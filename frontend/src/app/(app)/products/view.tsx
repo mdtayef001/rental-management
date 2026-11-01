@@ -1,10 +1,12 @@
 "use client"
 
 import { useState } from "react"
-import { Plus } from "lucide-react"
+import { useSearchParams } from "next/navigation"
+import { Plus, SlidersHorizontal, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
+  ConfirmAction,
   EmptyState,
   ErrorState,
   FilterTabs,
@@ -16,6 +18,8 @@ import {
 } from "@/components/common"
 import { Code, DataView, Primary, type Column } from "@/components/data-view"
 import { ProductDialog } from "@/components/product-form"
+import { StockAdjustDialog } from "@/components/stock-adjust"
+import { useDeleteProduct } from "@/lib/data/mutations"
 import { useCurrency, useSettings } from "@/components/session"
 import { useCategories, useDebounced, usePaging, useProducts } from "@/lib/data/queries"
 import { count, money } from "@/lib/format"
@@ -28,13 +32,28 @@ const FILTERS = [
 ] as const
 
 /** The catalogue, with what is on the shelf and what is out on rent for each line. */
-export function ProductsView({ canEdit }: { canEdit: boolean }) {
+export function ProductsView({
+  canEdit,
+  canAdjust,
+  canDelete,
+}: {
+  canEdit: boolean
+  canAdjust: boolean
+  canDelete: boolean
+}) {
   const currency = useCurrency()
   const settings = useSettings()
   const categories = useCategories()
+  const params = useSearchParams()
   const [text, setText] = useState("")
   const [category, setCategory] = useState("")
-  const [filter, setFilter] = useState<"" | "lowStock" | "rentable">("")
+  // The dashboard links straight here for "products running low".
+  const [filter, setFilter] = useState<"" | "lowStock" | "rentable">(
+    params.get("filter") === "lowStock" ? "lowStock" : "",
+  )
+  const [adjusting, setAdjusting] = useState<Product | null>(null)
+  const [deleting, setDeleting] = useState<Product | null>(null)
+  const remove = useDeleteProduct()
   const search = useDebounced(text.trim(), 300)
   const { page, pageSize, setPage, setPageSize } = usePaging(search, category, filter)
   const [adding, setAdding] = useState(false)
@@ -176,6 +195,26 @@ export function ProductsView({ canEdit }: { canEdit: boolean }) {
             columns={columns}
             getKey={(product) => product.id}
             href={(product) => `/products/${product.id}`}
+            actions={
+              canAdjust || canDelete
+                ? (product) => (
+                    <>
+                      {canAdjust && (
+                        <Button variant="outline" size="sm" onClick={() => setAdjusting(product)}>
+                          <SlidersHorizontal className="size-4" />
+                          <span className="md:sr-only">Correct the count</span>
+                        </Button>
+                      )}
+                      {canDelete && (
+                        <Button variant="ghost" size="sm" onClick={() => setDeleting(product)}>
+                          <Trash2 className="size-4" />
+                          <span className="md:sr-only">Delete</span>
+                        </Button>
+                      )}
+                    </>
+                  )
+                : undefined
+            }
           />
           <Pagination
             page={page}
@@ -189,6 +228,33 @@ export function ProductsView({ canEdit }: { canEdit: boolean }) {
       )}
 
       <ProductDialog open={adding} onOpenChange={setAdding} onSaved={() => setAdding(false)} />
+
+      {adjusting && (
+        <StockAdjustDialog open onOpenChange={(open) => !open && setAdjusting(null)} product={adjusting} />
+      )}
+
+      {/* Deleting is explained in terms of what survives it, because the thing people are
+          really asking is "will this wreck my old receipts". It doesn't. */}
+      {deleting && (
+        <ConfirmAction
+          open
+          onOpenChange={(open) => !open && setDeleting(null)}
+          title={`Delete ${deleting.name}?`}
+          description={
+            <>
+              It comes out of the catalogue and off the scanner straight away. Past rentals, receipts and bills keep
+              its name and SKU exactly as they were printed, so nothing in your records changes. A product that has
+              never been rented, bought or counted is removed completely.
+            </>
+          }
+          confirmLabel="Delete it"
+          destructive
+          onConfirm={async () => {
+            await remove.mutateAsync(deleting.id)
+            setDeleting(null)
+          }}
+        />
+      )}
     </div>
   )
 }

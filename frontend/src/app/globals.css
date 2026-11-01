@@ -190,31 +190,23 @@
   }
 }
 /* Printing.
-   Only the receipt goes on paper: everything else — sidebar, buttons, the rest of the
-   page — is hidden, and the receipt is lifted out of the layout so it starts at the top
-   of the sheet. Works for both 80mm thermal rolls and A4. */
+   Only a receipt goes on paper. Everything else — sidebar, buttons, the screen copy of
+   the receipt itself — is hidden, and the till copy is lifted out of the layout so it
+   starts at the top of the roll. `ReceiptPaper` sets the page size to the slip's own
+   measured height, so nothing feeds out after it. */
 @media print {
   body * {
     visibility: hidden;
   }
 
-  .receipt,
-  .receipt * {
+  .receipt-paper,
+  .receipt-paper * {
     visibility: visible;
   }
 
-  .receipt {
+  .receipt-paper {
     position: absolute;
     top: 0;
     left: 0;
-    width: 100%;
-    max-width: none;
-    padding: 0;
-    color: #000;
-    background: #fff;
-  }
-
-  @page {
-    margin: 8mm;
   }
 }

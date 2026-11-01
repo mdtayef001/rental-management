@@ -171,8 +171,8 @@ class ProductViewSet(TenantViewSet, viewsets.ModelViewSet):
         log(self.request.user, "Product changed", f"{product.name} ({product.sku})")
 
     def destroy(self, request, *args, **kwargs):
-        """Archives instead of deleting, so old rentals keep naming the product."""
-        services.archive_product(user=request.user, product=self.get_object())
+        """Deletes an unused product, archives one with history. See `delete_product`."""
+        services.delete_product(user=request.user, product=self.get_object())
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=False)

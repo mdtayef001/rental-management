@@ -7,6 +7,7 @@ go negative and writes a ledger entry. Nothing else is allowed to touch
 
 from django.db import transaction
 from django.db.models import F, Q, Sum
+from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from apps.accounts.models import log
@@ -133,12 +134,22 @@ def create_product(*, user, **fields):
 
 
 @transaction.atomic
-def archive_product(*, user, product):
-    """Products are archived, never deleted: a rental from last year still names them.
+def delete_product(*, user, product):
+    """Remove a product from the catalogue.
 
-    Refused while any of them is out on rent, so an item can't vanish from the catalogue
-    while a customer still has it.
+    A product nobody has ever used — a typo, a line that was never stocked — is deleted
+    outright, because leaving it archived would mean a mistake can never be tidied away.
+
+    One with any history is archived instead. Deleting it would be deleting the past: a
+    rental from last year, a supplier's bill, the stock ledger. The lines themselves keep
+    their own copy of the name and SKU, so a receipt still reads correctly either way; what
+    archiving protects is everything that still points at the row — the stock history, and
+    the product page a receipt's figures can be traced back to.
+
+    Either way it is refused while units are out on rent, so an item cannot vanish from the
+    catalogue while a customer still has it.
     """
+    from apps.purchasing.models import PurchaseItem, SupplierReturn
     from apps.rentals.models import Rental, RentalItem
 
     out = (
@@ -148,11 +159,25 @@ def archive_product(*, user, product):
     )
     if out:
         raise ValidationError("Some of these are still out on rent. Take them back first.")
-    from django.utils import timezone
+
+    name = f"{product.name} ({product.sku})"
+    used = (
+        RentalItem.objects.filter(product=product).exists()
+        or PurchaseItem.objects.filter(product=product).exists()
+        or SupplierReturn.objects.filter(product=product).exists()
+        or StockMovement.objects.filter(product=product).exists()
+    )
+    if not used:
+        # Stock rows are the product's own counters, not history, so they go with it.
+        StockLevel.objects.filter(product=product).delete()
+        product.delete()
+        log(user, "Product deleted", name)
+        return False
 
     product.archived_at = timezone.now()
     product.save(update_fields=["archived_at"])
-    log(user, "Product archived", f"{product.name} ({product.sku})")
+    log(user, "Product archived", name)
+    return True
 
 
 @transaction.atomic

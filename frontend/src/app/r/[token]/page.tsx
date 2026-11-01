@@ -2,7 +2,9 @@ import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import { API_URL } from "@/lib/api/config"
 import { SERVER_TIMEOUT_MS } from "@/lib/api/errors"
+import { ReceiptDocument } from "@/components/receipt"
 import { count, dateTime, money } from "@/lib/format"
+import type { ReceiptView } from "@/lib/receipt"
 
 export const metadata: Metadata = {
   title: "Your receipt",
@@ -60,74 +62,71 @@ interface Receipt {
  *
  * No login: the long random token in the URL is the credential, which is why it is 16
  * random bytes rather than the rental number. It is fetched on the server and rendered as
- * plain HTML — the customer may be on a bad connection in a workshop, so this page ships
- * no JavaScript at all.
+ * It shows the same receipt the shop prints, from the same component, so the slip in the
+ * customer's hand and the page on their phone can never disagree.
  */
 export default async function PublicReceiptPage({ params }: PageProps<"/r/[token]">) {
   const { token } = await params
 
-  let receipt: Receipt
+  let data: Receipt
   try {
     const res = await fetch(`${API_URL}/receipts/${encodeURIComponent(token)}/`, {
       cache: "no-store",
       signal: AbortSignal.timeout(SERVER_TIMEOUT_MS),
     })
     if (!res.ok) notFound()
-    receipt = (await res.json()) as Receipt
+    data = (await res.json()) as Receipt
   } catch {
     notFound()
   }
 
-  const { business, branch, rental, items, returns } = receipt
+  const { business, branch, rental, items, returns } = data
   const currency = business.currency
-  const held = rental.deposit - rental.depositRefunded
+
+  const receipt: ReceiptView = {
+    businessName: business.name,
+    branchName: branch?.name,
+    address: branch?.address || business.address,
+    phone: branch?.phone || business.phone,
+    code: rental.code,
+    startedAt: rental.startedAt,
+    dueAt: rental.dueAt,
+    returnedAt: rental.returnedAt,
+    customerName: rental.customerName,
+    items: items.map((item) => ({
+      name: item.productName,
+      quantity: item.quantity,
+      quantityReturned: item.quantityReturned,
+      quantityLost: item.quantityLost,
+      plan: item.plan,
+      rate: item.rate,
+    })),
+    rentTotal: rental.rentTotal,
+    lateFee: rental.lateFee,
+    damageFee: rental.damageFee,
+    discount: rental.discount,
+    deposit: rental.deposit,
+    depositRefunded: rental.depositRefunded,
+    paidAmount: rental.paidAmount,
+    balance: rental.balance,
+    currency,
+    note: business.receiptNote,
+    // No QR code on the customer's own copy: they are already looking at the page it
+    // would open.
+    link: null,
+    state: rental.status === "cancelled" ? "cancelled" : rental.status === "returned" ? "returned" : "out",
+  }
 
   return (
-    <main className="receipt mx-auto w-full max-w-md space-y-6 p-4 sm:my-8 sm:rounded-xl sm:border sm:bg-card sm:p-6 sm:shadow-sm">
-      <header className="space-y-1 border-b pb-4 text-center">
-        <h1 className="font-heading text-lg font-semibold">{business.name}</h1>
-        {branch?.address && <p className="text-sm text-muted-foreground">{branch.address}</p>}
-        {(branch?.phone || business.phone) && (
-          <p className="text-sm text-muted-foreground">{branch?.phone || business.phone}</p>
-        )}
-      </header>
-
-      <section className="space-y-1 text-sm">
-        <Row label="Receipt" value={rental.code} bold />
-        <Row label="Name" value={rental.customerName} />
-        <Row label="Taken out" value={dateTime(rental.startedAt)} />
-        {rental.dueAt && <Row label="Due back" value={dateTime(rental.dueAt)} />}
-        {rental.returnedAt && <Row label="All returned" value={dateTime(rental.returnedAt)} />}
-      </section>
-
-      <section>
-        <h2 className="mb-2 font-heading text-sm font-semibold">What you have</h2>
-        <ul className="space-y-2 text-sm">
-          {items.map((item, index) => (
-            <li key={index} className="flex justify-between gap-3 border-b pb-2">
-              <div className="min-w-0">
-                <div>{item.productName}</div>
-                <div className="text-xs text-muted-foreground">
-                  {count(item.quantity)} out
-                  {item.quantityReturned > 0 && ` · ${count(item.quantityReturned)} returned`}
-                  {item.quantityLost > 0 && ` · ${count(item.quantityLost)} not returned`}
-                </div>
-              </div>
-              <div className="shrink-0 text-right tabular-nums">
-                {money(item.rate, currency)}
-                <div className="text-xs text-muted-foreground">per {item.plan.replace("ly", "")}</div>
-              </div>
-            </li>
-          ))}
-        </ul>
-      </section>
+    <main className="mx-auto w-full max-w-md space-y-4 p-4 sm:py-8">
+      <ReceiptDocument receipt={receipt} />
 
       {returns.length > 0 && (
-        <section>
-          <h2 className="mb-2 font-heading text-sm font-semibold">Returns</h2>
-          <ul className="space-y-2 text-sm">
+        <section className="rounded-xl border bg-card p-5 text-sm print:hidden">
+          <h2 className="font-heading font-semibold">What you have brought back</h2>
+          <ul className="mt-3 space-y-2">
             {returns.map((taken) => (
-              <li key={taken.code} className="border-b pb-2">
+              <li key={taken.code} className="border-b pb-2 last:border-0 last:pb-0">
                 <div className="flex justify-between gap-3">
                   <span className="text-muted-foreground">{dateTime(taken.at)}</span>
                   <span className="tabular-nums">
@@ -143,36 +142,9 @@ export default async function PublicReceiptPage({ params }: PageProps<"/r/[token
         </section>
       )}
 
-      <section className="space-y-1 border-t pt-4 text-sm">
-        {rental.rentTotal > 0 && <Row label="Rent" value={money(rental.rentTotal, currency)} />}
-        {rental.lateFee > 0 && <Row label="Late fee" value={money(rental.lateFee, currency)} />}
-        {rental.damageFee > 0 && <Row label="Damage or loss" value={money(rental.damageFee, currency)} />}
-        {rental.discount > 0 && <Row label="Discount" value={`− ${money(rental.discount, currency)}`} />}
-        {rental.deposit > 0 && <Row label="Deposit held" value={money(held, currency)} />}
-        <Row label="Paid" value={money(rental.paidAmount, currency)} />
-        <Row
-          label={rental.balance >= 0 ? "Still to pay" : "To be refunded to you"}
-          value={money(Math.abs(rental.balance), currency)}
-          bold
-        />
-      </section>
-
-      {business.receiptNote && (
-        <p className="border-t pt-4 text-center text-xs text-muted-foreground">{business.receiptNote}</p>
-      )}
-
-      <p className="text-center text-xs text-muted-foreground">
+      <p className="text-center text-xs text-muted-foreground print:hidden">
         Keep this link to check what you have out. Show it when you bring the items back.
       </p>
     </main>
-  )
-}
-
-function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
-  return (
-    <div className={`flex justify-between gap-3 ${bold ? "font-semibold" : ""}`}>
-      <span className={bold ? "" : "text-muted-foreground"}>{label}</span>
-      <span className="shrink-0 tabular-nums">{value}</span>
-    </div>
   )
 }

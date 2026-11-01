@@ -15,7 +15,7 @@ import {
   SearchInput,
   Spinner,
   StatGrid,
-  StatTile,
+  StatCard,
   TableSkeleton,
   Toolbar,
 } from "@/components/common"
@@ -94,13 +94,13 @@ export function SuppliersView() {
 
       {debt && debt.owed > 0 && (
         <StatGrid className="lg:grid-cols-3">
-          <StatTile label="Owed in total" value={money(debt.owed, currency)} tone="warning" />
-          <StatTile
+          <StatCard label="Owed in total" value={money(debt.owed, currency)} tone="warning" />
+          <StatCard
             label="Past its due date"
             value={money(debt.overdue, currency)}
             tone={debt.overdue ? "danger" : "default"}
           />
-          <StatTile label="Suppliers owed" value={count(debt.supplierCount)} />
+          <StatCard label="Suppliers owed" value={count(debt.supplierCount)} />
         </StatGrid>
       )}
 

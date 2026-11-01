@@ -5,7 +5,7 @@ import { AlertTriangle, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ErrorState, PageHeader, StatGrid, StatTile } from "@/components/common"
+import { ErrorState, PageHeader, StatGrid, StatCard } from "@/components/common"
 import { DataView, Code, Primary, type Column } from "@/components/data-view"
 import { useCurrency } from "@/components/session"
 import {
@@ -57,15 +57,15 @@ export function ReportsView({ canSeeSpend }: { canSeeSpend: boolean }) {
           {/* Earned in the range. Four figures, because a fifth would make all five
               forgettable — the rest are in the strip underneath. */}
           <StatGrid>
-            <StatTile label="Earned" value={money(s?.revenue ?? 0, currency)} loading={!s} />
-            <StatTile label="Rent" value={money(s?.rent ?? 0, currency)} loading={!s} />
-            <StatTile
+            <StatCard label="Earned" value={money(s?.revenue ?? 0, currency)} loading={!s} />
+            <StatCard label="Rent" value={money(s?.rent ?? 0, currency)} loading={!s} />
+            <StatCard
               label="Late fees"
               value={money(s?.lateFees ?? 0, currency)}
               loading={!s}
               tone={s?.lateFees ? "warning" : "default"}
             />
-            <StatTile
+            <StatCard
               label="Owed by customers"
               value={money(s?.outstanding ?? 0, currency)}
               loading={!s}

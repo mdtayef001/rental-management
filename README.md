@@ -172,6 +172,11 @@ picks one, rather than branching in JavaScript, so the server and the browser ag
 page never flashes. Alignment is dropped in the card: right-aligning exists so a column can
 be read downward, and a card has no column.
 
+Several patterns here are lifted from the Friday inventory app this was modelled on — the
+stat card with its tinted icon tile, the "needs attention" list, the confirm dialog, the
+tabbed scanner and the two-copy receipt — rebuilt in this palette rather than copied with
+its colours.
+
 **Navigation is grouped, not listed.** Thirteen links in one flat list is a list nobody
 reads. They are now four short ones — Today, Hire, Stock, Money, Admin — in a sidebar that
 collapses to an icon rail for more table width, and becomes a sheet on a phone with the
@@ -203,6 +208,9 @@ customers (list + detail), products (list + detail with printable QR labels), st
 purchases, suppliers, sent back to supplier, reports, team, activity, settings, the super
 admin's platform page, and the public receipt a customer opens from their QR code.
 
+There is no separate Stock screen either: the products list already carries what is on
+the shelf, what is out on rent and the total, and corrections are made from the row.
+
 There is no Branches screen. A business is created with exactly one branch and the branch
 pickers never render; the model and the `branch` column on stock, rentals and purchases
 stay as the seam for a second location later.
@@ -219,6 +227,33 @@ Every block downloads as CSV, and three full ledgers (rentals, returns, payments
 there for an accountant. Exports stream row by row rather than being built in memory, and
 a cell that starts `=`, `+`, `-` or `@` is prefixed with an apostrophe so a customer named
 `=HYPERLINK(…)` cannot run a formula on the owner's machine when the file is opened.
+
+## Receipts
+
+Each rental's receipt exists in two copies, rendered from the same data so the paper can
+never say something the screen doesn't.
+
+The **screen copy** is an ordinary page in the app's colours, because a receipt is read
+far more often than it is printed — usually by someone checking what a customer owes. The
+**till copy** is laid out as a shop slip: 80mm wide, solid black on white (thermal
+printers turn grey into speckles), each item's figures on their own line. It is measured
+as it renders and the printed page is sized to exactly its own height, so one rental is
+one strip of paper with no blank tail feeding out after it.
+
+The team's copy lives at `/rentals/<id>/receipt` with the print button and a link to send
+the customer. The customer's own copy at `/r/<token>` is the same document, so the slip in
+their hand and the page on their phone always agree. The QR code on the printed slip opens
+that page — and scanning it at the counter opens the return.
+
+## Products
+
+A product can be deleted. What happens depends on whether it has a past: one nobody has
+ever rented, bought or counted is removed outright, because a typo should be able to
+disappear. One with history is archived instead — it leaves the catalogue and the scanner,
+but the row stays so the stock ledger and every figure traced back to it still resolve.
+Either way the rental lines, bills and receipts keep their own copy of the name and SKU,
+so **nothing already printed changes**. Deleting is refused while units are still out on
+rent.
 
 ## Sent back to supplier
 

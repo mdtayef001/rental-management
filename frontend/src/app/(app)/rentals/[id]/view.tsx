@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Ban, MessageCircle, Undo2, Wallet } from "lucide-react"
+import { Ban, MessageCircle, ReceiptText, Undo2, Wallet } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ButtonLink } from "@/components/ui/button-link"
@@ -20,7 +20,7 @@ import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import { ErrorState, PageHeader, Spinner, TableSkeleton } from "@/components/common"
 import { Code, DataView, Primary } from "@/components/data-view"
-import { PrintButton, Receipt } from "@/components/receipt"
+
 import { useCurrency, useCurrentUser, useSession } from "@/components/session"
 import { useCancelRental, useRefundDeposit, useRentalPayment } from "@/lib/data/mutations"
 import { useRental } from "@/lib/data/queries"
@@ -68,7 +68,10 @@ export function RentalDetailView({ id }: { id: string }) {
             Take back
           </ButtonLink>
         )}
-        <PrintButton />
+        <ButtonLink href={`/rentals/${rental.id}/receipt`} variant="outline">
+          <ReceiptText className="size-4" />
+          Receipt
+        </ButtonLink>
         {share && (
           <Button variant="outline" render={<a href={share} target="_blank" rel="noreferrer" />}>
             <MessageCircle className="size-4" />
@@ -287,11 +290,6 @@ export function RentalDetailView({ id }: { id: string }) {
             </Button>
           )}
         </div>
-      </div>
-
-      {/* Hidden on screen, printed by the Print button. */}
-      <div className="hidden">
-        <Receipt rental={rental} business={business} branchName={rental.branchName} />
       </div>
 
       <PaymentDialog open={paying} onOpenChange={setPaying} rental={rental} />

@@ -16,7 +16,7 @@ import {
   SearchInput,
   Spinner,
   StatGrid,
-  StatTile,
+  StatCard,
   TableSkeleton,
   Toolbar,
 } from "@/components/common"
@@ -129,19 +129,19 @@ export function SupplierReturnsView() {
 
       {summary && summary.count > 0 && (
         <StatGrid>
-          <StatTile
+          <StatCard
             label="Waiting on suppliers"
             value={count(summary.open)}
             hint={summary.open ? "Chase these up" : "Nothing outstanding"}
             tone={summary.open ? "warning" : "default"}
           />
-          <StatTile
+          <StatCard
             label="Still owed to you"
             value={money(summary.outstanding, currency)}
             tone={summary.outstanding > 0 ? "warning" : "good"}
           />
-          <StatTile label="Units sent back" value={count(summary.units)} />
-          <StatTile label="Value sent back" value={money(summary.value, currency)} />
+          <StatCard label="Units sent back" value={count(summary.units)} />
+          <StatCard label="Value sent back" value={money(summary.value, currency)} />
         </StatGrid>
       )}
 

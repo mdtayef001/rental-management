@@ -9,7 +9,7 @@ from rest_framework.test import APITestCase
 
 from apps.accounts.models import User
 from apps.accounts.services import create_business, create_user
-from apps.catalog.models import StockLevel, StockMovement
+from apps.catalog.models import Product, StockLevel, StockMovement
 from apps.catalog.services import adjust_stock, change_stock, create_product
 
 PASSWORD = "correct-horse-battery"
@@ -156,9 +156,14 @@ class LookupTests(CatalogTestCase):
         self.assertEqual(self.client.get("/api/products/lookup/?code=111").status_code, 200)
 
     def test_an_archived_product_no_longer_scans(self):
-        from apps.catalog.services import archive_product
+        from apps.catalog.services import delete_product
 
-        archive_product(user=self.owner, product=self.machine)
+        # Bought in once, so it has history and is archived rather than removed.
+        adjust_stock(
+            user=self.owner, product=self.machine, branch=self.branch, quantity=5,
+            reason=StockMovement.Reason.ADJUSTMENT,
+        )
+        delete_product(user=self.owner, product=self.machine)
         self.login(self.owner)
         self.assertEqual(self.client.get("/api/products/lookup/?code=SM-100").status_code, 404)
 
@@ -196,8 +201,8 @@ class ProductTests(CatalogTestCase):
             )
             self.assertEqual(res.status_code, 201, res.content)
 
-    def test_a_product_out_on_rent_cannot_be_archived(self):
-        from apps.catalog.services import archive_product, create_customer
+    def test_a_product_out_on_rent_cannot_be_deleted(self):
+        from apps.catalog.services import create_customer, delete_product
         from apps.rentals.services import create_rental
 
         adjust_stock(
@@ -210,7 +215,48 @@ class ProductTests(CatalogTestCase):
             lines=[{"product": self.machine, "quantity": 5, "plan": "daily"}],
         )
         with self.assertRaises(ValidationError):
-            archive_product(user=self.owner, product=self.machine)
+            delete_product(user=self.owner, product=self.machine)
+
+    def test_a_product_nobody_has_used_is_deleted_outright(self):
+        """A typo should be able to disappear, not haunt the catalogue as an archived row."""
+        from apps.catalog.services import delete_product
+
+        typo = create_product(user=self.owner, sku="TYPO-1", name="Sewing machien", rentable=True, rent_daily=Decimal("10.00"))
+        archived = delete_product(user=self.owner, product=typo)
+        self.assertFalse(archived)
+        self.assertFalse(Product.objects.filter(pk=typo.pk).exists())
+
+    def test_a_product_with_history_is_archived_and_old_rentals_still_name_it(self):
+        from apps.catalog.services import create_customer, delete_product
+        from apps.rentals.models import RentalItem
+        from apps.rentals.services import create_rental, take_return
+
+        adjust_stock(
+            user=self.owner, product=self.machine, branch=self.branch, quantity=10,
+            reason=StockMovement.Reason.ADJUSTMENT,
+        )
+        customer = create_customer(user=self.owner, name="Mr. X")
+        rental = create_rental(
+            user=self.owner, customer=customer, branch=self.branch,
+            lines=[{"product": self.machine, "quantity": 4, "plan": "daily"}],
+        )
+        take_return(user=self.owner, rental=rental, lines=[{"item": rental.items.get(), "quantity": 4}])
+
+        archived = delete_product(user=self.owner, product=self.machine)
+        self.assertTrue(archived)
+        self.machine.refresh_from_db()
+        self.assertIsNotNone(self.machine.archived_at)
+        # The receipt still reads correctly: the line carries its own copy of the name.
+        item = RentalItem.objects.get(rental=rental)
+        self.assertEqual(item.product_name, "Sewing machine")
+        self.assertEqual(item.product_sku, "SM-100")
+
+    def test_deleting_a_product_through_the_api(self):
+        self.login(self.owner)
+        typo = create_product(user=self.owner, sku="TYPO-2", name="Spare", rentable=True, rent_daily=Decimal("10.00"))
+        res = self.client.delete(f"/api/products/{typo.id}/")
+        self.assertEqual(res.status_code, 204)
+        self.assertFalse(Product.objects.filter(pk=typo.pk).exists())
 
     def test_the_product_list_reports_on_hand_and_out_on_rent(self):
         from apps.catalog.services import create_customer

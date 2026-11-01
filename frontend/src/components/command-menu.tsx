@@ -17,7 +17,6 @@ import {
   Undo2,
   User,
   Users,
-  Warehouse,
 } from "lucide-react"
 import {
   Command,
@@ -44,7 +43,6 @@ const PAGES = [
   { href: "/returns", label: "Returns", icon: Undo2 },
   { href: "/customers", label: "Customers", icon: Users },
   { href: "/products", label: "Products", icon: Package },
-  { href: "/stock", label: "Stock levels", icon: Warehouse },
   { href: "/purchases", label: "Purchases", icon: ShoppingCart },
   { href: "/suppliers", label: "Suppliers", icon: Truck },
   { href: "/supplier-returns", label: "Sent back", icon: PackageX },

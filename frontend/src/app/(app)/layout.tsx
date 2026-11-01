@@ -1,10 +1,10 @@
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
+import { AppHeader } from "@/components/app-header"
 import { AppSidebar } from "@/components/app-sidebar"
-import { CommandMenu } from "@/components/command-menu"
 import { MobileBar } from "@/components/mobile-bar"
 import { SessionProvider } from "@/components/session"
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { getContext } from "@/lib/auth/dal"
 import { ROLE_HOME } from "@/lib/auth/roles"
 
@@ -31,13 +31,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       <SidebarProvider defaultOpen={open}>
         <AppSidebar />
         <SidebarInset>
-          {/* Sticky, so the way out of a long table is always one tap away. */}
-          <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b bg-background/80 px-3 backdrop-blur-sm sm:px-4">
-            <SidebarTrigger className="-ml-1" />
-            <div className="ml-auto flex items-center gap-2">
-              <CommandMenu />
-            </div>
-          </header>
+          <AppHeader />
 
           <main className="flex-1 px-3 py-5 sm:px-6 sm:py-6">
             <div className="mx-auto w-full max-w-6xl space-y-6">{children}</div>

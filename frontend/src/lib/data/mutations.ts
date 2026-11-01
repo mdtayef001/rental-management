@@ -189,15 +189,22 @@ export function useSaveProduct(id?: string) {
   })
 }
 
-export function useArchiveProduct() {
+/**
+ * Delete a product.
+ *
+ * Django removes it outright when nothing has ever used it and archives it when something
+ * has, because deleting a product with history would be deleting the history. Either way
+ * past rentals, receipts and bills keep the name and SKU they were printed with.
+ */
+export function useDeleteProduct() {
   const refresh = useRefresh()
   return useMutation({
     mutationFn: (id: string) => request<void>(`products/${id}/`, { method: "DELETE" }),
     onSuccess: () => {
       refresh("products", "stock", "activity")
-      toast.success("Product archived")
+      toast.success("Product deleted")
     },
-    onError: (err) => showError(err, "Couldn't archive the product."),
+    onError: (err) => showError(err, "Couldn't delete the product."),
   })
 }
 

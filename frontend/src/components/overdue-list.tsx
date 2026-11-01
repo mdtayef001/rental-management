@@ -2,7 +2,9 @@
 
 import Link from "next/link"
 import { MessageCircle, Phone } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { ButtonLink } from "@/components/ui/button-link"
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Spinner } from "@/components/common"
 import { useCurrency, useSession } from "@/components/session"
 import { useRentals } from "@/lib/data/queries"
@@ -32,43 +34,50 @@ export function OverdueList({ limit = 5 }: { limit?: number }) {
 
   if (isLoading) {
     return (
-      <section className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-        <Spinner />
-        Checking what&apos;s late…
-      </section>
+      <Card className="h-full">
+        <CardContent className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Spinner />
+          Checking what&apos;s late…
+        </CardContent>
+      </Card>
     )
   }
 
-  // Nothing late is good news, and good news does not need a panel, an icon and a border.
+  // Nothing late is good news, and good news gets a quiet card rather than a loud one.
   if (total === 0) {
     return (
-      <section className="border-l-2 border-success/40 py-1 pl-4">
-        <p className="text-sm text-muted-foreground">
-          Nothing overdue. Everything out is still within its date.
-        </p>
-      </section>
+      <Card className="h-full">
+        <CardHeader>
+          <CardTitle>Nothing overdue</CardTitle>
+          <CardDescription>Everything that is out is still within its date.</CardDescription>
+        </CardHeader>
+      </Card>
     )
   }
 
   return (
-    <section className="border-l-2 border-destructive pl-4 sm:pl-5">
-      <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 className="text-lg font-semibold tracking-tight">
-          {plural(total, "rental")} overdue
-        </h2>
+    // The one card on the dashboard with a coloured edge: it is the only thing here that
+    // asks somebody to pick up the phone.
+    <Card className="h-full border-l-2 border-l-destructive">
+      <CardHeader>
+        <CardTitle className="text-destructive">{plural(total, "rental")} overdue</CardTitle>
+        <CardDescription>Worst first. Ring them, or send a WhatsApp.</CardDescription>
         {total > rentals.length && (
-          <Link href="/rentals?status=overdue" className="text-sm text-muted-foreground underline-offset-4 hover:underline">
-            See all {count(total)}
-          </Link>
+          <CardAction>
+            <Button variant="ghost" size="sm" render={<Link href="/rentals?status=overdue" />}>
+              See all {count(total)}
+            </Button>
+          </CardAction>
         )}
-      </header>
-
-      <ul className="mt-4 space-y-px">
-        {rentals.map((rental) => (
-          <OverdueRow key={rental.id} rental={rental} currency={currency} />
-        ))}
-      </ul>
-    </section>
+      </CardHeader>
+      <CardContent>
+        <ul className="space-y-px">
+          {rentals.map((rental) => (
+            <OverdueRow key={rental.id} rental={rental} currency={currency} />
+          ))}
+        </ul>
+      </CardContent>
+    </Card>
   )
 }
 

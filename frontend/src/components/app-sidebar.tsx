@@ -19,7 +19,6 @@ import {
   Truck,
   Undo2,
   Users,
-  Warehouse,
 } from "lucide-react"
 import { useTheme } from "next-themes"
 import { Badge } from "@/components/ui/badge"
@@ -86,21 +85,15 @@ const GROUPS: { label: string; items: Item[] }[] = [
     label: "Stock",
     items: [
       { href: "/products", label: "Products", icon: Package },
-      { href: "/stock", label: "Stock levels", icon: Warehouse },
-    ],
-  },
-  {
-    label: "Money",
-    items: [
       { href: "/purchases", label: "Purchases", icon: ShoppingCart },
       { href: "/suppliers", label: "Suppliers", icon: Truck },
       { href: "/supplier-returns", label: "Sent back", icon: PackageX },
-      { href: "/reports", label: "Reports", icon: FileSpreadsheet },
     ],
   },
   {
-    label: "Admin",
+    label: "Business",
     items: [
+      { href: "/reports", label: "Reports", icon: FileSpreadsheet },
       { href: "/users", label: "Team", icon: Users },
       { href: "/activity", label: "Activity", icon: ActivityIcon },
       { href: "/settings", label: "Settings", icon: Settings },

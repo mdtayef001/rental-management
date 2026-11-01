@@ -18,7 +18,7 @@ import {
   SearchInput,
   Spinner,
   StatGrid,
-  StatTile,
+  StatCard,
   TableSkeleton,
   Toolbar,
 } from "@/components/common"
@@ -121,9 +121,9 @@ export function PurchasesView() {
 
       {summary && summary.count > 0 && (
         <StatGrid className="lg:grid-cols-3">
-          <StatTile label="Bills" value={count(summary.count)} />
-          <StatTile label="Bought in total" value={money(summary.total, currency)} />
-          <StatTile label="Still owed" value={money(summary.due, currency)} tone={summary.due ? "warning" : "default"} />
+          <StatCard label="Bills" value={count(summary.count)} />
+          <StatCard label="Bought in total" value={money(summary.total, currency)} />
+          <StatCard label="Still owed" value={money(summary.due, currency)} tone={summary.due ? "warning" : "default"} />
         </StatGrid>
       )}
 

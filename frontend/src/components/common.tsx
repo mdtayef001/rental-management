@@ -1,9 +1,23 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
-import { AlertCircle, ArrowLeft, Inbox, Loader2, Search } from "lucide-react"
+import { AlertCircle, ArrowLeft, Inbox, Loader2, Search, type LucideIcon } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PAGE_SIZES } from "@/lib/data/queries"
 import { count } from "@/lib/format"
@@ -146,60 +160,204 @@ export function StatGrid({ children, className }: { children: React.ReactNode; c
   return <div className={cn("grid grid-cols-2 gap-3 lg:grid-cols-4", className)}>{children}</div>
 }
 
+const TONES = {
+  default: "bg-primary/10 text-primary",
+  good: "bg-success-soft text-success-soft-foreground",
+  warning: "bg-warning-soft text-warning-soft-foreground",
+  danger: "bg-destructive-soft text-destructive-soft-foreground",
+}
+export type Tone = keyof typeof TONES
+
 /**
- * One number.
+ * One number, with the icon that says what kind of number it is.
  *
- * Tone is for the number itself and is used sparingly: a figure turns amber or red only
- * when it is asking someone to do something about it.
+ * The tone sits on the icon tile rather than on the figure. A whole row of coloured
+ * numbers reads as decoration and stops meaning anything; a coloured tile next to a plain
+ * figure still says "this is the one to look at", and the figure stays legible.
  */
-export function StatTile({
+export function StatCard({
   label,
   value,
   hint,
-  tone = "default",
   icon: Icon,
+  tone = "default",
   href,
   loading,
 }: {
   label: string
   value: React.ReactNode
-  hint?: string
-  tone?: "default" | "warning" | "danger" | "good"
-  icon?: React.ComponentType<{ className?: string }>
+  hint?: React.ReactNode
+  icon?: LucideIcon
+  tone?: Tone
   href?: string
   loading?: boolean
 }) {
   const body = (
-    <>
-      <div className="flex items-center justify-between gap-2">
-        <span className="truncate text-sm text-muted-foreground">{label}</span>
-        {Icon && <Icon className="size-4 shrink-0 text-muted-foreground/70" />}
+    <CardContent className="flex items-start justify-between gap-3">
+      <div className="min-w-0 space-y-1">
+        <p className="truncate text-sm text-muted-foreground">{label}</p>
+        {loading ? (
+          <Skeleton className="h-8 w-24" />
+        ) : (
+          <p className="font-heading text-2xl font-semibold tracking-tight tabular-nums">{value}</p>
+        )}
+        {hint && <p className="truncate text-xs text-muted-foreground">{hint}</p>}
       </div>
-      {loading ? (
-        <Skeleton className="mt-2 h-8 w-24" />
-      ) : (
-        <div
-          className={cn(
-            "mt-1 font-heading text-2xl font-semibold tracking-tight tabular-nums",
-            tone === "warning" && "text-warning-soft-foreground dark:text-warning",
-            tone === "danger" && "text-destructive",
-            tone === "good" && "text-success-soft-foreground dark:text-success",
-          )}
-        >
-          {value}
-        </div>
+      {Icon && (
+        <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-lg", TONES[tone])}>
+          <Icon className="size-4.5" />
+        </span>
       )}
-      {hint && <div className="mt-1 truncate text-xs text-muted-foreground">{hint}</div>}
-    </>
+    </CardContent>
   )
-
-  const shell = "rounded-lg border bg-card p-4"
   return href ? (
-    <Link href={href} className={cn(shell, "transition-colors hover:border-primary/40 hover:bg-accent/40")}>
-      {body}
+    <Link href={href} className="rounded-xl outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
+      <Card className="h-full transition-colors hover:bg-accent/40">{body}</Card>
     </Link>
   ) : (
-    <div className={shell}>{body}</div>
+    <Card className="h-full">{body}</Card>
+  )
+}
+
+/** A small status word. Colour means the same thing everywhere: see the design notes. */
+export function Pill({
+  tone = "muted",
+  children,
+  className,
+}: {
+  tone?: "muted" | "info" | "warning" | "good" | "danger"
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap",
+        tone === "muted" && "bg-muted text-muted-foreground",
+        tone === "info" && "bg-info-soft text-info-soft-foreground",
+        tone === "warning" && "bg-warning-soft text-warning-soft-foreground",
+        tone === "good" && "bg-success-soft text-success-soft-foreground",
+        tone === "danger" && "bg-destructive-soft text-destructive-soft-foreground",
+        className,
+      )}
+    >
+      {children}
+    </span>
+  )
+}
+
+/**
+ * A select that matches the rest of the app.
+ *
+ * Raw `<select>` elements were scattered across the screens and each browser styles them
+ * differently; this is the same control everywhere, keyboard included.
+ */
+export function SimpleSelect({
+  value,
+  onChange,
+  options,
+  placeholder = "Select…",
+  className,
+  id,
+  disabled,
+  label,
+}: {
+  value: string
+  onChange: (value: string) => void
+  options: { value: string; label: string }[]
+  placeholder?: string
+  className?: string
+  id?: string
+  disabled?: boolean
+  label?: string
+}) {
+  return (
+    <Select items={options} value={value || null} onValueChange={(v) => onChange((v as string | null) ?? "")} disabled={disabled}>
+      <SelectTrigger id={id} aria-label={label} className={cn("h-9 w-full", className)}>
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((option) => (
+          <SelectItem key={option.value} value={option.value}>
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+}
+
+/**
+ * "Are you sure", for the handful of actions that cannot be undone.
+ *
+ * The question is the title and the consequence is the description, because people read
+ * the bold line and press the button — so the bold line has to be the thing they are
+ * agreeing to, not the word "Warning".
+ */
+export function ConfirmAction({
+  trigger,
+  title,
+  description,
+  confirmLabel = "Confirm",
+  destructive,
+  onConfirm,
+  open,
+  onOpenChange,
+}: {
+  /** Leave out to control it yourself with `open`, e.g. from a menu item. */
+  trigger?: React.ReactElement
+  title: string
+  description: React.ReactNode
+  confirmLabel?: string
+  destructive?: boolean
+  /** Return false to keep the dialog open, e.g. when the server refused. */
+  onConfirm: () => boolean | void | Promise<boolean | void>
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+}) {
+  const [ownOpen, setOwnOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const isOpen = open ?? ownOpen
+  const setOpen = (next: boolean) => {
+    if (open === undefined) setOwnOpen(next)
+    onOpenChange?.(next)
+  }
+
+  return (
+    <AlertDialog open={isOpen} onOpenChange={setOpen}>
+      {trigger && <AlertDialogTrigger render={trigger} />}
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogDescription>{description}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            variant={destructive ? "destructive" : "default"}
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true)
+              try {
+                // A refusal from the server is an ordinary outcome here — "those are still
+                // out on rent" — and the mutation has already said so in a toast. The
+                // dialog stays open so the person can read it and cancel, rather than
+                // freezing on a spinner because the rejection escaped.
+                const result = await onConfirm()
+                if (result !== false) setOpen(false)
+              } catch {
+                // Deliberately swallowed: see above.
+              } finally {
+                setBusy(false)
+              }
+            }}
+          >
+            {busy && <Spinner />}
+            {confirmLabel}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }
 
