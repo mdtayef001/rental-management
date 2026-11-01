@@ -59,7 +59,7 @@ the proxy), `zod` (form validation), `recharts` (reports), `date-fns`, `sonner` 
 
 ## Step-by-step build
 
-Phases 0-5 are complete. See the README for what remains.
+Phases 0-5 are complete, including the supplier-returns screen. See the README for the detail.
 
 ### Phase 0 — Scaffold
 1. `git init`; `backend/` (uv, Django project `config`) and `frontend/` (create-next-app).

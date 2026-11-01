@@ -1,10 +1,11 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Search, Trash2 } from "lucide-react"
+import { PackageX, Plus, Search, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { ButtonLink } from "@/components/ui/button-link"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -35,6 +36,10 @@ export function PurchasesView() {
   return (
     <div className="space-y-6">
       <PageHeader title="Purchases" description="Stock bought in, and what you still owe for it.">
+        <ButtonLink href="/supplier-returns" variant="outline">
+          <PackageX className="size-4" />
+          Sent back
+        </ButtonLink>
         <Button onClick={() => setRecording(true)}>
           <Plus className="size-4" />
           Record a purchase

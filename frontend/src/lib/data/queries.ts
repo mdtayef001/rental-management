@@ -225,6 +225,18 @@ export function usePurchaseSummary(params: Params = {}, enabled = true) {
   })
 }
 
+/** The figures above the supplier-returns list. Takes the same filters as the list itself. */
+export function useSupplierReturnSummary(params: Params = {}, enabled = true) {
+  return useQuery({
+    ...apiQuery<{ count: number; open: number; units: number; value: number; outstanding: number }>(
+      "purchases/returns-summary/",
+      params,
+    ),
+    enabled,
+    placeholderData: keepPreviousData,
+  })
+}
+
 export function useSupplierDebtSummary(enabled = true) {
   return useQuery({
     ...apiQuery<{ owed: number; overdue: number; supplierCount: number }>("purchases/payments-summary/"),

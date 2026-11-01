@@ -193,16 +193,58 @@ class PurchaseViewSet(PurchasingViewSet, mixins.ListModelMixin, mixins.RetrieveM
         supplier_return = services.create_supplier_return(user=request.user, **serializer.validated_data)
         return Response(SupplierReturnSerializer(supplier_return).data, status=status.HTTP_201_CREATED)
 
-    @action(detail=False, url_path="returns-list")
-    def returns_list(self, request):
+    def returns_queryset(self, request):
+        """Supplier returns, filtered by the query string.
+
+        Searching accepts what the owner has in front of them: a product name, a supplier,
+        or a code copied off the screen — "SR-000012", "sr 12" and "12" all find the same
+        return, because the digits are what identify it.
+        """
         qs = SupplierReturn.objects.filter(business=request.user.business).select_related("purchase", "supplier")
         state = request.query_params.get("status", "")
         if state in SupplierReturn.Status.values:
             qs = qs.filter(status=state)
+        purchase = self.id_param("purchase")
+        if purchase:
+            qs = qs.filter(purchase_id=purchase)
+        supplier = self.id_param("supplier")
+        if supplier:
+            qs = qs.filter(supplier_id=supplier)
+        text = request.query_params.get("search", "").strip()
+        if text:
+            clause = Q(product_name__icontains=text) | Q(supplier__name__icontains=text) | Q(reason__icontains=text)
+            digits = "".join(c for c in text if c.isdigit())
+            if digits:
+                clause |= Q(number=int(digits)) | Q(purchase__number=int(digits))
+            qs = qs.filter(clause)
+        return qs
+
+    @action(detail=False, url_path="returns-list")
+    def returns_list(self, request):
+        qs = self.returns_queryset(request)
         page = self.paginate_queryset(qs)
         if page is not None:
             return self.get_paginated_response(SupplierReturnSerializer(page, many=True).data)
         return Response(SupplierReturnSerializer(qs[:200], many=True).data)
+
+    @action(detail=False, url_path="returns-summary")
+    def returns_summary(self, request):
+        """How much stock is sitting with suppliers, and how much of it they still owe for.
+
+        `outstanding` can't be summed in SQL — it's a property that nets replacements,
+        refunds and credits off the value — so it's added up in Python over the open
+        returns only. Those are the few rows that matter, and the ones a shop chases.
+        """
+        qs = self.returns_queryset(request)
+        totals = qs.aggregate(
+            count=Count("id"),
+            units=Coalesce(Sum("quantity"), Value(0), output_field=IntegerField()),
+            value=Coalesce(Sum(F("unit_cost") * F("quantity")), Value(0), output_field=MONEY),
+            open=Count("id", filter=Q(status=SupplierReturn.Status.OPEN)),
+        )
+        open_rows = qs.filter(status=SupplierReturn.Status.OPEN).select_related(None)
+        outstanding = sum((row.outstanding for row in open_rows), Decimal("0.00"))
+        return Response({**totals, "outstanding": outstanding})
 
     @action(detail=False, methods=["post"], url_path=r"returns/(?P<return_id>[^/.]+)/settle")
     def settle(self, request, return_id=None):

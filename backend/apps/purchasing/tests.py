@@ -2,10 +2,13 @@
 
 from decimal import Decimal
 
+from django.core.cache import cache
 from django.test import TestCase
 from rest_framework.exceptions import ValidationError
+from rest_framework.test import APITestCase
 
-from apps.accounts.services import create_business
+from apps.accounts.models import User
+from apps.accounts.services import create_business, create_user
 from apps.catalog.models import StockLevel, StockMovement
 from apps.catalog.services import adjust_stock, create_product
 from apps.purchasing import services
@@ -234,3 +237,144 @@ class SupplierReturnTests(PurchasingTestCase):
     def test_a_supplier_with_bills_cannot_be_deleted(self):
         with self.assertRaises(ValidationError):
             services.delete_supplier(user=self.owner, supplier=self.supplier)
+
+
+class SupplierReturnApiTests(APITestCase):
+    """The screen's own endpoints: the filtered list and the figures above it.
+
+    These are read by a screen that staff never see, so the role gate is part of the test:
+    a manager without the owner's purchasing switch gets nothing at all.
+    """
+
+    def setUp(self):
+        # Login is rate-limited per address, and the limiter counts in the cache.
+        cache.clear()
+        self.business, self.branch, self.owner = create_business(
+            name="Dhaka Rentals", owner_name="Owner", owner_email="owner@example.com", owner_password=PASSWORD
+        )
+        self.supplier = Supplier.objects.create(business=self.business, name="Singer Agent")
+        self.other = Supplier.objects.create(business=self.business, name="Brother Depot")
+        self.machine = create_product(user=self.owner, sku="SM-100", name="Sewing machine", rentable=True)
+        self.table = create_product(user=self.owner, sku="TB-1", name="Cutting table", rentable=True)
+
+        self.bill = self._buy(self.supplier, self.machine, 100, "50.00")
+        self.faulty = services.create_supplier_return(
+            user=self.owner, item=self.bill.items.get(), quantity=10, reason="Faulty motors"
+        )
+        self.other_bill = self._buy(self.other, self.table, 20, "200.00")
+        self.wrong_size = services.create_supplier_return(
+            user=self.owner, item=self.other_bill.items.get(), quantity=2, reason="Wrong size"
+        )
+        # One of the two is finished, so the status filter has something to separate.
+        services.settle_return(user=self.owner, supplier_return=self.wrong_size, refunded_amount=Decimal("400.00"))
+
+        self.login(self.owner)
+
+    def _buy(self, supplier, product, quantity, unit_cost):
+        return services.create_purchase(
+            user=self.owner,
+            supplier=supplier,
+            branch=self.branch,
+            lines=[{"product": product, "quantity": quantity, "unit_cost": Decimal(unit_cost)}],
+            paid_amount=Decimal(unit_cost) * quantity,
+            method="cash",
+        )
+
+    def login(self, user):
+        res = self.client.post("/api/auth/login/", {"email": user.email, "password": PASSWORD}, format="json")
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {res.data['access']}")
+        return user
+
+    def codes(self, **params):
+        res = self.client.get("/api/purchases/returns-list/", params)
+        self.assertEqual(res.status_code, 200)
+        return [row["code"] for row in res.json()]
+
+    def test_the_list_is_newest_first(self):
+        self.assertEqual(self.codes(), [self.wrong_size.code, self.faulty.code])
+
+    def test_only_the_open_ones_can_be_listed(self):
+        self.assertEqual(self.codes(status="open"), [self.faulty.code])
+        self.assertEqual(self.codes(status="settled"), [self.wrong_size.code])
+
+    def test_a_meaningless_status_is_ignored_rather_than_erroring(self):
+        self.assertEqual(len(self.codes(status="banana")), 2)
+
+    def test_searching_by_product_supplier_or_reason(self):
+        self.assertEqual(self.codes(search="sewing"), [self.faulty.code])
+        self.assertEqual(self.codes(search="Brother"), [self.wrong_size.code])
+        self.assertEqual(self.codes(search="faulty"), [self.faulty.code])
+
+    def test_a_code_off_the_screen_finds_its_return(self):
+        # However the owner retypes it.
+        for text in ("SR-000001", "sr 1", "1"):
+            self.assertIn(self.faulty.code, self.codes(search=text), text)
+
+    def test_the_list_can_be_narrowed_to_one_bill(self):
+        self.assertEqual(self.codes(purchase=self.bill.id), [self.faulty.code])
+        self.assertEqual(self.codes(supplier=self.other.id), [self.wrong_size.code])
+
+    def test_the_summary_counts_what_is_still_owed_by_suppliers(self):
+        res = self.client.get("/api/purchases/returns-summary/")
+        self.assertEqual(res.status_code, 200)
+        body = res.json()
+        self.assertEqual(body["count"], 2)
+        self.assertEqual(body["open"], 1)
+        self.assertEqual(body["units"], 12)
+        # 10 × 50 sent back, plus 2 × 200 — and only the open one is still outstanding.
+        self.assertEqual(Decimal(str(body["value"])), Decimal("900.00"))
+        self.assertEqual(Decimal(str(body["outstanding"])), Decimal("500.00"))
+
+    def test_the_summary_follows_the_same_filters_as_the_list(self):
+        body = self.client.get("/api/purchases/returns-summary/", {"status": "settled"}).json()
+        self.assertEqual(body["count"], 1)
+        self.assertEqual(Decimal(str(body["outstanding"])), Decimal("0.00"))
+
+    def test_another_businesss_returns_are_not_listed(self):
+        theirs, their_branch, their_owner = create_business(
+            name="Sylhet Tools", owner_name="Them", owner_email="them@example.com", owner_password=PASSWORD
+        )
+        self.login(their_owner)
+        self.assertEqual(self.codes(), [])
+        self.assertEqual(self.client.get("/api/purchases/returns-summary/").json()["count"], 0)
+
+    def test_a_manager_needs_the_owners_purchasing_switch(self):
+        manager = create_user(
+            actor=self.owner, name="Manager", email="manager@example.com", password=PASSWORD, role=User.Role.MANAGER,
+        )
+        self.login(manager)
+        self.assertEqual(self.client.get("/api/purchases/returns-list/").status_code, 403)
+
+        self.business.settings["permissions"]["managerPurchases"] = True
+        self.business.save(update_fields=["settings"])
+        self.assertEqual(self.client.get("/api/purchases/returns-list/").status_code, 200)
+
+    def test_staff_cannot_see_supplier_returns(self):
+        helper = create_user(
+            actor=self.owner, name="Helper", email="helper@example.com", password=PASSWORD, role=User.Role.STAFF,
+        )
+        self.login(helper)
+        for path in ("returns-list", "returns-summary"):
+            self.assertEqual(self.client.get(f"/api/purchases/{path}/").status_code, 403, path)
+
+    def test_sending_stock_back_through_the_api(self):
+        res = self.client.post(
+            "/api/purchases/returns/",
+            {"item": str(self.bill.items.get().id), "quantity": 5, "reason": "Bent needles"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201, res.json())
+        self.assertEqual(res.json()["code"], "SR-000003")
+        self.assertEqual(StockLevel.objects.get(product=self.machine, branch=self.branch).quantity, 85)
+
+    def test_settling_through_the_api(self):
+        res = self.client.post(
+            f"/api/purchases/returns/{self.faulty.id}/settle/",
+            {"replacedQuantity": 4, "refundedAmount": "300.00"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 200, res.json())
+        body = res.json()
+        self.assertEqual(body["replacedQuantity"], 4)
+        self.assertEqual(Decimal(str(body["outstanding"])), Decimal("0.00"))
+        self.assertEqual(body["status"], "settled")

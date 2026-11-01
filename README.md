@@ -171,8 +171,8 @@ action after reading it is a phone call.
 
 All built: login, dashboard, scan, rent out, take back, rentals (list + detail), returns,
 customers (list + detail), products (list + detail with printable QR labels), stock,
-purchases, suppliers, reports, team, activity, settings, the super admin's platform page,
-and the public receipt a customer opens from their QR code.
+purchases, suppliers, sent back to supplier, reports, team, activity, settings, the super
+admin's platform page, and the public receipt a customer opens from their QR code.
 
 There is no Branches screen. A business is created with exactly one branch and the branch
 pickers never render; the model and the `branch` column on stock, rentals and purchases
@@ -191,7 +191,24 @@ there for an accountant. Exports stream row by row rather than being built in me
 a cell that starts `=`, `+`, `-` or `@` is prefixed with an apostrophe so a customer named
 `=HYPERLINK(…)` cannot run a formula on the owner's machine when the file is opened.
 
+## Sent back to supplier
+
+Faulty stock goes back on the bill it arrived on, because that bill says who to chase and
+what was paid per unit. Sending it back takes the units off the shelf straight away, so the
+screen reads as an action with consequences rather than a note someone files, and the
+quantity is capped at what is still left on the purchase line.
+
+A supplier makes it good in three ways and often in more than one: replacements come back
+as stock, a refund is money in, and a credit comes off what the business already owes them
+— so it is recorded as a supplier payment with the method `credit` and pays down their
+oldest bills exactly as cash would. Each can be recorded on its own, and a return that is
+half replaced stays open for the rest. Closing one unsettled writes off what is left and
+is kept deliberately quiet at the bottom of the dialog.
+
+The figures above the list follow the same filters as the list. `outstanding` is summed in
+Python rather than SQL, because it nets replacements, refunds and credits off the value;
+only the open returns are totalled, which are the few rows a shop actually chases.
+
 ## Still to build
 
-See `PLAN.md`. The supplier-returns screen (the API is there). Everything else in the plan
-is done.
+See `PLAN.md`. Everything in the plan is done.
