@@ -33,8 +33,10 @@ export async function request<T>(
     throw unreachable(timeout.aborted ? timeout.reason : err)
   }
   if (res.status === 401) {
-    // The login ended for good. A full page load to /logout clears the cookies, rather
-    // than leaving the app half-authenticated and failing every request.
+    // The login ended for good. This has to be a full page load, not a router push: it
+    // clears the cookies server-side and throws away the whole query cache with the
+    // document, so no stale data from the old session survives into the login screen.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.href = "/logout"
     throw new ApiError(401, "Your session has ended. Please log in again.")
   }

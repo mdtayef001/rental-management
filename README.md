@@ -152,9 +152,29 @@ frontend/src/
 Each app keeps business logic in `services.py`: views validate input and decide who may
 call, services do the work in one transaction.
 
+## Design
+
+**Archivo** for the interface — a grotesque with a tall x-height that holds up at 11px in a
+dense table and at 32px on a figure. Tabular figures are on globally, because nearly every
+screen is a column of quantities, money or day counts. **IBM Plex Mono** is used only for
+machine codes (`RN-000001`, SKUs, barcodes): strings people compare character by character
+against a printed label, where fixed widths are information rather than decoration.
+
+The dashboard is arranged by urgency, not by category. The **chase list** of overdue
+rentals is the one loud element on the page, because it is the only thing that asks anyone
+to do something. Each row carries a day block whose colour steps at 1–3 days (a nudge),
+4–14 (a real problem) and 15+ (stock at risk), so five rows can be ranked at a glance
+without reading dates — and the customer's phone number sits in the row, because the next
+action after reading it is a phone call.
+
+## Screens
+
+All built: login, dashboard, scan, rent out, take back, rentals (list + detail), returns,
+customers (list + detail), products (list + detail with printable QR labels), stock,
+purchases, suppliers, team, branches, activity, settings, the super admin's platform page,
+and the public receipt a customer opens from their QR code.
+
 ## Still to build
 
-See `PLAN.md`. The backend is complete through purchasing; the frontend has login, the app
-shell, dashboard, scan, take-back and the rentals list. Remaining screens: rent-out cart,
-rental detail, receipts and printing, customers, products, stock, purchasing, team,
-settings, reports, and the super admin's platform pages.
+See `PLAN.md`. Reporting with CSV export, and the supplier-returns screen (the API is
+there). Everything else in the plan is done.

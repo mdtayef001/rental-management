@@ -1,6 +1,5 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
@@ -123,31 +122,22 @@ function NavLink({ item, path, overdue }: { item: Item; path: string; overdue: n
 
 export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme()
-  // The server has no idea which theme the browser will resolve to, so rendering the Sun
-  // or Moon during SSR guarantees a hydration mismatch. Render a neutral placeholder until
-  // the component has mounted and the real theme is known.
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
 
-  if (!mounted) {
-    return (
-      <Button variant="ghost" className="w-full justify-start gap-3" disabled aria-hidden>
-        <Moon className="size-4 opacity-0" />
-        <span className="opacity-0">Theme</span>
-      </Button>
-    )
-  }
-
-  const dark = resolvedTheme === "dark"
+  // Both icons are always rendered and CSS shows one, rather than branching on the theme
+  // in JavaScript. The server cannot know which theme the browser will resolve to, so any
+  // branch here is a guaranteed hydration mismatch; this way the markup is identical on
+  // both sides and the right icon appears the moment the stylesheet applies.
   return (
     <Button
       variant="ghost"
       className="w-full justify-start gap-3"
-      onClick={() => setTheme(dark ? "light" : "dark")}
-      aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+      onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+      aria-label="Switch between light and dark mode"
     >
-      {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
-      {dark ? "Light mode" : "Dark mode"}
+      <Moon className="size-4 dark:hidden" />
+      <Sun className="hidden size-4 dark:block" />
+      <span className="dark:hidden">Dark mode</span>
+      <span className="hidden dark:inline">Light mode</span>
     </Button>
   )
 }

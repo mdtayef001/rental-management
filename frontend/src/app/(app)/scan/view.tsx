@@ -2,10 +2,8 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { AlertTriangle, ArrowRight, Package, ScanLine, Undo2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { ButtonLink } from "@/components/ui/button-link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { PageHeader, Spinner, StatTile } from "@/components/common"
@@ -23,7 +21,6 @@ import { count, money, plural } from "@/lib/format"
  * and only the person at the counter knows which.
  */
 export function ScanView({ canRent, canTakeReturns }: { canRent: boolean; canTakeReturns: boolean }) {
-  const router = useRouter()
   const currency = useCurrency()
   const { defaultBranchId, showPicker, branches } = useBranchScope()
   const [branchId, setBranchId] = useState(defaultBranchId)

@@ -135,14 +135,17 @@ export function CodeInput({
   onSubmit,
   placeholder = "Scan or type a barcode / SKU, then press Enter",
   autoFocus,
-  disabled,
+  busy,
 }: {
   onSubmit: (code: string) => void
   placeholder?: string
   autoFocus?: boolean
-  disabled?: boolean
+  /** A lookup is in flight. The field stays usable — see below. */
+  busy?: boolean
 }) {
   const [value, setValue] = useState("")
+  const inputRef = useRef<HTMLInputElement>(null)
+
   return (
     <form
       className="flex gap-2"
@@ -153,17 +156,23 @@ export function CodeInput({
         onSubmit(code)
         // Cleared straight away, so the next scan doesn't append to the last one.
         setValue("")
+        // And focus is put back deliberately: a hardware scanner fires the next code
+        // immediately, and anything that steals focus between scans drops items silently.
+        inputRef.current?.focus()
       }}
     >
       <div className="relative flex-1">
         <Keyboard className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+        {/* Never disabled while a lookup runs. Disabling an input blurs it, and a USB
+            scanner typing the next code into nothing is a silently lost item. The field
+            stays live; only the button waits. */}
         <Input
+          ref={inputRef}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder={placeholder}
           className="h-11 pl-9 font-mono"
           autoFocus={autoFocus}
-          disabled={disabled}
           inputMode="text"
           autoComplete="off"
           autoCapitalize="off"
@@ -171,7 +180,7 @@ export function CodeInput({
           aria-label="Barcode or SKU"
         />
       </div>
-      <Button type="submit" className="h-11" disabled={disabled || !value.trim()}>
+      <Button type="submit" className="h-11" disabled={busy || !value.trim()}>
         Look up
       </Button>
     </form>

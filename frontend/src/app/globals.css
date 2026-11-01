@@ -8,7 +8,7 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-mono: var(--font-mono);
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -126,5 +126,37 @@
   }
   html {
     @apply font-sans;
+    /* This app is a wall of quantities, money and day counts. Tabular figures keep every
+       column of numbers aligned, so a 1 and a 7 occupy the same width down a table. */
+    font-variant-numeric: tabular-nums;
+  }
+}
+/* Printing.
+   Only the receipt goes on paper: everything else — sidebar, buttons, the rest of the
+   page — is hidden, and the receipt is lifted out of the layout so it starts at the top
+   of the sheet. Works for both 80mm thermal rolls and A4. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .receipt,
+  .receipt * {
+    visibility: visible;
+  }
+
+  .receipt {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    max-width: none;
+    padding: 0;
+    color: #000;
+    background: #fff;
+  }
+
+  @page {
+    margin: 8mm;
   }
 }

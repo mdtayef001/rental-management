@@ -125,7 +125,7 @@ function FindPanel({
           <>
             {/* Typing first: a USB gun scanner needs nothing else, and it works when the
                 camera is refused or missing. */}
-            <CodeInput onSubmit={(code) => onLookup({ code })} autoFocus disabled={busy} />
+            <CodeInput onSubmit={(code) => onLookup({ code })} autoFocus busy={busy} />
             <p className="text-xs text-muted-foreground">
               Works with a product barcode, a SKU, or the QR code on the customer&apos;s receipt.
             </p>

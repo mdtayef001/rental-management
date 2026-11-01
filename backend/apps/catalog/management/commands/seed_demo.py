@@ -142,6 +142,22 @@ class Command(BaseCommand):
             notes="Chased twice by phone.",
         )
 
+        # Two more overdue, at different severities, so the chase list shows all three of
+        # its levels: a nudge (1-3 days), a real problem (4-14), and stock at risk (15+).
+        create_rental(
+            user=staff, customer=customers["Dhaka Events"], branch=branch,
+            started_at=now - timedelta(days=9), due_at=now - timedelta(days=2),
+            deposit=Decimal("2000.00"),
+            lines=[{"product": products["IRN-1"], "quantity": 3, "plan": "daily"}],
+        )
+        create_rental(
+            user=owner, customer=customers["Mr. Y Textiles"], branch=branch,
+            started_at=now - timedelta(days=40), due_at=now - timedelta(days=21),
+            deposit=Decimal("8000.00"),
+            lines=[{"product": products["OL-200"], "quantity": 4, "plan": "weekly"}],
+            notes="No answer on the phone for two weeks.",
+        )
+
         # Open-ended, no agreed return date.
         create_rental(
             user=owner, customer=customers["Dhaka Events"], branch=branch,
