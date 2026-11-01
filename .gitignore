@@ -1,0 +1,22 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+db.sqlite3
+staticfiles/
+
+# Node
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# Secrets — never commit these
+.env
+.env.local
+.env*.local
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/

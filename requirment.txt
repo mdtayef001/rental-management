@@ -1,0 +1,27 @@
+i want a rendtal manegment system to build as refarence you can go  /home/tayef/code/friday in that project there is rental system i build you can taka that or you youse the whole project but there will be no subcripton system i want build for my client you can takt the inveroty system, loging system, security, purcess, you can every thing relate to rental, but have super user who can create business but don't need the werhouse, transfers,
+
+the main fethcer must have:
+-super user can create busniess
+-owner can create users
+-can scan barcode or qr san to rent out or search product
+-when scan in or return same client rent multipul time or the same product it should show or aks which are he returing
+-create recipts
+
+for the forntedn:
+-Next js
+-TS
+-Tailwind
+-TensackQuery for refach,lodaing, cahsing to make webiste faster
+-Do Clean code so I can read or undersant
+-JWT for security
+-Use fornted libary that you think is the best
+-Use other pakege to need of you think it's good to have
+
+For backend:
+-Djanog
+-Rest api freamwork
+-JWT for secury
+-Use other pakege to need of you think it's good to have
+
+
+Website need be fast don't fecth all data all at once do lazing loging or cahe it use paginaton and have to indutiry grade security
