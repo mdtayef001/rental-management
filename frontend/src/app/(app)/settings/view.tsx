@@ -125,7 +125,7 @@ export function SettingsView({ business }: { business: Business }) {
                 onChange={(e) =>
                   patch("rentals", { ...settings.rentals, defaultPlan: e.target.value as BusinessSettings["rentals"]["defaultPlan"] })
                 }
-                className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                className="h-9 w-full rounded-md border bg-card px-2 text-sm"
               >
                 <option value="daily">Per day</option>
                 <option value="weekly">Per week</option>

@@ -1,14 +1,24 @@
 "use client"
 
 import { useState } from "react"
-import { Ban, KeyRound, Plus, Search, Trash2 } from "lucide-react"
+import { Ban, KeyRound, Plus, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { EmptyState, ErrorState, PageHeader, Pagination, Spinner, TableSkeleton } from "@/components/common"
+import {
+  EmptyState,
+  ErrorState,
+  FilterTabs,
+  PageHeader,
+  Pagination,
+  SearchInput,
+  Spinner,
+  TableSkeleton,
+  Toolbar,
+} from "@/components/common"
+import { DataView, Primary, type Column } from "@/components/data-view"
 import {
   useCreateBusiness,
   useDeleteBusiness,
@@ -18,6 +28,12 @@ import {
 import { useDebounced, usePaging, usePlatformBusinesses } from "@/lib/data/queries"
 import { count, date } from "@/lib/format"
 import type { PlatformBusiness } from "@/lib/types"
+
+const STATUSES = [
+  { value: "", label: "All" },
+  { value: "active", label: "Active" },
+  { value: "suspended", label: "Suspended" },
+] as const
 
 /**
  * The super admin's only screen: the businesses on the platform.
@@ -40,6 +56,50 @@ export function PlatformView() {
   )
   const suspend = useSuspendBusiness()
 
+  const columns: Column<PlatformBusiness>[] = [
+    {
+      id: "business",
+      header: "Business",
+      role: "title",
+      cell: (business) => (
+        <Primary
+          sub={
+            <>
+              {business.industry || "No industry"}
+              {business.suspended && business.suspendedReason && (
+                <span className="block text-destructive">{business.suspendedReason}</span>
+              )}
+            </>
+          }
+        >
+          {business.name}
+        </Primary>
+      ),
+    },
+    {
+      id: "state",
+      header: "",
+      role: "status",
+      cell: (business) => (business.suspended ? <Badge variant="destructive">Suspended</Badge> : null),
+    },
+    {
+      id: "owner",
+      header: "Owner",
+      cell: (business) => (
+        <>
+          {business.ownerName}
+          <div className="text-xs text-muted-foreground">{business.ownerEmail}</div>
+        </>
+      ),
+    },
+    { id: "people", header: "People", align: "end", cell: (business) => count(business.userCount) },
+    {
+      id: "created",
+      header: "Created",
+      cell: (business) => <span className="text-muted-foreground">{date(business.createdAt)}</span>,
+    },
+  ]
+
   return (
     <div className="space-y-6">
       <PageHeader title="Businesses" description="Every business on the platform.">
@@ -49,36 +109,15 @@ export function PlatformView() {
         </Button>
       </PageHeader>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-56 flex-1">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Business name or owner email"
-            className="pl-9"
-            aria-label="Search businesses"
-          />
-        </div>
-        <div className="flex gap-1">
-          {(
-            [
-              { value: "", label: "All" },
-              { value: "active", label: "Active" },
-              { value: "suspended", label: "Suspended" },
-            ] as const
-          ).map((option) => (
-            <Button
-              key={option.value}
-              size="sm"
-              variant={status === option.value ? "default" : "outline"}
-              onClick={() => setStatus(option.value)}
-            >
-              {option.label}
-            </Button>
-          ))}
-        </div>
-      </div>
+      <Toolbar>
+        <SearchInput
+          value={text}
+          onChange={setText}
+          placeholder="Business name or owner email"
+          label="Search businesses"
+        />
+        <FilterTabs value={status} onChange={setStatus} options={STATUSES} label="Filter businesses" />
+      </Toolbar>
 
       {isError ? (
         <ErrorState error={error} onRetry={() => refetch()} />
@@ -92,76 +131,39 @@ export function PlatformView() {
         />
       ) : (
         <>
-          <div className="overflow-x-auto rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Business</TableHead>
-                  <TableHead>Owner</TableHead>
-                  <TableHead className="text-right">People</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="w-48" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data?.results.map((business) => (
-                  <TableRow key={business.id} className={business.suspended ? "opacity-60" : undefined}>
-                    <TableCell>
-                      <div className="font-medium">{business.name}</div>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        {business.industry || "—"}
-                        {business.suspended && <Badge variant="destructive">Suspended</Badge>}
-                      </div>
-                      {business.suspended && business.suspendedReason && (
-                        <div className="mt-1 text-xs text-destructive">{business.suspendedReason}</div>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {business.ownerName}
-                      <div className="text-xs text-muted-foreground">{business.ownerEmail}</div>
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{count(business.userCount)}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{date(business.createdAt)}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={suspend.isPending}
-                          onClick={() =>
-                            suspend.mutate({
-                              id: business.id,
-                              suspended: !business.suspended,
-                              reason: business.suspended ? "" : "Suspended by the platform administrator",
-                            })
-                          }
-                        >
-                          <Ban className="size-4" />
-                          {business.suspended ? "Switch on" : "Suspend"}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => setActing({ business, what: "password" })}
-                          aria-label={`Reset the owner password for ${business.name}`}
-                        >
-                          <KeyRound className="size-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => setActing({ business, what: "delete" })}
-                          aria-label={`Delete ${business.name}`}
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <DataView
+            label="Businesses"
+            rows={data?.results ?? []}
+            columns={columns}
+            getKey={(business) => business.id}
+            actions={(business) => (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={suspend.isPending}
+                  onClick={() =>
+                    suspend.mutate({
+                      id: business.id,
+                      suspended: !business.suspended,
+                      reason: business.suspended ? "" : "Suspended by the platform administrator",
+                    })
+                  }
+                >
+                  <Ban className="size-4" />
+                  {business.suspended ? "Switch on" : "Suspend"}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setActing({ business, what: "password" })}>
+                  <KeyRound className="size-4" />
+                  <span className="md:sr-only">Reset owner password</span>
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setActing({ business, what: "delete" })}>
+                  <Trash2 className="size-4" />
+                  <span className="md:sr-only">Delete</span>
+                </Button>
+              </>
+            )}
+          />
 
           <Pagination
             page={page}

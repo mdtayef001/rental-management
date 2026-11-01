@@ -14,8 +14,8 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { EmptyState, ErrorState, PageHeader, Pagination, Spinner, TableSkeleton } from "@/components/common"
+import { DataView, Primary, type Column } from "@/components/data-view"
 import { useBranchScope, useCurrentUser } from "@/components/session"
 import { canManageUser, creatableRoles, roleLabel } from "@/lib/auth/roles"
 import { useDisableUser, useSaveUser, useSetUserPassword } from "@/lib/data/mutations"
@@ -50,8 +50,55 @@ export function UsersView() {
 
   const roles = creatableRoles(me)
 
+  const columns: Column<SessionUser>[] = [
+    {
+      id: "name",
+      header: "Name",
+      role: "title",
+      cell: (person) => (
+        <Primary sub={person.email}>
+          <span className={person.isActive ? undefined : "line-through decoration-muted-foreground"}>
+            {person.name}
+          </span>
+          {person.id === me.id && <span className="ml-2 text-xs font-normal text-muted-foreground">(you)</span>}
+        </Primary>
+      ),
+    },
+    {
+      id: "role",
+      header: "Role",
+      role: "status",
+      cell: (person) => (
+        <div className="flex flex-wrap items-center gap-1">
+          <Badge variant={person.role === "owner" ? "default" : "secondary"}>{roleLabel(person)}</Badge>
+          {!person.isActive && <Badge variant="outline">Disabled</Badge>}
+        </div>
+      ),
+    },
+    {
+      id: "can",
+      header: "Can",
+      cell: (person) => (
+        <span className="text-sm text-muted-foreground">
+          {person.role === "staff"
+            ? RIGHTS.filter((r) => person[r.id])
+                .map((r) => r.label)
+                .join(", ") || "Nothing yet"
+            : "Everything in their role"}
+        </span>
+      ),
+    },
+    {
+      id: "seen",
+      header: "Last logged in",
+      cell: (person) => (
+        <span className="text-sm text-muted-foreground">{person.lastLogin ? date(person.lastLogin) : "Never"}</span>
+      ),
+    },
+  ]
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <PageHeader title="Team" description="Who works here, and what each of them is allowed to do.">
         {roles.length > 0 && (
           <Button onClick={() => setAdding(true)}>
@@ -69,70 +116,25 @@ export function UsersView() {
         <EmptyState title="Nobody else yet" description="Add a manager or counter staff to share the work." />
       ) : (
         <>
-          <div className="overflow-x-auto rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Can</TableHead>
-                  <TableHead>Last logged in</TableHead>
-                  <TableHead className="w-20" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data?.results.map((person) => {
-                  const mine = canManageUser(me, person)
-                  return (
-                    <TableRow key={person.id} className={person.isActive ? undefined : "opacity-60"}>
-                      <TableCell>
-                        <div className="font-medium">
-                          {person.name}
-                          {person.id === me.id && <span className="ml-2 text-xs text-muted-foreground">(you)</span>}
-                        </div>
-                        <div className="text-xs text-muted-foreground">{person.email}</div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={person.role === "owner" ? "default" : "secondary"}>{roleLabel(person)}</Badge>
-                        {!person.isActive && (
-                          <Badge variant="outline" className="ml-1">
-                            Disabled
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {person.role === "staff" ? (
-                          RIGHTS.filter((r) => person[r.id]).map((r) => r.label).join(", ") || "Nothing yet"
-                        ) : (
-                          <span>Everything in their role</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {person.lastLogin ? date(person.lastLogin) : "Never"}
-                      </TableCell>
-                      <TableCell>
-                        {mine && (
-                          <div className="flex gap-1">
-                            <Button variant="ghost" size="sm" onClick={() => setEditing(person)}>
-                              Edit
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              onClick={() => setResetting(person)}
-                              aria-label={`Reset ${person.name}'s password`}
-                            >
-                              <KeyRound className="size-4" />
-                            </Button>
-                          </div>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </div>
+          <DataView
+            label="Team"
+            rows={data?.results ?? []}
+            columns={columns}
+            getKey={(person) => person.id}
+            actions={(person) =>
+              canManageUser(me, person) ? (
+                <>
+                  <Button variant="outline" size="sm" onClick={() => setEditing(person)}>
+                    Edit
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setResetting(person)}>
+                    <KeyRound className="size-4" />
+                    <span className="md:sr-only">Reset password</span>
+                  </Button>
+                </>
+              ) : null
+            }
+          />
 
           <Pagination
             page={page}
@@ -255,7 +257,7 @@ function UserDialog({ roles, user, onClose }: { roles: TenantRole[]; user?: Sess
                 id="u-role"
                 value={form.role}
                 onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as TenantRole }))}
-                className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                className="h-9 w-full rounded-md border bg-card px-2 text-sm"
               >
                 {roles.map((role) => (
                   <option key={role} value={role}>

@@ -1,13 +1,12 @@
 "use client"
 
 import { useState } from "react"
-import Link from "next/link"
 import { AlertTriangle, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { ErrorState } from "@/components/common"
+import { ErrorState, PageHeader, StatGrid, StatTile } from "@/components/common"
+import { DataView, Code, Primary, type Column } from "@/components/data-view"
 import { useCurrency } from "@/components/session"
 import {
   exportUrl,
@@ -19,7 +18,6 @@ import {
 import { count, money } from "@/lib/format"
 import { DEFAULT_PRESET, PRESETS, periodLabel, presetFor, rangeLabel } from "@/lib/reports"
 import type { CustomerReportRow, ProductReportRow, ReportExport, ReportRange, RevenueRow } from "@/lib/types"
-import { cn } from "@/lib/utils"
 
 /**
  * The owner's end-of-month screen.
@@ -46,19 +44,11 @@ export function ReportsView({ canSeeSpend }: { canSeeSpend: boolean }) {
   const busy = summary.isFetching || revenue.isFetching
 
   return (
-    <div className="space-y-8">
-      <header className="space-y-4">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              {rangeLabel(range)}
-              {busy && " · updating…"}
-            </p>
-          </div>
-        </div>
+    <div className="space-y-6">
+      <div className="space-y-4">
+        <PageHeader title="Reports" description={rangeLabel(range) + (busy ? " · updating…" : "")} />
         <RangePicker range={range} onChange={setRange} />
-      </header>
+      </div>
 
       {summary.isError ? (
         <ErrorState error={summary.error} onRetry={() => summary.refetch()} />
@@ -66,25 +56,25 @@ export function ReportsView({ canSeeSpend }: { canSeeSpend: boolean }) {
         <>
           {/* Earned in the range. Four figures, because a fifth would make all five
               forgettable — the rest are in the strip underneath. */}
-          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border lg:grid-cols-4">
-            <Figure label="Earned" value={money(s?.revenue ?? 0, currency)} loading={!s} big />
-            <Figure label="Rent" value={money(s?.rent ?? 0, currency)} loading={!s} />
-            <Figure
+          <StatGrid>
+            <StatTile label="Earned" value={money(s?.revenue ?? 0, currency)} loading={!s} />
+            <StatTile label="Rent" value={money(s?.rent ?? 0, currency)} loading={!s} />
+            <StatTile
               label="Late fees"
               value={money(s?.lateFees ?? 0, currency)}
               loading={!s}
-              tone={s?.lateFees ? "warn" : undefined}
+              tone={s?.lateFees ? "warning" : "default"}
             />
-            <Figure
+            <StatTile
               label="Owed by customers"
               value={money(s?.outstanding ?? 0, currency)}
               loading={!s}
-              tone={s?.outstanding ? "bad" : undefined}
+              tone={s?.outstanding ? "danger" : "default"}
               hint="All time"
             />
-          </div>
+          </StatGrid>
 
-          <dl className="flex flex-wrap gap-x-10 gap-y-4 border-t pt-5 text-sm">
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-4 border-t pt-5 text-sm sm:flex sm:flex-wrap sm:gap-x-10">
             <Quiet label="Rentals started" value={count(s?.rentals ?? 0)} />
             <Quiet label="Units sent out" value={count(s?.unitsRented ?? 0)} />
             <Quiet label="Units returned" value={count(s?.unitsReturned ?? 0)} />
@@ -96,7 +86,7 @@ export function ReportsView({ canSeeSpend }: { canSeeSpend: boolean }) {
           </dl>
 
           {(s?.unitsLost || s?.unitsDamaged) ? (
-            <p className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-500">
+            <p className="flex items-start gap-2 rounded-lg bg-warning-soft px-3 py-2.5 text-sm text-warning-soft-foreground">
               <AlertTriangle className="mt-0.5 size-4 shrink-0" />
               <span>
                 {count(s.unitsLost)} {s.unitsLost === 1 ? "unit never came" : "units never came"} back and{" "}
@@ -114,7 +104,7 @@ export function ReportsView({ canSeeSpend }: { canSeeSpend: boolean }) {
             href={exportUrl("revenue", range)}
           />
 
-          <div className="grid gap-8 lg:grid-cols-2">
+          <div className="grid gap-6 lg:grid-cols-2">
             <ProductTable
               rows={products.data?.results ?? []}
               currency={currency}
@@ -140,12 +130,13 @@ export function ReportsView({ canSeeSpend }: { canSeeSpend: boolean }) {
 function RangePicker({ range, onChange }: { range: ReportRange; onChange: (r: ReportRange) => void }) {
   const active = presetFor(range)
   return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-3">
-      <div className="flex flex-wrap gap-1">
+    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-2">
+      <div className="-mx-1 flex gap-1 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {PRESETS.map((preset) => (
           <Button
             key={preset.id}
             size="sm"
+            className="shrink-0"
             variant={active === preset.id ? "default" : "outline"}
             onClick={() => onChange(preset.range())}
           >
@@ -159,7 +150,7 @@ function RangePicker({ range, onChange }: { range: ReportRange; onChange: (r: Re
           value={range.from}
           max={range.to}
           onChange={(e) => e.target.value && onChange({ ...range, from: e.target.value })}
-          className="h-9 w-auto"
+          className="h-9 w-auto flex-1 sm:flex-none"
           aria-label="From"
         />
         <span className="text-muted-foreground">to</span>
@@ -168,7 +159,7 @@ function RangePicker({ range, onChange }: { range: ReportRange; onChange: (r: Re
           value={range.to}
           min={range.from}
           onChange={(e) => e.target.value && onChange({ ...range, to: e.target.value })}
-          className="h-9 w-auto"
+          className="h-9 w-auto flex-1 sm:flex-none"
           aria-label="To"
         />
       </div>
@@ -259,38 +250,38 @@ function ProductTable({
       ) : rows.length === 0 ? (
         <Empty>No items came back in this period.</Empty>
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Product</TableHead>
-                <TableHead className="text-right">Units</TableHead>
-                <TableHead className="text-right">Earned</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.slice(0, 8).map((row) => (
-                <TableRow key={row.id ?? row.name}>
-                  <TableCell>
-                    {row.id ? (
-                      <Link href={`/products/${row.id}`} className="font-medium underline-offset-4 hover:underline">
-                        {row.name}
-                      </Link>
-                    ) : (
-                      <span className="font-medium">{row.name}</span>
-                    )}
-                    <div className="flex gap-2 font-mono text-xs text-muted-foreground">
-                      {row.sku}
-                      {row.lost > 0 && <span className="font-sans text-destructive">{row.lost} lost</span>}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">{count(row.units)}</TableCell>
-                  <TableCell className="text-right font-medium tabular-nums">{money(row.revenue, currency)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+        <DataView
+          label="What earned the most"
+          rows={rows.slice(0, 8)}
+          getKey={(row) => row.id ?? row.name}
+          href={(row) => (row.id ? `/products/${row.id}` : "")}
+          columns={[
+            {
+              id: "product",
+              header: "Product",
+              role: "title",
+              cell: (row) => (
+                <Primary
+                  sub={
+                    <>
+                      <Code>{row.sku}</Code>
+                      {row.lost > 0 && <span className="ml-2 text-destructive">{row.lost} lost</span>}
+                    </>
+                  }
+                >
+                  {row.name}
+                </Primary>
+              ),
+            },
+            { id: "units", header: "Units", align: "end", cell: (row) => count(row.units) },
+            {
+              id: "earned",
+              header: "Earned",
+              align: "end",
+              cell: (row) => <span className="font-medium">{money(row.revenue, currency)}</span>,
+            },
+          ] satisfies Column<ProductReportRow>[]}
+        />
       )}
     </section>
   )
@@ -315,41 +306,37 @@ function CustomerTable({
       ) : rows.length === 0 ? (
         <Empty>Nobody returned anything in this period.</Empty>
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Customer</TableHead>
-                <TableHead className="text-right">Spent</TableHead>
-                <TableHead className="text-right">Owes</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.slice(0, 8).map((row) => (
-                <TableRow key={row.id ?? row.name}>
-                  <TableCell>
-                    {row.id ? (
-                      <Link href={`/customers/${row.id}`} className="font-medium underline-offset-4 hover:underline">
-                        {row.name}
-                      </Link>
-                    ) : (
-                      <span className="font-medium">{row.name}</span>
-                    )}
-                    <div className="text-xs text-muted-foreground">
-                      {row.phone || `${count(row.rentals)} rentals`}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right font-medium tabular-nums">{money(row.revenue, currency)}</TableCell>
-                  <TableCell
-                    className={cn("text-right tabular-nums", row.outstanding > 0 && "text-destructive")}
-                  >
-                    {row.outstanding > 0 ? money(row.outstanding, currency) : "—"}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+        <DataView
+          label="Best customers"
+          rows={rows.slice(0, 8)}
+          getKey={(row) => row.id ?? row.name}
+          href={(row) => (row.id ? `/customers/${row.id}` : "")}
+          columns={[
+            {
+              id: "customer",
+              header: "Customer",
+              role: "title",
+              cell: (row) => <Primary sub={row.phone || `${count(row.rentals)} rentals`}>{row.name}</Primary>,
+            },
+            {
+              id: "spent",
+              header: "Spent",
+              align: "end",
+              cell: (row) => <span className="font-medium">{money(row.revenue, currency)}</span>,
+            },
+            {
+              id: "owes",
+              header: "Owes",
+              align: "end",
+              cell: (row) =>
+                row.outstanding > 0 ? (
+                  <span className="text-destructive">{money(row.outstanding, currency)}</span>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                ),
+            },
+          ] satisfies Column<CustomerReportRow>[]}
+        />
       )}
     </section>
   )
@@ -366,14 +353,19 @@ function Ledgers({ range }: { range: ReportRange }) {
   return (
     <section className="space-y-3 border-t pt-6">
       <h2 className="text-sm font-medium">Download the full records</h2>
-      <ul className="divide-y rounded-lg border">
+      <ul className="divide-y overflow-hidden rounded-lg border bg-card">
         {files.map((file) => (
-          <li key={file.report} className="flex items-center justify-between gap-4 p-4">
+          <li key={file.report} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="font-medium">{file.title}</div>
               <p className="text-sm text-muted-foreground">{file.description}</p>
             </div>
-            <Button variant="outline" size="sm" render={<a href={exportUrl(file.report, range)} download />}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0 max-sm:w-full"
+              render={<a href={exportUrl(file.report, range)} download />}
+            >
               <Download className="size-4" />
               CSV
             </Button>
@@ -409,45 +401,6 @@ function SectionHead({
         <Download className="size-3.5" />
         <span className="sr-only">Download {download} as </span>CSV
       </a>
-    </div>
-  )
-}
-
-function Figure({
-  label,
-  value,
-  hint,
-  tone,
-  loading,
-  big,
-}: {
-  label: string
-  value: string
-  hint?: string
-  tone?: "warn" | "bad"
-  loading?: boolean
-  big?: boolean
-}) {
-  return (
-    <div className="bg-background p-4">
-      <div className="flex items-baseline gap-2 text-sm text-muted-foreground">
-        {label}
-        {hint && <span className="text-xs">{hint}</span>}
-      </div>
-      {loading ? (
-        <Skeleton className="mt-2 h-8 w-24" />
-      ) : (
-        <div
-          className={cn(
-            "mt-1 leading-tight font-semibold tabular-nums",
-            big ? "text-[1.75rem]" : "text-2xl",
-            tone === "warn" && "text-amber-600 dark:text-amber-500",
-            tone === "bad" && "text-destructive",
-          )}
-        >
-          {value}
-        </div>
-      )}
     </div>
   )
 }

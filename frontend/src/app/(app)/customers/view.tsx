@@ -1,17 +1,31 @@
 "use client"
 
 import { useState } from "react"
-import Link from "next/link"
-import { Plus, Search, UserX } from "lucide-react"
+import { Plus, UserX } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { EmptyState, ErrorState, PageHeader, Pagination, TableSkeleton } from "@/components/common"
+import {
+  EmptyState,
+  ErrorState,
+  FilterTabs,
+  PageHeader,
+  Pagination,
+  SearchInput,
+  TableSkeleton,
+  Toolbar,
+} from "@/components/common"
+import { DataView, Primary, type Column } from "@/components/data-view"
 import { CustomerDialog } from "@/components/customer-picker"
 import { useCurrency } from "@/components/session"
 import { useCustomers, useDebounced, usePaging } from "@/lib/data/queries"
 import { count, money } from "@/lib/format"
+import type { Customer } from "@/lib/types"
+
+const FILTERS = [
+  { value: "", label: "All" },
+  { value: "open", label: "Has items out" },
+  { value: "blocked", label: "Blocked" },
+] as const
 
 /** Who the business rents to, with what each of them has out and owes. */
 export function CustomersView() {
@@ -33,8 +47,63 @@ export function CustomersView() {
     { pageSize },
   )
 
+  const columns: Column<Customer>[] = [
+    {
+      id: "name",
+      header: "Name",
+      role: "title",
+      cell: (customer) => <Primary sub={customer.company || customer.phone}>{customer.name}</Primary>,
+    },
+    {
+      id: "blocked",
+      header: "",
+      role: "status",
+      cell: (customer) =>
+        customer.blocked ? (
+          <Badge variant="destructive" className="gap-1">
+            <UserX className="size-3" />
+            Blocked
+          </Badge>
+        ) : null,
+    },
+    {
+      id: "phone",
+      header: "Phone",
+      role: "hidden",
+      cell: (customer) => <span className="font-mono text-xs">{customer.phone || "—"}</span>,
+    },
+    {
+      id: "out",
+      header: "Out now",
+      align: "end",
+      cell: (customer) =>
+        customer.openRentalCount ? (
+          <Badge variant="info">{count(customer.openRentalCount)}</Badge>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
+      id: "rentals",
+      header: "Rentals",
+      align: "end",
+      cell: (customer) => <span className="text-muted-foreground">{count(customer.rentalCount ?? 0)}</span>,
+    },
+    {
+      id: "owes",
+      header: "Owes",
+      align: "end",
+      cell: (customer) =>
+        (customer.balanceDue ?? 0) > 0 ? (
+          <span className="text-warning-soft-foreground dark:text-warning">{money(customer.balanceDue, currency)}</span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+  ]
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <PageHeader title="Customers" description="Everyone you rent to, and what they have out.">
         <Button onClick={() => setAdding(true)}>
           <Plus className="size-4" />
@@ -42,36 +111,15 @@ export function CustomersView() {
         </Button>
       </PageHeader>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-56 flex-1">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Name, phone number, company or ID"
-            className="pl-9"
-            aria-label="Search customers"
-          />
-        </div>
-        <div className="flex gap-1">
-          {(
-            [
-              { value: "", label: "All" },
-              { value: "open", label: "Has items out" },
-              { value: "blocked", label: "Blocked" },
-            ] as const
-          ).map((option) => (
-            <Button
-              key={option.value}
-              size="sm"
-              variant={filter === option.value ? "default" : "outline"}
-              onClick={() => setFilter(option.value)}
-            >
-              {option.label}
-            </Button>
-          ))}
-        </div>
-      </div>
+      <Toolbar>
+        <SearchInput
+          value={text}
+          onChange={setText}
+          placeholder="Name, phone number, company or ID"
+          label="Search customers"
+        />
+        <FilterTabs value={filter} onChange={setFilter} options={FILTERS} label="Filter customers" />
+      </Toolbar>
 
       {isError ? (
         <ErrorState error={error} onRetry={() => refetch()} />
@@ -80,63 +128,20 @@ export function CustomersView() {
       ) : data && data.results.length === 0 ? (
         <EmptyState
           title={search ? `Nobody matches “${search}”` : "No customers yet"}
-          description={search ? "Try a different name or number." : "Add a customer, or add one while renting something out."}
+          description={
+            search ? "Try a different name or number." : "Add a customer, or add one while renting something out."
+          }
           action={<Button onClick={() => setAdding(true)}>Add a customer</Button>}
         />
       ) : (
         <>
-          <div className="overflow-x-auto rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead className="text-right">Out now</TableHead>
-                  <TableHead className="text-right">Rentals</TableHead>
-                  <TableHead className="text-right">Owes</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data?.results.map((customer) => (
-                  <TableRow key={customer.id}>
-                    <TableCell>
-                      <Link href={`/customers/${customer.id}`} className="font-medium hover:underline">
-                        {customer.name}
-                      </Link>
-                      {customer.company && <div className="text-xs text-muted-foreground">{customer.company}</div>}
-                      {customer.blocked && (
-                        <Badge variant="destructive" className="mt-1 gap-1">
-                          <UserX className="size-3" />
-                          Blocked
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{customer.phone || "—"}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {customer.openRentalCount ? (
-                        <Badge variant="secondary">{count(customer.openRentalCount)}</Badge>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">
-                      {count(customer.rentalCount ?? 0)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {(customer.balanceDue ?? 0) > 0 ? (
-                        <span className="text-amber-600 dark:text-amber-500">
-                          {money(customer.balanceDue, currency)}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-
+          <DataView
+            label="Customers"
+            rows={data?.results ?? []}
+            columns={columns}
+            getKey={(customer) => customer.id}
+            href={(customer) => `/customers/${customer.id}`}
+          />
           <Pagination
             page={page}
             pageSize={pageSize}

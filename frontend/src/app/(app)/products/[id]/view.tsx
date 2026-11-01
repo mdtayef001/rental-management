@@ -1,15 +1,15 @@
 "use client"
 
 import { useState } from "react"
-import Link from "next/link"
 import { QRCodeSVG } from "qrcode.react"
-import { ArrowLeft, Archive, Pencil, Printer, SlidersHorizontal } from "lucide-react"
+import { Archive, Pencil, Printer, SlidersHorizontal } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ButtonLink } from "@/components/ui/button-link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ErrorState, PageHeader, TableSkeleton } from "@/components/common"
+import { DataView, Primary } from "@/components/data-view"
 import { ProductDialog } from "@/components/product-form"
 import { StockAdjustDialog } from "@/components/stock-adjust"
 import { useBranchScope, useCurrency, useSettings } from "@/components/session"
@@ -53,12 +53,11 @@ export function ProductDetailView({
 
   return (
     <div className="space-y-6">
-      <Button variant="ghost" size="sm" render={<Link href="/products" />}>
-        <ArrowLeft className="size-4" />
-        Products
-      </Button>
-
-      <PageHeader title={product.name} description={product.description || undefined}>
+      <PageHeader
+        title={product.name}
+        description={product.description || undefined}
+        back={{ href: "/products", label: "Products" }}
+      >
         {canAdjust && (
           <Button variant="outline" onClick={() => setAdjusting(true)}>
             <SlidersHorizontal className="size-4" />
@@ -95,7 +94,7 @@ export function ProductDetailView({
                       <TableRow key={branch.id}>
                         <TableCell>{branch.name}</TableCell>
                         <TableCell className="text-right tabular-nums">
-                          <span className={quantity <= threshold ? "text-amber-600 dark:text-amber-500" : undefined}>
+                          <span className={quantity <= threshold ? "text-warning-soft-foreground dark:text-warning" : undefined}>
                             {count(quantity)}
                           </span>
                         </TableCell>
@@ -121,39 +120,57 @@ export function ProductDetailView({
                   <TableSkeleton rows={4} columns={4} />
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>When</TableHead>
-                        <TableHead>What happened</TableHead>
-                        <TableHead className="text-right">Change</TableHead>
-                        <TableHead className="text-right">Left</TableHead>
-                        <TableHead>Who</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {movements.data?.results.map((move) => (
-                        <TableRow key={move.id}>
-                          <TableCell className="text-sm whitespace-nowrap">{friendlyDateTime(move.at)}</TableCell>
-                          <TableCell className="text-sm">
+                <div className="px-3 pb-3 md:px-0 md:pb-0">
+                  <DataView
+                    label="Stock history"
+                    className="md:rounded-none md:border-0"
+                    rows={movements.data?.results ?? []}
+                    getKey={(move) => move.id}
+                    columns={[
+                      {
+                        id: "what",
+                        header: "What happened",
+                        role: "title",
+                        cell: (move) => (
+                          <Primary sub={move.note || friendlyDateTime(move.at)}>
                             {REASON_LABEL[move.reason] ?? move.reason}
-                            {move.note && <div className="text-xs text-muted-foreground">{move.note}</div>}
-                          </TableCell>
-                          <TableCell
-                            className={`text-right tabular-nums ${move.change > 0 ? "text-emerald-600 dark:text-emerald-500" : "text-destructive"}`}
+                          </Primary>
+                        ),
+                      },
+                      {
+                        id: "change",
+                        header: "Change",
+                        align: "end",
+                        cell: (move) => (
+                          <span
+                            className={
+                              move.change > 0 ? "text-success-soft-foreground dark:text-success" : "text-destructive"
+                            }
                           >
                             {move.change > 0 ? "+" : ""}
                             {count(move.change)}
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums text-muted-foreground">
-                            {count(move.balance)}
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">{move.byName || "—"}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                          </span>
+                        ),
+                      },
+                      {
+                        id: "left",
+                        header: "Left",
+                        align: "end",
+                        cell: (move) => <span className="text-muted-foreground">{count(move.balance)}</span>,
+                      },
+                      {
+                        id: "when",
+                        header: "When",
+                        role: "hidden",
+                        cell: (move) => <span className="whitespace-nowrap">{friendlyDateTime(move.at)}</span>,
+                      },
+                      {
+                        id: "who",
+                        header: "Who",
+                        cell: (move) => <span className="text-muted-foreground">{move.byName || "—"}</span>,
+                      },
+                    ]}
+                  />
                 </div>
               )}
             </CardContent>

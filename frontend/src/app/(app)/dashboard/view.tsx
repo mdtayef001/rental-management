@@ -1,14 +1,13 @@
 "use client"
 
 import Link from "next/link"
-import { Package, Undo2 } from "lucide-react"
+import { Banknote, Package, PiggyBank, TriangleAlert, Undo2, Warehouse } from "lucide-react"
 import { ButtonLink } from "@/components/ui/button-link"
-import { Skeleton } from "@/components/ui/skeleton"
+import { PageHeader, StatGrid, StatTile } from "@/components/common"
 import { NothingOutYet, OverdueList } from "@/components/overdue-list"
 import { useCurrency } from "@/components/session"
 import { useRentalSummary, useStockSummary } from "@/lib/data/queries"
 import { count, money, plural } from "@/lib/format"
-import { cn } from "@/lib/utils"
 
 /**
  * What the owner wants to know on walking in: what's out, what's late, what's owed.
@@ -28,112 +27,104 @@ export function DashboardView({ businessName }: { businessName: string }) {
   const nothingEverRented = !isLoading && summary && summary.open === 0 && summary.unitsOut === 0
 
   return (
-    <div className="space-y-8">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{businessName}</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            {isLoading
-              ? "Loading today's figures…"
-              : summary?.open
-                ? `${plural(summary.open, "rental")} out, ${count(summary.unitsOut)} units with customers.`
-                : "Nothing is out on rent right now."}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <ButtonLink href="/take-back" variant="outline">
-            <Undo2 className="size-4" />
-            Take back
-          </ButtonLink>
-          <ButtonLink href="/rent-out">
-            <Package className="size-4" />
-            Rent out
-          </ButtonLink>
-        </div>
-      </header>
+    <div className="space-y-6">
+      <PageHeader
+        title={businessName}
+        description={
+          isLoading
+            ? "Loading today's figures…"
+            : summary?.open
+              ? `${plural(summary.open, "rental")} out, ${count(summary.unitsOut)} units with customers.`
+              : "Nothing is out on rent right now."
+        }
+      >
+        <ButtonLink href="/take-back" variant="outline">
+          <Undo2 className="size-4" />
+          Take back
+        </ButtonLink>
+        <ButtonLink href="/rent-out">
+          <Package className="size-4" />
+          Rent out
+        </ButtonLink>
+      </PageHeader>
 
-      {/* The shape of today. Four figures, no more — anything else belongs in the strip below. */}
-      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border lg:grid-cols-4">
-        <Figure label="Units out" value={count(summary?.unitsOut ?? 0)} loading={isLoading} />
-        <Figure
+      {/* The shape of today. Four figures, no more — anything else belongs in the strip
+          below. Each one links to the list it summarises, because the next thing anyone
+          does with a number they don't like is look at what is behind it. */}
+      <StatGrid>
+        <StatTile label="Units out" value={count(summary?.unitsOut ?? 0)} icon={Package} loading={isLoading} href="/rentals" />
+        <StatTile
           label="Due back today"
           value={count(summary?.dueToday ?? 0)}
+          icon={Undo2}
           loading={isLoading}
-          tone={summary?.dueToday ? "warn" : undefined}
+          tone={summary?.dueToday ? "warning" : "default"}
+          href="/rentals?status=due_today"
         />
-        <Figure
+        <StatTile
           label="Overdue"
           value={count(summary?.overdue ?? 0)}
+          icon={TriangleAlert}
           loading={isLoading}
-          tone={summary?.overdue ? "bad" : undefined}
+          tone={summary?.overdue ? "danger" : "default"}
+          hint={summary?.overdue ? "Chase these up" : "Nothing late"}
+          href="/rentals?status=overdue"
         />
-        <Figure
+        <StatTile
           label="Owed by customers"
           value={money(summary?.owed ?? 0, currency)}
+          icon={Banknote}
           loading={isLoading}
-          tone={summary?.owed ? "warn" : undefined}
+          tone={summary?.owed ? "warning" : "default"}
         />
-      </div>
+      </StatGrid>
 
       {nothingEverRented ? <NothingOutYet /> : <OverdueList />}
 
-      {/* Everything that is useful to know but needs no action today. Deliberately a plain
-          strip, not more cards, so it cannot compete with the chase list above it. */}
-      <dl className="flex flex-wrap gap-x-10 gap-y-4 border-t pt-5 text-sm">
+      {/* Everything useful to know that needs no action today. Deliberately a plain strip
+          rather than more tiles, so it cannot compete with the chase list above it. */}
+      <dl className="grid grid-cols-2 gap-x-6 gap-y-4 border-t pt-5 text-sm sm:flex sm:flex-wrap sm:gap-x-10">
         <Quiet label="Rent earned this month" value={money(summary?.revenueMonth ?? 0, currency)} />
-        <Quiet label="Deposits held" value={money(summary?.depositsHeld ?? 0, currency)} />
+        <Quiet label="Deposits held" value={money(summary?.depositsHeld ?? 0, currency)} icon={PiggyBank} />
         <Quiet label="Came back today" value={count(summary?.returnedToday ?? 0)} />
         <Quiet
           label="Low stock"
           value={count(stock?.lowStock ?? 0)}
           href={stock?.lowStock ? "/stock?lowStock=1" : undefined}
+          warn={!!stock?.lowStock}
         />
-        <Quiet label="On the shelf" value={`${count(stock?.units ?? 0)} units`} />
+        <Quiet label="On the shelf" value={`${count(stock?.units ?? 0)} units`} icon={Warehouse} />
       </dl>
     </div>
   )
 }
 
-function Figure({
+function Quiet({
   label,
   value,
-  tone,
-  loading,
+  href,
+  warn,
+  icon: Icon,
 }: {
   label: string
   value: string
-  tone?: "warn" | "bad"
-  loading?: boolean
+  href?: string
+  warn?: boolean
+  icon?: React.ComponentType<{ className?: string }>
 }) {
-  return (
-    <div className="bg-background p-4">
-      <div className="text-sm text-muted-foreground">{label}</div>
-      {loading ? (
-        <Skeleton className="mt-2 h-8 w-24" />
-      ) : (
-        <div
-          className={cn(
-            "mt-1 text-[1.75rem] leading-tight font-semibold tabular-nums",
-            tone === "warn" && "text-amber-600 dark:text-amber-500",
-            tone === "bad" && "text-destructive",
-          )}
-        >
-          {value}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function Quiet({ label, value, href }: { label: string; value: string; href?: string }) {
   const body = (
     <>
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="mt-0.5 font-medium tabular-nums">{value}</dd>
+      <dt className="flex items-center gap-1.5 text-muted-foreground">
+        {Icon && <Icon className="size-3.5" />}
+        {label}
+      </dt>
+      <dd className={warn ? "mt-0.5 font-medium tabular-nums text-warning-soft-foreground dark:text-warning" : "mt-0.5 font-medium tabular-nums"}>
+        {value}
+      </dd>
     </>
   )
   return href ? (
-    <Link href={href} className="underline-offset-4 hover:underline">
+    <Link href={href} className="rounded-sm underline-offset-4 hover:underline">
       {body}
     </Link>
   ) : (

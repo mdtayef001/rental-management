@@ -63,7 +63,7 @@ export function StockAdjustDialog({
                 id="s-branch"
                 value={branchId}
                 onChange={(e) => setBranchId(e.target.value)}
-                className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                className="h-9 w-full rounded-md border bg-card px-2 text-sm"
               >
                 {branches.map((branch) => (
                   <option key={branch.id} value={branch.id}>
@@ -89,7 +89,7 @@ export function StockAdjustDialog({
               autoFocus
             />
             {quantity !== "" && change !== 0 && (
-              <p className={`text-sm ${change > 0 ? "text-emerald-600 dark:text-emerald-500" : "text-amber-600 dark:text-amber-500"}`}>
+              <p className={`text-sm ${change > 0 ? "text-success-soft-foreground dark:text-success" : "text-warning-soft-foreground dark:text-warning"}`}>
                 This records {change > 0 ? "an increase" : "a decrease"} of{" "}
                 <strong>
                   {change > 0 ? "+" : ""}

@@ -12,9 +12,16 @@ const badgeVariants = cva(
         secondary:
           "bg-secondary text-secondary-foreground [a]:hover:bg-secondary/80",
         destructive:
-          "bg-destructive/10 text-destructive focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:focus-visible:ring-destructive/40 [a]:hover:bg-destructive/20",
+          "bg-destructive-soft text-destructive-soft-foreground focus-visible:ring-destructive/20 [a]:hover:bg-destructive-soft/80",
         outline:
           "border-border text-foreground [a]:hover:bg-muted [a]:hover:text-muted-foreground",
+        // Status, not decoration: these three say late, due soon and settled, and nothing
+        // else in the app is allowed to borrow them.
+        warning:
+          "bg-warning-soft text-warning-soft-foreground [a]:hover:bg-warning-soft/80",
+        success:
+          "bg-success-soft text-success-soft-foreground [a]:hover:bg-success-soft/80",
+        info: "bg-info-soft text-info-soft-foreground [a]:hover:bg-info-soft/80",
         ghost:
           "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
         link: "text-primary underline-offset-4 hover:underline",

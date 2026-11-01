@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { EmptyState, PageHeader, Spinner } from "@/components/common"
 import { CustomerPicker } from "@/components/customer-picker"
-import { CameraScanner, CodeInput } from "@/components/scanner"
+import { ScanField } from "@/components/scanner"
 import { useBranchScope, useCurrency, useCurrentUser, useSettings } from "@/components/session"
 import { request } from "@/lib/api/client"
 import { ApiError } from "@/lib/api/errors"
@@ -170,7 +170,7 @@ export function RentOutView() {
           <select
             value={branchId}
             onChange={(e) => setBranchId(e.target.value)}
-            className="h-9 rounded-md border bg-background px-2 text-sm"
+            className="h-9 rounded-md border bg-card px-2 text-sm"
             aria-label="Branch"
           >
             {branches.map((branch) => (
@@ -189,8 +189,7 @@ export function RentOutView() {
               <CardTitle className="text-base">Add items</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <CodeInput onSubmit={addCode} autoFocus busy={adding} placeholder="Scan or type a barcode / SKU" />
-              <CameraScanner onDetected={addCode} />
+              <ScanField onScan={addCode} autoFocus busy={adding} placeholder="Scan or type a barcode / SKU" />
             </CardContent>
           </Card>
 
@@ -236,7 +235,7 @@ export function RentOutView() {
                 allowWalkIn={settings.permissions.staffWalkInRentals || user.role !== "staff"}
               />
               {needsCustomer && (
-                <p className="mt-2 text-sm text-amber-600 dark:text-amber-500">
+                <p className="mt-2 text-sm text-warning-soft-foreground dark:text-warning">
                   A customer is required for every rental, per your settings.
                 </p>
               )}
@@ -311,7 +310,7 @@ export function RentOutView() {
                     )}
                   </div>
                   {settings.rentals.depositRequired && !depositValue && suggestedDeposit > 0 && (
-                    <p className="text-xs text-amber-600 dark:text-amber-500">
+                    <p className="text-xs text-warning-soft-foreground dark:text-warning">
                       These items suggest a {money(suggestedDeposit, currency)} deposit.
                     </p>
                   )}
@@ -341,7 +340,7 @@ export function RentOutView() {
                   id="method"
                   value={method}
                   onChange={(e) => setMethod(e.target.value)}
-                  className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                  className="h-9 w-full rounded-md border bg-card px-2 text-sm"
                 >
                   <option value="cash">Cash</option>
                   <option value="mobile">Mobile banking</option>
@@ -447,7 +446,7 @@ function LineRow({
               // Swap in the product's own rate for the new plan, if it has one.
               onChange({ plan, rate: Number(rateFor(line.product, plan) ?? line.rate) })
             }}
-            className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+            className="h-9 w-full rounded-md border bg-card px-2 text-sm"
           >
             {plans.map((plan) => (
               <option key={plan} value={plan}>

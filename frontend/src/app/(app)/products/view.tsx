@@ -1,17 +1,31 @@
 "use client"
 
 import { useState } from "react"
-import Link from "next/link"
-import { Plus, Search } from "lucide-react"
+import { Plus } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { EmptyState, ErrorState, PageHeader, Pagination, TableSkeleton } from "@/components/common"
+import {
+  EmptyState,
+  ErrorState,
+  FilterTabs,
+  PageHeader,
+  Pagination,
+  SearchInput,
+  TableSkeleton,
+  Toolbar,
+} from "@/components/common"
+import { Code, DataView, Primary, type Column } from "@/components/data-view"
 import { ProductDialog } from "@/components/product-form"
 import { useCurrency, useSettings } from "@/components/session"
 import { useCategories, useDebounced, usePaging, useProducts } from "@/lib/data/queries"
 import { count, money } from "@/lib/format"
+import type { Product } from "@/lib/types"
+
+const FILTERS = [
+  { value: "", label: "All" },
+  { value: "rentable", label: "For rent" },
+  { value: "lowStock", label: "Low stock" },
+] as const
 
 /** The catalogue, with what is on the shelf and what is out on rent for each line. */
 export function ProductsView({ canEdit }: { canEdit: boolean }) {
@@ -37,8 +51,84 @@ export function ProductsView({ canEdit }: { canEdit: boolean }) {
     { pageSize },
   )
 
+  function isLow(product: Product) {
+    return product.onHand <= (product.lowStockThreshold || settings.lowStockAlert)
+  }
+
+  const columns: Column<Product>[] = [
+    {
+      id: "product",
+      header: "Product",
+      role: "title",
+      cell: (product) => (
+        <Primary
+          sub={
+            <>
+              <Code>{product.sku}</Code>
+              {product.category && <span> · {product.category}</span>}
+            </>
+          }
+        >
+          {product.name}
+        </Primary>
+      ),
+    },
+    {
+      id: "flags",
+      header: "",
+      role: "status",
+      cell: (product) =>
+        !product.rentable ? (
+          <Badge variant="outline">Not for rent</Badge>
+        ) : isLow(product) ? (
+          <Badge variant="warning">Low stock</Badge>
+        ) : null,
+    },
+    {
+      id: "rates",
+      header: "Rates",
+      cell: (product) =>
+        product.rentable ? (
+          <div className="flex flex-wrap gap-x-3 text-sm text-muted-foreground">
+            {product.rentDaily != null && <span>{money(product.rentDaily, currency)}/day</span>}
+            {product.rentWeekly != null && <span>{money(product.rentWeekly, currency)}/wk</span>}
+            {product.rentMonthly != null && <span>{money(product.rentMonthly, currency)}/mo</span>}
+          </div>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
+      id: "shelf",
+      header: "On shelf",
+      align: "end",
+      cell: (product) => (
+        <span className={isLow(product) ? "font-medium text-warning-soft-foreground dark:text-warning" : undefined}>
+          {count(product.onHand)}
+        </span>
+      ),
+    },
+    {
+      id: "out",
+      header: "Out on rent",
+      align: "end",
+      cell: (product) =>
+        product.outOnRent > 0 ? (
+          <Badge variant="info">{count(product.outOnRent)}</Badge>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
+      id: "total",
+      header: "Total",
+      align: "end",
+      cell: (product) => <span className="text-muted-foreground">{count(product.onHand + product.outOnRent)}</span>,
+    },
+  ]
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <PageHeader title="Products" description="What you rent out, and how much of it you hold.">
         {canEdit && (
           <Button onClick={() => setAdding(true)}>
@@ -48,22 +138,13 @@ export function ProductsView({ canEdit }: { canEdit: boolean }) {
         )}
       </PageHeader>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-56 flex-1">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Name, SKU or barcode"
-            className="pl-9"
-            aria-label="Search products"
-          />
-        </div>
+      <Toolbar>
+        <SearchInput value={text} onChange={setText} placeholder="Name, SKU or barcode" label="Search products" />
         {categories.length > 0 && (
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className="h-9 rounded-md border bg-background px-2 text-sm"
+            className="h-9 shrink-0 rounded-md border bg-card px-2 text-sm"
             aria-label="Category"
           >
             <option value="">All categories</option>
@@ -74,25 +155,8 @@ export function ProductsView({ canEdit }: { canEdit: boolean }) {
             ))}
           </select>
         )}
-        <div className="flex gap-1">
-          {(
-            [
-              { value: "", label: "All" },
-              { value: "rentable", label: "For rent" },
-              { value: "lowStock", label: "Low stock" },
-            ] as const
-          ).map((option) => (
-            <Button
-              key={option.value}
-              size="sm"
-              variant={filter === option.value ? "default" : "outline"}
-              onClick={() => setFilter(option.value)}
-            >
-              {option.label}
-            </Button>
-          ))}
-        </div>
-      </div>
+        <FilterTabs value={filter} onChange={setFilter} options={FILTERS} label="Filter products" />
+      </Toolbar>
 
       {isError ? (
         <ErrorState error={error} onRetry={() => refetch()} />
@@ -106,67 +170,13 @@ export function ProductsView({ canEdit }: { canEdit: boolean }) {
         />
       ) : (
         <>
-          <div className="overflow-x-auto rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Product</TableHead>
-                  <TableHead>Rates</TableHead>
-                  <TableHead className="text-right">On shelf</TableHead>
-                  <TableHead className="text-right">Out on rent</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data?.results.map((product) => {
-                  const threshold = product.lowStockThreshold || settings.lowStockAlert
-                  const low = product.onHand <= threshold
-                  return (
-                    <TableRow key={product.id}>
-                      <TableCell>
-                        <Link href={`/products/${product.id}`} className="font-medium hover:underline">
-                          {product.name}
-                        </Link>
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                          <span className="font-mono">{product.sku}</span>
-                          {product.category && <span>{product.category}</span>}
-                          {!product.rentable && <Badge variant="secondary">Not for rent</Badge>}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {product.rentable ? (
-                          <div className="flex flex-wrap gap-x-3 text-muted-foreground">
-                            {product.rentDaily != null && <span>{money(product.rentDaily, currency)}/day</span>}
-                            {product.rentWeekly != null && <span>{money(product.rentWeekly, currency)}/wk</span>}
-                            {product.rentMonthly != null && <span>{money(product.rentMonthly, currency)}/mo</span>}
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        <span className={low ? "font-medium text-amber-600 dark:text-amber-500" : undefined}>
-                          {count(product.onHand)}
-                        </span>
-                        {low && <div className="text-xs text-amber-600 dark:text-amber-500">Low</div>}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {product.outOnRent > 0 ? (
-                          <Badge variant="secondary">{count(product.outOnRent)}</Badge>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums text-muted-foreground">
-                        {count(product.onHand + product.outOnRent)}
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </div>
-
+          <DataView
+            label="Products"
+            rows={data?.results ?? []}
+            columns={columns}
+            getKey={(product) => product.id}
+            href={(product) => `/products/${product.id}`}
+          />
           <Pagination
             page={page}
             pageSize={pageSize}

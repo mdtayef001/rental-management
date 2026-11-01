@@ -6,7 +6,7 @@ import { AlertTriangle, ArrowRight, Camera, CameraOff, Package, Undo2 } from "lu
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ButtonLink } from "@/components/ui/button-link"
-import { Spinner } from "@/components/common"
+import { PageHeader, Spinner } from "@/components/common"
 import { CameraScanner, CodeInput } from "@/components/scanner"
 import { useBranchScope, useCurrency } from "@/components/session"
 import { useLookup, useProductSearch, useRentalSummary } from "@/lib/data/queries"
@@ -47,28 +47,20 @@ export function ScanView({ canRent, canTakeReturns }: { canRent: boolean; canTak
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Scan</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Scan an item to rent it out or take it back. A USB scanner works too.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {canTakeReturns && (
-            <ButtonLink href="/take-back" variant="outline">
-              <Undo2 className="size-4" />
-              Take back
-            </ButtonLink>
-          )}
-          {canRent && (
-            <ButtonLink href="/rent-out">
-              <Package className="size-4" />
-              Rent out
-            </ButtonLink>
-          )}
-        </div>
-      </div>
+      <PageHeader title="Scan" description="Scan an item to rent it out or take it back. A USB scanner works too.">
+        {canTakeReturns && (
+          <ButtonLink href="/take-back" variant="outline">
+            <Undo2 className="size-4" />
+            Take back
+          </ButtonLink>
+        )}
+        {canRent && (
+          <ButtonLink href="/rent-out">
+            <Package className="size-4" />
+            Rent out
+          </ButtonLink>
+        )}
+      </PageHeader>
 
       {/* The field, and nothing above it. */}
       <div className="space-y-3">
@@ -112,7 +104,7 @@ export function ScanView({ canRent, canTakeReturns }: { canRent: boolean; canTak
           <Spinner /> Looking up {code}…
         </p>
       ) : lookup.isError ? (
-        <div className="flex items-start gap-3 rounded-lg border border-dashed p-5">
+        <div className="flex items-start gap-3 rounded-lg border border-dashed bg-card/40 p-5">
           <AlertTriangle className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
           <div className="space-y-1">
             <p className="font-medium">Nothing matches {code}</p>
@@ -176,13 +168,13 @@ function Suggestions({
   }
   if (rows.length === 0) {
     return (
-      <p className="rounded-lg border border-dashed p-5 text-sm text-muted-foreground">
+      <p className="rounded-lg border border-dashed bg-card/40 p-5 text-sm text-muted-foreground">
         No product matches “{query.trim()}”. Check the spelling, or scan the label.
       </p>
     )
   }
   return (
-    <ul className="divide-y overflow-hidden rounded-lg border">
+    <ul className="divide-y overflow-hidden rounded-lg border bg-card">
       {rows.slice(0, 8).map((product) => (
         <li key={product.id}>
           <button
@@ -218,7 +210,7 @@ function Found({
   const code = encodeURIComponent(product.barcode || product.sku)
 
   return (
-    <div className="rounded-lg border">
+    <div className="overflow-hidden rounded-lg border bg-card">
       <div className="flex flex-wrap items-start justify-between gap-4 border-b p-4">
         <div className="space-y-1">
           <h2 className="text-lg font-semibold">{product.name}</h2>
@@ -276,7 +268,7 @@ function Found({
           Product details
         </ButtonLink>
         {onHand === 0 && product.rentable && (
-          <p className="text-sm text-amber-700 dark:text-amber-500">
+          <p className="text-sm text-warning-soft-foreground dark:text-warning">
             None on the shelf — they may all be out on rent.
           </p>
         )}

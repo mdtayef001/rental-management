@@ -139,7 +139,7 @@ export function ProductDialog({
                   <Money id="p-monthly" label="Per month" value={form.rentMonthly} onChange={num("rentMonthly")} />
                 </div>
                 {noRate && (
-                  <p className="text-sm text-amber-600 dark:text-amber-500">
+                  <p className="text-sm text-warning-soft-foreground dark:text-warning">
                     Set at least one rate, or staff will have nothing to charge.
                   </p>
                 )}

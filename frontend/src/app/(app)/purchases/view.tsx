@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { PackageX, Plus, Search, Trash2 } from "lucide-react"
+import { PackageX, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -9,8 +9,20 @@ import { ButtonLink } from "@/components/ui/button-link"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { EmptyState, ErrorState, PageHeader, Pagination, Spinner, StatTile, TableSkeleton } from "@/components/common"
+import {
+  EmptyState,
+  ErrorState,
+  FilterTabs,
+  PageHeader,
+  Pagination,
+  SearchInput,
+  Spinner,
+  StatGrid,
+  StatTile,
+  TableSkeleton,
+  Toolbar,
+} from "@/components/common"
+import { Code, DataView, Primary, type Column } from "@/components/data-view"
 import { CodeInput } from "@/components/scanner"
 import { useBranchScope, useCurrency } from "@/components/session"
 import { request } from "@/lib/api/client"
@@ -18,7 +30,13 @@ import { ApiError } from "@/lib/api/errors"
 import { useCreatePurchase } from "@/lib/data/mutations"
 import { useDebounced, usePaging, usePurchases, usePurchaseSummary, useSuppliers } from "@/lib/data/queries"
 import { count, date, money, plural } from "@/lib/format"
-import type { ProductLookup } from "@/lib/types"
+import type { ProductLookup, Purchase } from "@/lib/types"
+
+const FILTERS = [
+  { value: "", label: "All" },
+  { value: "owing", label: "Unpaid" },
+  { value: "paid", label: "Paid" },
+] as const
 
 /** Stock bought in: the bills, what was paid, and what is still owed. */
 export function PurchasesView() {
@@ -33,8 +51,63 @@ export function PurchasesView() {
   const { data, isLoading, isFetching, isError, error, refetch } = usePurchases({ page, ...filters }, { pageSize })
   const { data: summary } = usePurchaseSummary(filters)
 
+  const columns: Column<Purchase>[] = [
+    {
+      id: "supplier",
+      header: "Supplier",
+      role: "title",
+      cell: (purchase) => (
+        <Primary
+          sub={
+            <>
+              <Code>{purchase.code}</Code> · {date(purchase.purchasedAt)}
+              {purchase.reference && ` · their ref ${purchase.reference}`}
+            </>
+          }
+        >
+          {purchase.supplierName || "No supplier"}
+        </Primary>
+      ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      role: "status",
+      cell: (purchase) =>
+        purchase.paymentStatus === "paid" ? (
+          <Badge variant="success">Paid</Badge>
+        ) : purchase.isOverdue ? (
+          <Badge variant="destructive">Past due</Badge>
+        ) : (
+          <Badge variant="warning">{purchase.paymentStatus === "partly_paid" ? "Part paid" : "Unpaid"}</Badge>
+        ),
+    },
+    {
+      id: "items",
+      header: "Items",
+      cell: (purchase) => (
+        <span className="text-muted-foreground">
+          {plural(purchase.items.length, "product")} ·{" "}
+          {count(purchase.items.reduce((n, i) => n + i.quantity, 0))} units
+        </span>
+      ),
+    },
+    { id: "total", header: "Total", align: "end", cell: (purchase) => money(purchase.total, currency) },
+    {
+      id: "owed",
+      header: "Owed",
+      align: "end",
+      cell: (purchase) =>
+        purchase.due > 0 ? (
+          <span className="text-warning-soft-foreground dark:text-warning">{money(purchase.due, currency)}</span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+  ]
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <PageHeader title="Purchases" description="Stock bought in, and what you still owe for it.">
         <ButtonLink href="/supplier-returns" variant="outline">
           <PackageX className="size-4" />
@@ -47,43 +120,22 @@ export function PurchasesView() {
       </PageHeader>
 
       {summary && summary.count > 0 && (
-        <div className="grid gap-3 sm:grid-cols-3">
+        <StatGrid className="lg:grid-cols-3">
           <StatTile label="Bills" value={count(summary.count)} />
           <StatTile label="Bought in total" value={money(summary.total, currency)} />
           <StatTile label="Still owed" value={money(summary.due, currency)} tone={summary.due ? "warning" : "default"} />
-        </div>
+        </StatGrid>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-56 flex-1">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Supplier, invoice number or product"
-            className="pl-9"
-            aria-label="Search purchases"
-          />
-        </div>
-        <div className="flex gap-1">
-          {(
-            [
-              { value: "", label: "All" },
-              { value: "owing", label: "Unpaid" },
-              { value: "paid", label: "Paid" },
-            ] as const
-          ).map((option) => (
-            <Button
-              key={option.value}
-              size="sm"
-              variant={status === option.value ? "default" : "outline"}
-              onClick={() => setStatus(option.value)}
-            >
-              {option.label}
-            </Button>
-          ))}
-        </div>
-      </div>
+      <Toolbar>
+        <SearchInput
+          value={text}
+          onChange={setText}
+          placeholder="Supplier, invoice number or product"
+          label="Search purchases"
+        />
+        <FilterTabs value={status} onChange={setStatus} options={FILTERS} label="Filter purchases" />
+      </Toolbar>
 
       {isError ? (
         <ErrorState error={error} onRetry={() => refetch()} />
@@ -97,59 +149,12 @@ export function PurchasesView() {
         />
       ) : (
         <>
-          <div className="overflow-x-auto rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Bill</TableHead>
-                  <TableHead>Supplier</TableHead>
-                  <TableHead>Items</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead className="text-right">Owed</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data?.results.map((purchase) => (
-                  <TableRow key={purchase.id}>
-                    <TableCell>
-                      <span className="font-mono text-xs">{purchase.code}</span>
-                      <div className="text-xs text-muted-foreground">{date(purchase.purchasedAt)}</div>
-                      {purchase.reference && (
-                        <div className="text-xs text-muted-foreground">Their ref: {purchase.reference}</div>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm">{purchase.supplierName || "No supplier"}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {plural(purchase.items.length, "product")}
-                      <div className="text-xs">
-                        {count(purchase.items.reduce((n, i) => n + i.quantity, 0))} units
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{money(purchase.total, currency)}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {purchase.due > 0 ? (
-                        <span className="text-amber-600 dark:text-amber-500">{money(purchase.due, currency)}</span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {purchase.paymentStatus === "paid" ? (
-                        <Badge variant="outline">Paid</Badge>
-                      ) : purchase.isOverdue ? (
-                        <Badge variant="destructive">Past due</Badge>
-                      ) : (
-                        <Badge variant="secondary">
-                          {purchase.paymentStatus === "partly_paid" ? "Part paid" : "Unpaid"}
-                        </Badge>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <DataView
+            label="Purchases"
+            rows={data?.results ?? []}
+            columns={columns}
+            getKey={(purchase) => purchase.id}
+          />
 
           <Pagination
             page={page}
@@ -238,7 +243,7 @@ function PurchaseDialog({ onClose }: { onClose: () => void }) {
                 id="pu-supplier"
                 value={supplierId}
                 onChange={(e) => setSupplierId(e.target.value)}
-                className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                className="h-9 w-full rounded-md border bg-card px-2 text-sm"
               >
                 <option value="">No supplier (paid in full)</option>
                 {suppliers.data?.results.map((supplier) => (
@@ -259,7 +264,7 @@ function PurchaseDialog({ onClose }: { onClose: () => void }) {
                   id="pu-branch"
                   value={branchId}
                   onChange={(e) => setBranchId(e.target.value)}
-                  className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                  className="h-9 w-full rounded-md border bg-card px-2 text-sm"
                 >
                   {branches.map((branch) => (
                     <option key={branch.id} value={branch.id}>
@@ -357,7 +362,7 @@ function PurchaseDialog({ onClose }: { onClose: () => void }) {
                 id="pu-method"
                 value={method}
                 onChange={(e) => setMethod(e.target.value)}
-                className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                className="h-9 w-full rounded-md border bg-card px-2 text-sm"
               >
                 <option value="cash">Cash</option>
                 <option value="mobile">Mobile banking</option>
@@ -376,7 +381,7 @@ function PurchaseDialog({ onClose }: { onClose: () => void }) {
           </div>
 
           {noSupplierUnpaid && (
-            <p className="text-sm text-amber-600 dark:text-amber-500">
+            <p className="text-sm text-warning-soft-foreground dark:text-warning">
               With no supplier there is nobody to owe, so this has to be paid in full.
             </p>
           )}

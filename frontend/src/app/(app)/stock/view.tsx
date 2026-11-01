@@ -1,17 +1,25 @@
 "use client"
 
 import { useState } from "react"
-import Link from "next/link"
 import { useSearchParams } from "next/navigation"
-import { Search, SlidersHorizontal } from "lucide-react"
+import { SlidersHorizontal } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { EmptyState, ErrorState, PageHeader, Pagination, TableSkeleton } from "@/components/common"
+import {
+  EmptyState,
+  ErrorState,
+  PageHeader,
+  Pagination,
+  SearchInput,
+  TableSkeleton,
+  Toolbar,
+} from "@/components/common"
+import { Code, DataView, Primary, type Column } from "@/components/data-view"
 import { StockAdjustDialog } from "@/components/stock-adjust"
 import { useBranchScope } from "@/components/session"
 import { useDebounced, usePaging, useProduct, useStock, useStockSummary } from "@/lib/data/queries"
 import { count, plural } from "@/lib/format"
+import type { StockLevel } from "@/lib/types"
 
 /** What is on the shelf, line by line, and the way to correct it. */
 export function StockView({ canAdjust }: { canAdjust: boolean }) {
@@ -28,10 +36,38 @@ export function StockView({ canAdjust }: { canAdjust: boolean }) {
   const { data, isLoading, isFetching, isError, error, refetch } = useStock({ page, ...filters }, { pageSize })
   const { data: summary } = useStockSummary(filters)
 
+  const columns: Column<StockLevel>[] = [
+    {
+      id: "product",
+      header: "Product",
+      role: "title",
+      cell: (level) => <Primary sub={<Code>{level.productSku}</Code>}>{level.productName}</Primary>,
+    },
+    {
+      id: "low",
+      header: "",
+      role: "status",
+      cell: (level) => (level.low ? <Badge variant="warning">Low</Badge> : null),
+    },
+    ...(showPicker
+      ? [{ id: "branch", header: "Branch", cell: (level: StockLevel) => level.branchName } as Column<StockLevel>]
+      : []),
+    {
+      id: "quantity",
+      header: "On the shelf",
+      align: "end",
+      cell: (level) => (
+        <span className={level.low ? "font-medium text-warning-soft-foreground dark:text-warning" : undefined}>
+          {count(level.quantity)}
+        </span>
+      ),
+    },
+  ]
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <PageHeader
-        title="Stock"
+        title="Stock levels"
         description={
           summary
             ? `${count(summary.units)} units across ${plural(summary.lines, "line")}${summary.lowStock ? `, ${count(summary.lowStock)} running low` : ""}.`
@@ -39,22 +75,13 @@ export function StockView({ canAdjust }: { canAdjust: boolean }) {
         }
       />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-56 flex-1">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Product name or SKU"
-            className="pl-9"
-            aria-label="Search stock"
-          />
-        </div>
+      <Toolbar>
+        <SearchInput value={text} onChange={setText} placeholder="Product name or SKU" label="Search stock" />
         {showPicker && (
           <select
             value={branch}
             onChange={(e) => setBranch(e.target.value)}
-            className="h-9 rounded-md border bg-background px-2 text-sm"
+            className="h-9 shrink-0 rounded-md border bg-card px-2 text-sm"
             aria-label="Branch"
           >
             <option value="">All branches</option>
@@ -65,10 +92,10 @@ export function StockView({ canAdjust }: { canAdjust: boolean }) {
             ))}
           </select>
         )}
-        <Button size="sm" variant={low ? "default" : "outline"} onClick={() => setLow((v) => !v)}>
+        <Button size="sm" variant={low ? "default" : "outline"} onClick={() => setLow((v) => !v)} className="h-9 shrink-0">
           Low stock only
         </Button>
-      </div>
+      </Toolbar>
 
       {isError ? (
         <ErrorState error={error} onRetry={() => refetch()} />
@@ -81,50 +108,28 @@ export function StockView({ canAdjust }: { canAdjust: boolean }) {
         />
       ) : (
         <>
-          <div className="overflow-x-auto rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Product</TableHead>
-                  {showPicker && <TableHead>Branch</TableHead>}
-                  <TableHead className="text-right">On the shelf</TableHead>
-                  {canAdjust && <TableHead className="w-10" />}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data?.results.map((level) => (
-                  <TableRow key={level.id}>
-                    <TableCell>
-                      <Link href={`/products/${level.productId}`} className="font-medium hover:underline">
-                        {level.productName}
-                      </Link>
-                      <div className="font-mono text-xs text-muted-foreground">{level.productSku}</div>
-                    </TableCell>
-                    {showPicker && <TableCell className="text-sm">{level.branchName}</TableCell>}
-                    <TableCell className="text-right tabular-nums">
-                      <span className={level.low ? "font-medium text-amber-600 dark:text-amber-500" : undefined}>
-                        {count(level.quantity)}
-                      </span>
-                      {level.low && <div className="text-xs text-amber-600 dark:text-amber-500">Low</div>}
-                    </TableCell>
-                    {canAdjust && (
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => setAdjustingId(level.productId)}
-                          aria-label={`Correct the stock of ${level.productName}`}
-                        >
-                          <SlidersHorizontal className="size-4" />
-                        </Button>
-                      </TableCell>
-                    )}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-
+          <DataView
+            label="Stock levels"
+            rows={data?.results ?? []}
+            columns={columns}
+            getKey={(level) => level.id}
+            href={(level) => `/products/${level.productId}`}
+            actions={
+              canAdjust
+                ? (level) => (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setAdjustingId(level.productId)}
+                      aria-label={`Correct the stock of ${level.productName}`}
+                    >
+                      <SlidersHorizontal className="size-4" />
+                      <span className="md:hidden">Correct the count</span>
+                    </Button>
+                  )
+                : undefined
+            }
+          />
           <Pagination
             page={page}
             pageSize={pageSize}

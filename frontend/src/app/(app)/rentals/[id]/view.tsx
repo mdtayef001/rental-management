@@ -1,8 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import Link from "next/link"
-import { ArrowLeft, Ban, MessageCircle, Undo2, Wallet } from "lucide-react"
+import { Ban, MessageCircle, Undo2, Wallet } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ButtonLink } from "@/components/ui/button-link"
@@ -17,9 +16,10 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import { ErrorState, PageHeader, Spinner, TableSkeleton } from "@/components/common"
+import { Code, DataView, Primary } from "@/components/data-view"
 import { PrintButton, Receipt } from "@/components/receipt"
 import { useCurrency, useCurrentUser, useSession } from "@/components/session"
 import { useCancelRental, useRefundDeposit, useRentalPayment } from "@/lib/data/mutations"
@@ -56,14 +56,11 @@ export function RentalDetailView({ id }: { id: string }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" size="sm" render={<Link href="/rentals" />}>
-          <ArrowLeft className="size-4" />
-          Rentals
-        </Button>
-      </div>
-
-      <PageHeader title={rental.code} description={`${rental.customerName} · out ${dateTime(rental.startedAt)}`}>
+      <PageHeader
+        title={rental.code}
+        description={`${rental.customerName} · out ${dateTime(rental.startedAt)}`}
+        back={{ href: "/rentals", label: "Rentals" }}
+      >
         <StatusBadge status={rental.status} overdue={rental.isOverdue} />
         {rental.status !== "cancelled" && rental.status !== "returned" && user.canTakeReturns && (
           <ButtonLink href={`/take-back?rental=${rental.id}`}>
@@ -81,7 +78,7 @@ export function RentalDetailView({ id }: { id: string }) {
       </PageHeader>
 
       {rental.isOverdue && (
-        <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">
+        <div className="rounded-lg border border-destructive/30 bg-destructive-soft/50 p-3 text-sm">
           <strong>{dueLabel(rental.dueAt)}.</strong> {plural(rental.unitsOut, "unit")} still with{" "}
           {rental.customerName}
           {rental.customerPhone && ` (${rental.customerPhone})`}.
@@ -94,50 +91,63 @@ export function RentalDetailView({ id }: { id: string }) {
             <CardHeader>
               <CardTitle className="text-base">Items</CardTitle>
             </CardHeader>
-            <CardContent className="overflow-x-auto p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Product</TableHead>
-                    <TableHead className="text-right">Out</TableHead>
-                    <TableHead className="text-right">Back</TableHead>
-                    <TableHead className="text-right">Still out</TableHead>
-                    <TableHead>Plan</TableHead>
-                    <TableHead className="text-right">Charged</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rental.items?.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell>
-                        <div className="font-medium">{item.productName}</div>
-                        {item.productSku && (
-                          <div className="font-mono text-xs text-muted-foreground">{item.productSku}</div>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{count(item.quantity)}</TableCell>
-                      <TableCell className="text-right tabular-nums">
+            <CardContent className="p-0 max-md:px-3 max-md:pb-3">
+              <DataView
+                label="Items on this rental"
+                className="md:rounded-none md:border-0"
+                rows={rental.items ?? []}
+                getKey={(item) => item.id}
+                columns={[
+                  {
+                    id: "product",
+                    header: "Product",
+                    role: "title",
+                    cell: (item) => <Primary sub={item.productSku && <Code>{item.productSku}</Code>}>{item.productName}</Primary>,
+                  },
+                  {
+                    id: "still",
+                    header: "Still out",
+                    role: "status",
+                    align: "end",
+                    cell: (item) =>
+                      item.quantityOut > 0 ? (
+                        <Badge variant="info">{count(item.quantityOut)} out</Badge>
+                      ) : (
+                        <Badge variant="success">All back</Badge>
+                      ),
+                  },
+                  { id: "out", header: "Out", align: "end", cell: (item) => count(item.quantity) },
+                  {
+                    id: "back",
+                    header: "Back",
+                    align: "end",
+                    cell: (item) => (
+                      <>
                         {count(item.quantityReturned)}
                         {item.quantityLost > 0 && (
                           <div className="text-xs text-destructive">{count(item.quantityLost)} lost</div>
                         )}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {item.quantityOut > 0 ? (
-                          <Badge variant="secondary">{count(item.quantityOut)}</Badge>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm">
+                      </>
+                    ),
+                  },
+                  {
+                    id: "plan",
+                    header: "Plan",
+                    cell: (item) => (
+                      <>
                         {PLAN_LABEL[item.plan]}
                         <div className="text-xs text-muted-foreground">{money(item.rate, currency)}</div>
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{money(item.lineTotal, currency)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                      </>
+                    ),
+                  },
+                  {
+                    id: "charged",
+                    header: "Charged",
+                    align: "end",
+                    cell: (item) => money(item.lineTotal, currency),
+                  },
+                ]}
+              />
             </CardContent>
           </Card>
 
@@ -294,7 +304,7 @@ export function RentalDetailView({ id }: { id: string }) {
 function Line({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
   return (
     <div className="flex items-baseline justify-between gap-2">
-      <span className={warn ? "text-amber-600 dark:text-amber-500" : "text-muted-foreground"}>{label}</span>
+      <span className={warn ? "text-warning-soft-foreground dark:text-warning" : "text-muted-foreground"}>{label}</span>
       <span className="shrink-0 tabular-nums">{value}</span>
     </div>
   )
@@ -341,7 +351,7 @@ function PaymentDialog({
               id="p-method"
               value={method}
               onChange={(e) => setMethod(e.target.value)}
-              className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+              className="h-9 w-full rounded-md border bg-card px-2 text-sm"
             >
               <option value="cash">Cash</option>
               <option value="mobile">Mobile banking</option>

@@ -42,7 +42,7 @@ export function OverdueList({ limit = 5 }: { limit?: number }) {
   // Nothing late is good news, and good news does not need a panel, an icon and a border.
   if (total === 0) {
     return (
-      <section className="border-l-2 border-emerald-600/40 py-1 pl-4 dark:border-emerald-500/40">
+      <section className="border-l-2 border-success/40 py-1 pl-4">
         <p className="text-sm text-muted-foreground">
           Nothing overdue. Everything out is still within its date.
         </p>
@@ -143,7 +143,7 @@ function DayBlock({ days }: { days: number }) {
       ? "bg-destructive text-white dark:bg-destructive/90"
       : days >= 4
         ? "bg-destructive/15 text-destructive ring-1 ring-destructive/30"
-        : "bg-amber-500/15 text-amber-700 ring-1 ring-amber-500/30 dark:text-amber-400"
+        : "bg-warning-soft text-warning-soft-foreground ring-1 ring-warning/30"
 
   return (
     <div

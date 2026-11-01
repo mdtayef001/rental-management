@@ -1,13 +1,12 @@
 "use client"
 
 import { useState } from "react"
-import Link from "next/link"
-import { ArrowLeft, MessageCircle, Pencil, Phone, UserX } from "lucide-react"
+import { MessageCircle, Pencil, Phone, UserX } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ButtonLink } from "@/components/ui/button-link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { EmptyState, ErrorState, PageHeader, Pagination, TableSkeleton } from "@/components/common"
+import { Code, DataView, Primary } from "@/components/data-view"
 import { CustomerDialog } from "@/components/customer-picker"
 import { useCurrency, useCurrentUser } from "@/components/session"
 import { useCustomer, usePaging, useRentals } from "@/lib/data/queries"
@@ -30,12 +29,11 @@ export function CustomerDetailView({ id }: { id: string }) {
 
   return (
     <div className="space-y-6">
-      <Button variant="ghost" size="sm" render={<Link href="/customers" />}>
-        <ArrowLeft className="size-4" />
-        Customers
-      </Button>
-
-      <PageHeader title={customer.name} description={customer.company || undefined}>
+      <PageHeader
+        title={customer.name}
+        description={customer.company || undefined}
+        back={{ href: "/customers", label: "Customers" }}
+      >
         {customer.phone && (
           <Button variant="outline" render={<a href={`tel:${customer.phone}`} />}>
             <Phone className="size-4" />
@@ -58,7 +56,7 @@ export function CustomerDetailView({ id }: { id: string }) {
       </PageHeader>
 
       {customer.blocked && (
-        <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">
+        <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive-soft/50 p-3 text-sm">
           <UserX className="mt-0.5 size-4 shrink-0 text-destructive" />
           <span>
             <strong>Blocked from renting.</strong> {customer.blockedReason || "No reason given."}
@@ -79,40 +77,51 @@ export function CustomerDetailView({ id }: { id: string }) {
             ) : rentals.data?.results.length === 0 ? (
               <EmptyState title="Nothing rented yet" description="This customer has no rental history." />
             ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Rental</TableHead>
-                      <TableHead className="text-right">Units</TableHead>
-                      <TableHead>Due</TableHead>
-                      <TableHead className="text-right">Owed</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {rentals.data?.results.map((rental) => (
-                      <TableRow key={rental.id}>
-                        <TableCell>
-                          <Link href={`/rentals/${rental.id}`} className="font-mono text-xs hover:underline">
-                            {rental.code}
-                          </Link>
-                          <div className="text-xs text-muted-foreground">{date(rental.startedAt)}</div>
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">{count(rental.unitsOut)}</TableCell>
-                        <TableCell className={`text-sm ${rental.isOverdue ? "text-destructive" : ""}`}>
+              <div className="px-3 pb-3 md:px-0 md:pb-0">
+                <DataView
+                  label={`Rentals by ${customer.name}`}
+                  className="md:rounded-none md:border-0"
+                  rows={rentals.data?.results ?? []}
+                  getKey={(rental) => rental.id}
+                  href={(rental) => `/rentals/${rental.id}`}
+                  columns={[
+                    {
+                      id: "rental",
+                      header: "Rental",
+                      role: "title",
+                      cell: (rental) => (
+                        <Primary sub={<Code>{rental.code}</Code>}>{date(rental.startedAt)}</Primary>
+                      ),
+                    },
+                    {
+                      id: "status",
+                      header: "Status",
+                      role: "status",
+                      cell: (rental) => <StatusBadge status={rental.status} overdue={rental.isOverdue} />,
+                    },
+                    { id: "units", header: "Units", align: "end", cell: (rental) => count(rental.unitsOut) },
+                    {
+                      id: "due",
+                      header: "Due",
+                      cell: (rental) => (
+                        <span className={rental.isOverdue ? "text-destructive" : undefined}>
                           {rental.dueAt ? dueLabel(rental.dueAt) : "Open-ended"}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {rental.balance > 0 ? money(rental.balance, currency) : "—"}
-                        </TableCell>
-                        <TableCell>
-                          <StatusBadge status={rental.status} overdue={rental.isOverdue} />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                        </span>
+                      ),
+                    },
+                    {
+                      id: "owed",
+                      header: "Owed",
+                      align: "end",
+                      cell: (rental) =>
+                        rental.balance > 0 ? (
+                          money(rental.balance, currency)
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        ),
+                    },
+                  ]}
+                />
               </div>
             )}
           </CardContent>
@@ -175,7 +184,7 @@ function Row({ label, value, warn }: { label: string; value: string; warn?: bool
   return (
     <div className="flex items-baseline justify-between gap-3">
       <span className="text-muted-foreground">{label}</span>
-      <span className={`shrink-0 text-right ${warn ? "font-medium text-amber-600 dark:text-amber-500" : ""}`}>
+      <span className={`shrink-0 text-right ${warn ? "font-medium text-warning-soft-foreground dark:text-warning" : ""}`}>
         {value}
       </span>
     </div>

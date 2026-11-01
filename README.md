@@ -154,6 +154,35 @@ call, services do the work in one transaction.
 
 ## Design
 
+The UI is shadcn/ui on Base UI, with the stock neutral theme replaced by one of our own.
+
+**Colour carries meaning or it isn't used.** The chrome is a near-neutral ink, and a single
+blue marks the primary action and the page you are on — nothing else. Amber, red and green
+are reserved for rental status (due, late, settled), so a coloured figure on any screen
+always means the same thing. Each status has a soft tint for badge backgrounds and a
+separate darker ink for text on that tint, because an amber that reads well as a 3px bar
+does not read well as 12px type. All of it is defined once as tokens in `globals.css`, in
+both themes.
+
+**One list, two shapes.** `components/data-view.tsx` takes a screen's columns and renders a
+table on a laptop and stacked cards on a phone. A table is right at the counter — columns
+of money and quantities line up and compare down the page — and wrong on a 390px screen,
+where six columns become a horizontal scroll nobody finds. Both shapes are rendered and CSS
+picks one, rather than branching in JavaScript, so the server and the browser agree and the
+page never flashes. Alignment is dropped in the card: right-aligning exists so a column can
+be read downward, and a card has no column.
+
+**Navigation is grouped, not listed.** Thirteen links in one flat list is a list nobody
+reads. They are now four short ones — Today, Hire, Stock, Money, Admin — in a sidebar that
+collapses to an icon rail for more table width, and becomes a sheet on a phone with the
+three counter actions in a bottom bar. **Ctrl-K** opens a palette that jumps to a screen or
+straight to a customer or machine by name; it offers only screens the person can actually
+open, from the same rules the server enforces.
+
+Buttons and inputs are taller than the shadcn defaults. This is used standing up, often on
+a phone, sometimes by someone holding a machine in the other hand: 32px is a mouse target,
+not a finger target.
+
 **Archivo** for the interface — a grotesque with a tall x-height that holds up at 11px in a
 dense table and at 32px on a figure. Tabular figures are on globally, because nearly every
 screen is a column of quantities, money or day counts. **IBM Plex Mono** is used only for

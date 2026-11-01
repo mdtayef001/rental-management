@@ -1,14 +1,25 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Search } from "lucide-react"
+import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
-import { EmptyState, ErrorState, PageHeader, Pagination, Spinner, StatTile, TableSkeleton } from "@/components/common"
+import {
+  EmptyState,
+  ErrorState,
+  PageHeader,
+  Pagination,
+  SearchInput,
+  Spinner,
+  StatGrid,
+  StatTile,
+  TableSkeleton,
+  Toolbar,
+} from "@/components/common"
+import { DataView, Primary, type Column } from "@/components/data-view"
 import { useCurrency } from "@/components/session"
 import { usePaySupplier, useSaveSupplier } from "@/lib/data/mutations"
 import { useDebounced, usePaging, useSupplierDebtSummary, useSuppliers } from "@/lib/data/queries"
@@ -32,8 +43,48 @@ export function SuppliersView() {
   )
   const { data: debt } = useSupplierDebtSummary()
 
+  const columns: Column<Supplier>[] = [
+    {
+      id: "supplier",
+      header: "Supplier",
+      role: "title",
+      cell: (supplier) => <Primary sub={supplier.company || supplier.phone}>{supplier.name}</Primary>,
+    },
+    {
+      id: "phone",
+      header: "Phone",
+      role: "hidden",
+      cell: (supplier) => <span className="font-mono text-xs">{supplier.phone || "—"}</span>,
+    },
+    {
+      id: "bills",
+      header: "Bills",
+      align: "end",
+      cell: (supplier) => <span className="text-muted-foreground">{count(supplier.purchaseCount ?? 0)}</span>,
+    },
+    {
+      id: "bought",
+      header: "Bought in total",
+      align: "end",
+      cell: (supplier) => <span className="text-muted-foreground">{money(supplier.totalBought ?? 0, currency)}</span>,
+    },
+    {
+      id: "owe",
+      header: "You owe",
+      align: "end",
+      cell: (supplier) =>
+        (supplier.balance ?? 0) > 0 ? (
+          <span className="font-medium text-warning-soft-foreground dark:text-warning">
+            {money(supplier.balance, currency)}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+  ]
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <PageHeader title="Suppliers" description="Who you buy stock from, and what you still owe.">
         <Button onClick={() => setAdding(true)}>
           <Plus className="size-4" />
@@ -42,7 +93,7 @@ export function SuppliersView() {
       </PageHeader>
 
       {debt && debt.owed > 0 && (
-        <div className="grid gap-3 sm:grid-cols-3">
+        <StatGrid className="lg:grid-cols-3">
           <StatTile label="Owed in total" value={money(debt.owed, currency)} tone="warning" />
           <StatTile
             label="Past its due date"
@@ -50,24 +101,20 @@ export function SuppliersView() {
             tone={debt.overdue ? "danger" : "default"}
           />
           <StatTile label="Suppliers owed" value={count(debt.supplierCount)} />
-        </div>
+        </StatGrid>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-56 flex-1">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Name, company or phone"
-            className="pl-9"
-            aria-label="Search suppliers"
-          />
-        </div>
-        <Button size="sm" variant={owing ? "default" : "outline"} onClick={() => setOwing((v) => !v)}>
+      <Toolbar>
+        <SearchInput value={text} onChange={setText} placeholder="Name, company or phone" label="Search suppliers" />
+        <Button
+          size="sm"
+          variant={owing ? "default" : "outline"}
+          onClick={() => setOwing((v) => !v)}
+          className="h-9 shrink-0"
+        >
           Owed money only
         </Button>
-      </div>
+      </Toolbar>
 
       {isError ? (
         <ErrorState error={error} onRetry={() => refetch()} />
@@ -81,55 +128,24 @@ export function SuppliersView() {
         />
       ) : (
         <>
-          <div className="overflow-x-auto rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Supplier</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead className="text-right">Bills</TableHead>
-                  <TableHead className="text-right">Bought in total</TableHead>
-                  <TableHead className="text-right">You owe</TableHead>
-                  <TableHead className="w-24" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data?.results.map((supplier) => (
-                  <TableRow key={supplier.id}>
-                    <TableCell>
-                      <button type="button" className="font-medium hover:underline" onClick={() => setEditing(supplier)}>
-                        {supplier.name}
-                      </button>
-                      {supplier.company && <div className="text-xs text-muted-foreground">{supplier.company}</div>}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{supplier.phone || "—"}</TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">
-                      {count(supplier.purchaseCount ?? 0)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">
-                      {money(supplier.totalBought ?? 0, currency)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {(supplier.balance ?? 0) > 0 ? (
-                        <span className="font-medium text-amber-600 dark:text-amber-500">
-                          {money(supplier.balance, currency)}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {(supplier.balance ?? 0) > 0 && (
-                        <Button variant="ghost" size="sm" onClick={() => setPaying(supplier)}>
-                          Pay
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <DataView
+            label="Suppliers"
+            rows={data?.results ?? []}
+            columns={columns}
+            getKey={(supplier) => supplier.id}
+            actions={(supplier) => (
+              <>
+                <Button variant="outline" size="sm" onClick={() => setEditing(supplier)}>
+                  Edit
+                </Button>
+                {(supplier.balance ?? 0) > 0 && (
+                  <Button variant="default" size="sm" onClick={() => setPaying(supplier)}>
+                    Pay
+                  </Button>
+                )}
+              </>
+            )}
+          />
 
           <Pagination
             page={page}
@@ -247,7 +263,7 @@ function PayDialog({ supplier, onClose }: { supplier: Supplier; onClose: () => v
               id="pay-method"
               value={method}
               onChange={(e) => setMethod(e.target.value)}
-              className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+              className="h-9 w-full rounded-md border bg-card px-2 text-sm"
             >
               <option value="cash">Cash</option>
               <option value="mobile">Mobile banking</option>

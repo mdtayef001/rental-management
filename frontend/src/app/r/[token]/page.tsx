@@ -83,9 +83,9 @@ export default async function PublicReceiptPage({ params }: PageProps<"/r/[token
   const held = rental.deposit - rental.depositRefunded
 
   return (
-    <main className="mx-auto w-full max-w-md space-y-6 p-5">
+    <main className="receipt mx-auto w-full max-w-md space-y-6 p-4 sm:my-8 sm:rounded-xl sm:border sm:bg-card sm:p-6 sm:shadow-sm">
       <header className="space-y-1 border-b pb-4 text-center">
-        <h1 className="text-lg font-semibold">{business.name}</h1>
+        <h1 className="font-heading text-lg font-semibold">{business.name}</h1>
         {branch?.address && <p className="text-sm text-muted-foreground">{branch.address}</p>}
         {(branch?.phone || business.phone) && (
           <p className="text-sm text-muted-foreground">{branch?.phone || business.phone}</p>
@@ -101,7 +101,7 @@ export default async function PublicReceiptPage({ params }: PageProps<"/r/[token
       </section>
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold">What you have</h2>
+        <h2 className="mb-2 font-heading text-sm font-semibold">What you have</h2>
         <ul className="space-y-2 text-sm">
           {items.map((item, index) => (
             <li key={index} className="flex justify-between gap-3 border-b pb-2">
@@ -124,7 +124,7 @@ export default async function PublicReceiptPage({ params }: PageProps<"/r/[token
 
       {returns.length > 0 && (
         <section>
-          <h2 className="mb-2 text-sm font-semibold">Returns</h2>
+          <h2 className="mb-2 font-heading text-sm font-semibold">Returns</h2>
           <ul className="space-y-2 text-sm">
             {returns.map((taken) => (
               <li key={taken.code} className="border-b pb-2">

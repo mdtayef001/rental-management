@@ -31,7 +31,9 @@ export function MobileBar() {
 
   return (
     <nav
-      className="sticky bottom-0 flex border-t bg-background/95 backdrop-blur lg:hidden"
+      // Sticky to the bottom of the screen and padded for the phone's home indicator, so
+      // the last row of a list is never hidden under it.
+      className="sticky bottom-0 z-20 flex border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
       aria-label="Quick actions"
     >
       {tabs.map((tab) => {
@@ -43,8 +45,10 @@ export function MobileBar() {
             href={tab.href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "flex flex-1 flex-col items-center gap-1 py-2.5 text-xs transition",
-              active ? "text-primary" : "text-muted-foreground",
+              "relative flex flex-1 flex-col items-center gap-1 py-2.5 text-xs font-medium transition-colors",
+              active
+                ? "text-primary before:absolute before:inset-x-5 before:top-0 before:h-0.5 before:rounded-full before:bg-primary"
+                : "text-muted-foreground hover:text-foreground",
             )}
           >
             <Icon className="size-5" />

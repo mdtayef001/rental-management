@@ -206,6 +206,55 @@ export function CodeInput({
   )
 }
 
+/**
+ * The standard way to take a code: a field, and a camera that stays out of the way.
+ *
+ * The camera is off until someone asks for it. A live video panel is a 4:3 block sitting
+ * between the field and whatever the scan produced, which on a phone pushes the result
+ * off the screen — and most shops scan with a USB gun anyway, where the camera is only
+ * ever noise. Mounting it on demand also means the device camera is released the moment
+ * it is closed.
+ */
+export function ScanField({
+  onScan,
+  busy,
+  placeholder,
+  autoFocus,
+}: {
+  onScan: (code: string) => void
+  busy?: boolean
+  placeholder?: string
+  autoFocus?: boolean
+}) {
+  const [camera, setCamera] = useState(false)
+
+  return (
+    <div className="space-y-3">
+      <CodeInput onSubmit={onScan} busy={busy} placeholder={placeholder} autoFocus={autoFocus}>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setCamera((on) => !on)}
+          aria-pressed={camera}
+          className="shrink-0"
+        >
+          {camera ? <CameraOff className="size-4" /> : <Camera className="size-4" />}
+          <span className="hidden sm:inline">{camera ? "Close camera" : "Camera"}</span>
+        </Button>
+      </CodeInput>
+      {camera && (
+        <div className="max-w-sm">
+          <CameraScanner
+            onDetected={(code) => {
+              if (!busy) onScan(code)
+            }}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
 /** A camera button that opens a scanner and hands back the first code it reads. */
 export function ScanButton({
   onScan,

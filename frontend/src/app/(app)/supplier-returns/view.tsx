@@ -7,8 +7,20 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { EmptyState, ErrorState, PageHeader, Pagination, Spinner, StatTile, TableSkeleton } from "@/components/common"
+import {
+  EmptyState,
+  ErrorState,
+  FilterTabs,
+  PageHeader,
+  Pagination,
+  SearchInput,
+  Spinner,
+  StatGrid,
+  StatTile,
+  TableSkeleton,
+  Toolbar,
+} from "@/components/common"
+import { Code, DataView, Primary, type Column } from "@/components/data-view"
 import { useCurrency } from "@/components/session"
 import { useCreateSupplierReturn, useSettleSupplierReturn } from "@/lib/data/mutations"
 import {
@@ -50,8 +62,61 @@ export function SupplierReturnsView() {
   const { data, isLoading, isFetching, isError, error, refetch } = useSupplierReturns({ page, ...filters }, { pageSize })
   const { data: summary } = useSupplierReturnSummary(filters)
 
+  const columns: Column<SupplierReturn>[] = [
+    {
+      id: "product",
+      header: "Product",
+      role: "title",
+      cell: (row) => (
+        <Primary
+          sub={
+            <>
+              <Code>{row.code}</Code> · bill {row.purchaseCode} · {date(row.createdAt)}
+            </>
+          }
+        >
+          {count(row.quantity)} × {row.productName}
+        </Primary>
+      ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      role: "status",
+      cell: (row) =>
+        row.status === "open" ? (
+          <Badge variant="warning">Waiting</Badge>
+        ) : row.status === "settled" ? (
+          <Badge variant="success">Settled</Badge>
+        ) : (
+          <Badge variant="outline">Written off</Badge>
+        ),
+    },
+    { id: "supplier", header: "Supplier", cell: (row) => row.supplierName || "No supplier" },
+    { id: "reason", header: "Reason", role: "hidden", cell: (row) => row.reason },
+    { id: "value", header: "Value", align: "end", cell: (row) => money(row.value, currency) },
+    {
+      id: "settled",
+      header: "Settled by",
+      cell: (row) => <Settlement row={row} currency={currency} />,
+    },
+    {
+      id: "owed",
+      header: "Still owed",
+      align: "end",
+      cell: (row) =>
+        row.outstanding > 0 ? (
+          <span className="font-medium text-warning-soft-foreground dark:text-warning">
+            {money(row.outstanding, currency)}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+  ]
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <PageHeader
         title="Sent back to supplier"
         description="Faulty stock returned to whoever sold it, and what they still owe you for it."
@@ -63,7 +128,7 @@ export function SupplierReturnsView() {
       </PageHeader>
 
       {summary && summary.count > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatGrid>
           <StatTile
             label="Waiting on suppliers"
             value={count(summary.open)}
@@ -77,33 +142,18 @@ export function SupplierReturnsView() {
           />
           <StatTile label="Units sent back" value={count(summary.units)} />
           <StatTile label="Value sent back" value={money(summary.value, currency)} />
-        </div>
+        </StatGrid>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-56 flex-1">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Product, supplier, reason or a code like SR-000012"
-            className="pl-9"
-            aria-label="Search returns to suppliers"
-          />
-        </div>
-        <div className="flex gap-1">
-          {STATUSES.map((option) => (
-            <Button
-              key={option.value}
-              size="sm"
-              variant={status === option.value ? "default" : "outline"}
-              onClick={() => setStatus(option.value)}
-            >
-              {option.label}
-            </Button>
-          ))}
-        </div>
-      </div>
+      <Toolbar>
+        <SearchInput
+          value={text}
+          onChange={setText}
+          placeholder="Product, supplier, reason or a code like SR-000012"
+          label="Search returns to suppliers"
+        />
+        <FilterTabs value={status} onChange={setStatus} options={STATUSES} label="Filter returns to suppliers" />
+      </Toolbar>
 
       {isError ? (
         <ErrorState error={error} onRetry={() => refetch()} />
@@ -123,62 +173,19 @@ export function SupplierReturnsView() {
         />
       ) : (
         <>
-          <div className="overflow-x-auto rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Return</TableHead>
-                  <TableHead>Product</TableHead>
-                  <TableHead>Supplier</TableHead>
-                  <TableHead className="text-right">Value</TableHead>
-                  <TableHead>Settled by</TableHead>
-                  <TableHead className="text-right">Still owed</TableHead>
-                  <TableHead />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data?.results.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell>
-                      <span className="font-mono text-xs">{row.code}</span>
-                      <div className="text-xs text-muted-foreground">{date(row.createdAt)}</div>
-                      <div className="text-xs text-muted-foreground">Bill {row.purchaseCode}</div>
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {row.productName}
-                      <div className="text-xs text-muted-foreground tabular-nums">
-                        {count(row.quantity)} × {money(row.unitCost, currency)}
-                      </div>
-                      <div className="text-xs text-muted-foreground">{row.reason}</div>
-                    </TableCell>
-                    <TableCell className="text-sm">{row.supplierName || "No supplier"}</TableCell>
-                    <TableCell className="text-right tabular-nums">{money(row.value, currency)}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      <Settlement row={row} currency={currency} />
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {row.outstanding > 0 ? (
-                        <span className="text-amber-600 dark:text-amber-500">{money(row.outstanding, currency)}</span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {row.status === "open" ? (
-                        <Button size="sm" variant="outline" onClick={() => setSettling(row)}>
-                          Settle
-                        </Button>
-                      ) : row.status === "settled" ? (
-                        <Badge variant="outline">Settled</Badge>
-                      ) : (
-                        <Badge variant="secondary">Written off</Badge>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <DataView
+            label="Returns to suppliers"
+            rows={data?.results ?? []}
+            columns={columns}
+            getKey={(row) => row.id}
+            actions={(row) =>
+              row.status === "open" ? (
+                <Button size="sm" variant="outline" onClick={() => setSettling(row)}>
+                  Settle
+                </Button>
+              ) : null
+            }
+          />
 
           <Pagination
             page={page}
@@ -388,7 +395,7 @@ function SendBackDialog({ onClose }: { onClose: () => void }) {
             </div>
 
             {item && quantity > max && (
-              <p className="text-sm text-amber-600 dark:text-amber-500">
+              <p className="text-sm text-warning-soft-foreground dark:text-warning">
                 Only {count(max)} of those are left on this bill to send back.
               </p>
             )}

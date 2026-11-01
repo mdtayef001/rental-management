@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { EmptyState, ErrorState, PageHeader, Spinner } from "@/components/common"
 import { NotRecognised, NothingOut, ReturnChooser } from "@/components/return-chooser"
-import { CameraScanner, CodeInput } from "@/components/scanner"
+import { ScanField } from "@/components/scanner"
 import { useCurrency, useCurrentUser, useSettings } from "@/components/session"
 import { useResolveReturn, useTakeReturn } from "@/lib/data/mutations"
 import { useCustomers, useDebounced } from "@/lib/data/queries"
@@ -125,11 +125,10 @@ function FindPanel({
           <>
             {/* Typing first: a USB gun scanner needs nothing else, and it works when the
                 camera is refused or missing. */}
-            <CodeInput onSubmit={(code) => onLookup({ code })} autoFocus busy={busy} />
+            <ScanField onScan={(code) => onLookup({ code })} autoFocus busy={busy} />
             <p className="text-xs text-muted-foreground">
               Works with a product barcode, a SKU, or the QR code on the customer&apos;s receipt.
             </p>
-            <CameraScanner onDetected={(code) => !busy && onLookup({ code })} />
           </>
         ) : (
           <CustomerSearch onPick={(id) => onLookup({ customer: id })} busy={busy} />
@@ -341,7 +340,7 @@ function SettleReturn({
                 </Button>
               </div>
               {partial && (
-                <p className="text-sm text-amber-600 dark:text-amber-500">
+                <p className="text-sm text-warning-soft-foreground dark:text-warning">
                   {count(match.quantityOut - qty)} will stay out with {match.customerName}, and keep being charged
                   until they come back.
                 </p>
@@ -499,7 +498,7 @@ function SettleReturn({
                   id="method"
                   value={method}
                   onChange={(e) => setMethod(e.target.value)}
-                  className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                  className="h-9 w-full rounded-md border bg-card px-2 text-sm"
                 >
                   <option value="cash">Cash</option>
                   <option value="mobile">Mobile banking</option>
@@ -547,7 +546,7 @@ function SettleReturn({
 function Row({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
-      <span className={warn ? "text-amber-600 dark:text-amber-500" : "text-muted-foreground"}>{label}</span>
+      <span className={warn ? "text-warning-soft-foreground dark:text-warning" : "text-muted-foreground"}>{label}</span>
       <span className="shrink-0 tabular-nums">{value}</span>
     </div>
   )

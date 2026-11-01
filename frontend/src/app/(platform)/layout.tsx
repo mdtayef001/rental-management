@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { SessionProvider } from "@/components/session"
-import { ThemeToggle } from "@/components/app-nav"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { getContext } from "@/lib/auth/dal"
 import { ROLE_HOME } from "@/lib/auth/roles"
 
@@ -20,16 +20,19 @@ export default async function PlatformLayout({ children }: LayoutProps<"/">) {
   return (
     <SessionProvider user={ctx.user} business={null}>
       <div className="flex min-h-full flex-1 flex-col">
-        <header className="flex items-center justify-between gap-4 border-b px-4 py-3 sm:px-6">
-          <div>
-            <div className="font-semibold">Rental Manager</div>
-            <div className="text-xs text-muted-foreground">Platform administration</div>
+        <header className="sticky top-0 z-20 flex items-center justify-between gap-4 border-b bg-background/80 px-4 py-3 backdrop-blur-sm sm:px-6">
+          <div className="flex items-center gap-2.5">
+            <div className="flex size-8 items-center justify-center rounded-md bg-primary font-heading text-sm font-semibold text-primary-foreground">
+              RM
+            </div>
+            <div>
+              <div className="text-sm font-semibold">Rental Manager</div>
+              <div className="text-xs text-muted-foreground">Platform administration</div>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <div className="hidden text-sm text-muted-foreground sm:block">{ctx.user.email}</div>
-            <div className="w-36">
-              <ThemeToggle />
-            </div>
+            <ThemeToggle />
             <Button variant="outline" size="sm" render={<a href="/logout" />}>
               Log out
             </Button>

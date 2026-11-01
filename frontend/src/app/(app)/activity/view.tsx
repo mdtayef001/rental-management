@@ -1,9 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Search } from "lucide-react"
-import { Input } from "@/components/ui/input"
-import { EmptyState, ErrorState, PageHeader, Pagination, TableSkeleton } from "@/components/common"
+import { EmptyState, ErrorState, PageHeader, Pagination, SearchInput, TableSkeleton, Toolbar } from "@/components/common"
 import { useActivity, useActivityPeople, useDebounced, usePaging } from "@/lib/data/queries"
 import { friendlyDateTime } from "@/lib/format"
 
@@ -26,25 +24,16 @@ export function ActivityView() {
   )
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <PageHeader title="Activity" description="Everything anyone has done, newest first." />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-56 flex-1">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Search what happened"
-            className="pl-9"
-            aria-label="Search activity"
-          />
-        </div>
+      <Toolbar>
+        <SearchInput value={text} onChange={setText} placeholder="Search what happened" label="Search activity" />
         {people.length > 0 && (
           <select
             value={person}
             onChange={(e) => setPerson(e.target.value)}
-            className="h-9 rounded-md border bg-background px-2 text-sm"
+            className="h-9 shrink-0 rounded-md border bg-card px-2 text-sm"
             aria-label="Who"
           >
             <option value="">Everyone</option>
@@ -55,7 +44,7 @@ export function ActivityView() {
             ))}
           </select>
         )}
-      </div>
+      </Toolbar>
 
       {isError ? (
         <ErrorState error={error} onRetry={() => refetch()} />
@@ -65,12 +54,14 @@ export function ActivityView() {
         <EmptyState title="Nothing recorded yet" description="Actions will show up here as people use the app." />
       ) : (
         <>
-          <ul className="space-y-px rounded-lg border p-1">
+          {/* A timeline, not a table: the useful reading here is chronological, and on a
+              phone the who-and-when drops to its own line rather than being squeezed. */}
+          <ul className="divide-y overflow-hidden rounded-lg border bg-card">
             {data?.results.map((entry) => (
-              <li key={entry.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 rounded-md px-3 py-2.5 hover:bg-accent/40">
-                <span className="font-medium">{entry.action}</span>
+              <li key={entry.id} className="flex flex-col gap-1 px-3 py-2.5 transition-colors hover:bg-accent/40 sm:flex-row sm:items-baseline sm:gap-3">
+                <span className="shrink-0 font-medium">{entry.action}</span>
                 {entry.detail && <span className="min-w-0 flex-1 text-sm text-muted-foreground">{entry.detail}</span>}
-                <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                <span className="shrink-0 text-xs text-muted-foreground sm:ml-auto">
                   {entry.userName || "System"} · {friendlyDateTime(entry.at)}
                 </span>
               </li>

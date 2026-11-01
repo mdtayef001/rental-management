@@ -25,6 +25,7 @@ export function LoginForm({ next }: { next?: string }) {
         <Label htmlFor="email">Email</Label>
         <Input
           id="email"
+          className="h-10"
           name="email"
           type="email"
           autoComplete="username"
@@ -37,17 +38,17 @@ export function LoginForm({ next }: { next?: string }) {
 
       <div className="space-y-2">
         <Label htmlFor="password">Password</Label>
-        <Input id="password" name="password" type="password" autoComplete="current-password" required />
+        <Input id="password" name="password" type="password" autoComplete="current-password" required className="h-10" />
       </div>
 
       {state.error && (
-        <p role="alert" className="flex items-start gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+        <p role="alert" className="flex items-start gap-2 rounded-lg bg-destructive-soft p-3 text-sm text-destructive-soft-foreground">
           <AlertCircle className="mt-0.5 size-4 shrink-0" />
           {state.error}
         </p>
       )}
 
-      <Button type="submit" className="w-full" disabled={pending}>
+      <Button type="submit" size="lg" className="w-full" disabled={pending}>
         {pending && <Loader2 className="animate-spin" />}
         {pending ? "Logging in…" : "Log in"}
       </Button>
