@@ -5,8 +5,8 @@ import { usePathname } from "next/navigation"
 import {
   Activity as ActivityIcon,
   Boxes,
-  Building2,
   ChartColumn,
+  FileSpreadsheet,
   LogOut,
   Moon,
   Package,
@@ -51,9 +51,9 @@ const ITEMS: Item[] = [
   { href: "/products", label: "Products", icon: Package },
   { href: "/stock", label: "Stock", icon: Boxes },
   { href: "/purchases", label: "Purchases", icon: ShoppingCart },
+  { href: "/reports", label: "Reports", icon: FileSpreadsheet },
   { href: "/suppliers", label: "Suppliers", icon: Truck },
   { href: "/users", label: "Team", icon: Users },
-  { href: "/branches", label: "Branches", icon: Building2 },
   { href: "/activity", label: "Activity", icon: ActivityIcon },
   { href: "/settings", label: "Settings", icon: Settings },
 ]

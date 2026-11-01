@@ -9,7 +9,7 @@ proven pieces of `/home/tayef/code/friday` (Django 6 + DRF + Next.js 16).
 |---|---|
 | Subscription / billing | **None.** No trials, no payment gateway, no lock-outs. A business is open until the super admin suspends it. |
 | Warehouses / transfers | **None.** No warehouse type, no stock transfers, no stock requests. |
-| Branches | **Branch model, one seeded per business.** The UI hides the branch picker while a business has one branch, so it feels like a single store. A second branch later needs no migration. |
+| Branches | **Branch model, one seeded per business, no screen.** There is nothing to manage: a business is created with one branch and the pickers never render. The model stays so a second location later needs no migration. |
 | Rental shape | **Multi-item.** `Rental` + `RentalItem`, one receipt per rental, partial returns per item. |
 | Stock tracking | **By quantity, fungible.** 1,000 sewing machines are one product with quantity 1,000; 100 go out on a rental. No per-unit serials. Tables leave room to add them later. |
 | Purchasing | **Included.** Suppliers, purchases, supplier returns, supplier payments. |
@@ -59,7 +59,7 @@ the proxy), `zod` (form validation), `recharts` (reports), `date-fns`, `sonner` 
 
 ## Step-by-step build
 
-Phases 0-4 are complete, and phase 5 apart from reporting. See the README for what remains.
+Phases 0-5 are complete. See the README for what remains.
 
 ### Phase 0 — Scaffold
 1. `git init`; `backend/` (uv, Django project `config`) and `frontend/` (create-next-app).
@@ -133,8 +133,9 @@ Phases 0-4 are complete, and phase 5 apart from reporting. See the README for wh
 ### Phase 5 — Reporting, settings, hardening
 32. Dashboard: out on rent now, due back today, overdue, revenue this month, top products,
     low stock — each a single aggregate query.
-33. Reports with date ranges and CSV export: rental revenue, product utilisation, customer
-    history, outstanding deposits.
+33. Reports with date ranges and CSV export: revenue by day/week/month, top products, top
+    customers, and streamed CSV ledgers of rentals, returns and payments. Owner-only
+    unless the owner switches "See profit and reports" on for managers. ✅
 34. Activity log: who did what, when, filterable by person and action.
 35. Business settings: currency, receipt note, rental defaults, late-fee rule, manager
     permissions, low-stock alert.

@@ -1,3 +1,4 @@
+import { isValidElement } from "react"
 import { Button as ButtonPrimitive } from "@base-ui/react/button"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "cn"
@@ -43,12 +44,22 @@ function Button({
   className,
   variant = "default",
   size = "default",
+  render,
+  nativeButton,
   ...props
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+  // Base UI assumes it is rendering a real <button> and warns when it isn't, because a
+  // non-button loses keyboard and form behaviour that it then has to put back. Half the
+  // buttons in this app are links (ButtonLink renders a Next <Link>), so tell it the truth:
+  // when the call site renders something other than a <button>, it adds the right role and
+  // key handling instead of assuming native semantics it hasn't got.
+  const native = nativeButton ?? (render === undefined || (isValidElement(render) && render.type === "button"))
   return (
     <ButtonPrimitive
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
+      render={render}
+      nativeButton={native}
       {...props}
     />
   )

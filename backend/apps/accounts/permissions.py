@@ -72,6 +72,23 @@ class ManagerNeedsPermission(BasePermission):
         return True
 
 
+class ReadNeedsPermission(BasePermission):
+    """Even *reading* needs the owner's switch named by `view.read_permission`.
+
+    `ManagerNeedsPermission` leaves reads alone, which is right for a list a manager should
+    see but not change. Reports are the opposite case: the whole point of them is the money,
+    so seeing them at all is the thing the owner is granting.
+    """
+
+    message = "The owner hasn't given managers access to this."
+
+    def has_permission(self, request, view):
+        name = getattr(view, "read_permission", None)
+        if not name or request.user.role != User.Role.MANAGER:
+            return True
+        return request.user.business.permission_on(name)
+
+
 def creatable_roles(user):
     """Which roles `user` may hand out inside their business.
 

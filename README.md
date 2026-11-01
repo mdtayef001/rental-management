@@ -171,10 +171,27 @@ action after reading it is a phone call.
 
 All built: login, dashboard, scan, rent out, take back, rentals (list + detail), returns,
 customers (list + detail), products (list + detail with printable QR labels), stock,
-purchases, suppliers, team, branches, activity, settings, the super admin's platform page,
+purchases, suppliers, reports, team, activity, settings, the super admin's platform page,
 and the public receipt a customer opens from their QR code.
+
+There is no Branches screen. A business is created with exactly one branch and the branch
+pickers never render; the model and the `branch` column on stock, rentals and purchases
+stay as the seam for a second location later.
+
+## Reports
+
+Four questions in the order an owner asks them: what did we earn, when did we earn it,
+which machines earned it, who still owes us. The one thing to know about the figures is
+that **rent is earned at return, not at rent-out** — the price depends on how long the
+items were actually out, so "Earned" totals the returns taken in the range while "Rentals
+started" counts what went out in it. They are deliberately different numbers.
+
+Every block downloads as CSV, and three full ledgers (rentals, returns, payments) are
+there for an accountant. Exports stream row by row rather than being built in memory, and
+a cell that starts `=`, `+`, `-` or `@` is prefixed with an apostrophe so a customer named
+`=HYPERLINK(…)` cannot run a formula on the owner's machine when the file is opened.
 
 ## Still to build
 
-See `PLAN.md`. Reporting with CSV export, and the supplier-returns screen (the API is
-there). Everything else in the plan is done.
+See `PLAN.md`. The supplier-returns screen (the API is there). Everything else in the plan
+is done.

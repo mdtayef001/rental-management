@@ -41,7 +41,14 @@ export function useCurrency() {
   return useSession().business?.settings.currency ?? "BDT"
 }
 
-/** The branches this user may act in, and whether to show a branch picker at all. */
+/**
+ * The branches this user may act in, and whether to show a branch picker at all.
+ *
+ * There is no Branches screen: a business is created with exactly one, so `showPicker` is
+ * false everywhere and every form quietly uses `defaultBranchId`. The model and these
+ * pickers stay as the seam for a second location later — stock, rentals and purchases all
+ * already record which branch they happened at, so opening one needs no migration.
+ */
 export function useBranchScope() {
   const { user, business } = useSession()
   const all = business?.branches ?? []

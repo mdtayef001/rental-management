@@ -456,3 +456,98 @@ export interface PlatformBusiness {
   userCount: number
   createdAt: string
 }
+
+// ---------- Reports ----------
+//
+// Every figure below is one database aggregate. The split between the two halves of
+// `ReportSummary` is the thing to understand: the dated figures cover the chosen range,
+// and the standing ones are simply true right now, whatever range is selected.
+
+/** How a revenue series is bucketed. Chosen automatically from the length of the range. */
+export type ReportGroup = "day" | "week" | "month"
+
+/** The reports that can be downloaded as CSV. */
+export type ReportExport = "revenue" | "products" | "customers" | "rentals" | "returns" | "payments"
+
+export interface ReportRange {
+  /** Both ends inclusive, as `YYYY-MM-DD` local dates. */
+  from: string
+  to: string
+}
+
+export interface ReportSummary extends ReportRange {
+  days: number
+
+  // Earned in the range, from the returns that charged it.
+  revenue: number
+  rent: number
+  lateFees: number
+  damageFees: number
+  discounts: number
+  returns: number
+
+  // Happened in the range.
+  rentals: number
+  cancelled: number
+  lines: number
+  unitsRented: number
+  unitsReturned: number
+  unitsLost: number
+  unitsDamaged: number
+  depositsTaken: number
+  newCustomers: number
+  purchaseBills: number
+  purchaseSpend: number
+
+  // Through the till in the range, which is not the same as earned.
+  collected: number
+  refunded: number
+
+  // True right now, whatever the range.
+  openRentals: number
+  overdue: number
+  unitsOut: number
+  depositsHeld: number
+  outstanding: number
+}
+
+export interface RevenueRow {
+  /** The first day of the bucket, as `YYYY-MM-DD`. */
+  period: string
+  returns: number
+  rent: number
+  lateFees: number
+  damageFees: number
+  discounts: number
+  revenue: number
+}
+
+export interface ProductReportRow {
+  /** Null once the product has been deleted; its history still counts. */
+  id: string | null
+  name: string
+  sku: string
+  rentals: number
+  units: number
+  lost: number
+  damaged: number
+  rent: number
+  lateFees: number
+  damageFees: number
+  revenue: number
+}
+
+export interface CustomerReportRow {
+  id: string | null
+  name: string
+  phone: string
+  rentals: number
+  returns: number
+  rent: number
+  lateFees: number
+  damageFees: number
+  discounts: number
+  revenue: number
+  /** Unpaid across every rental they have ever had, not just this range. */
+  outstanding: number
+}

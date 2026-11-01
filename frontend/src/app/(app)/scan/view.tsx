@@ -2,208 +2,316 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { AlertTriangle, ArrowRight, Package, ScanLine, Undo2 } from "lucide-react"
+import { AlertTriangle, ArrowRight, Camera, CameraOff, Package, Undo2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { ButtonLink } from "@/components/ui/button-link"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { PageHeader, Spinner, StatTile } from "@/components/common"
+import { Spinner } from "@/components/common"
 import { CameraScanner, CodeInput } from "@/components/scanner"
 import { useBranchScope, useCurrency } from "@/components/session"
-import { useLookup, useRentalSummary } from "@/lib/data/queries"
+import { useLookup, useProductSearch, useRentalSummary } from "@/lib/data/queries"
 import { count, money, plural } from "@/lib/format"
+import type { ProductLookup } from "@/lib/types"
 
 /**
  * The counter screen: scan anything and the app works out what you probably want.
  *
- * Staff land here after logging in. One scan shows the item, how many are on the shelf and
- * how many are out — then offers the two things they might do with it. It deliberately
- * doesn't decide for them: scanning a product could mean renting it out or taking it back,
- * and only the person at the counter knows which.
+ * The layout is the whole design here. Staff stand at a counter with a customer waiting, so
+ * the field comes first and the answer appears directly under it — nothing is allowed
+ * between the two, because an answer below the fold is an answer nobody reads. The camera
+ * is off until it's asked for, since a live video panel would push every result off the
+ * screen; the day's figures sit at the bottom, where they inform without getting in the way.
+ *
+ * It deliberately doesn't decide what to do with a scan: a product could mean renting out
+ * or taking back, and only the person at the counter knows which.
  */
 export function ScanView({ canRent, canTakeReturns }: { canRent: boolean; canTakeReturns: boolean }) {
-  const currency = useCurrency()
-  const { defaultBranchId, showPicker, branches } = useBranchScope()
-  const [branchId, setBranchId] = useState(defaultBranchId)
+  const { defaultBranchId } = useBranchScope()
   const [code, setCode] = useState("")
+  const [typed, setTyped] = useState("")
+  const [camera, setCamera] = useState(false)
 
   const lookup = useLookup(code)
+  // While someone types a name, search for it. Exact codes come back from `useLookup` on
+  // Enter — this is for the half of the day when the label is torn off and staff type
+  // "sewing" instead.
+  const suggestions = useProductSearch(typed, { enabled: typed.trim().length > 1 && !isCode(typed) })
   const { data: summary } = useRentalSummary({ live: true })
 
-  const onHand = lookup.data ? (lookup.data.stock[branchId] ?? 0) : 0
+  function pick(product: ProductLookup) {
+    setTyped("")
+    setCode(product.barcode || product.sku)
+  }
+
+  const showingSuggestions = typed.trim().length > 1 && !isCode(typed)
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Scan" description="Scan an item to rent it out or take it back.">
-        {canTakeReturns && (
-          <ButtonLink href="/take-back" variant="outline">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Scan</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Scan an item to rent it out or take it back. A USB scanner works too.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          {canTakeReturns && (
+            <ButtonLink href="/take-back" variant="outline">
               <Undo2 className="size-4" />
               Take back
             </ButtonLink>
-        )}
-        {canRent && (
-          <ButtonLink href="/rent-out">
+          )}
+          {canRent && (
+            <ButtonLink href="/rent-out">
               <Package className="size-4" />
               Rent out
             </ButtonLink>
-        )}
-      </PageHeader>
-
-      {/* Today at a glance: the three numbers that decide what staff do next. */}
-      <div className="grid gap-3 sm:grid-cols-3">
-        <StatTile label="Out on rent" value={count(summary?.unitsOut ?? 0)} hint={plural(summary?.open ?? 0, "rental")} />
-        <StatTile
-          label="Due back today"
-          value={count(summary?.dueToday ?? 0)}
-          tone={summary?.dueToday ? "warning" : "default"}
-        />
-        <StatTile
-          label="Overdue"
-          value={count(summary?.overdue ?? 0)}
-          tone={summary?.overdue ? "danger" : "good"}
-          hint={summary?.overdue ? "Chase these up" : "Nothing late"}
-        />
+          )}
+        </div>
       </div>
 
-      {showPicker && (
-        <div className="flex items-center gap-2 text-sm">
-          <label htmlFor="branch" className="text-muted-foreground">
-            Branch
-          </label>
-          <select
-            id="branch"
-            value={branchId}
-            onChange={(e) => setBranchId(e.target.value)}
-            className="h-9 rounded-md border bg-background px-2 text-sm"
+      {/* The field, and nothing above it. */}
+      <div className="space-y-3">
+        <CodeInput value={typed} onChange={setTyped} onSubmit={setCode} autoFocus busy={lookup.isFetching}>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11"
+            onClick={() => setCamera((on) => !on)}
+            aria-pressed={camera}
           >
-            {branches.map((branch) => (
-              <option key={branch.id} value={branch.id}>
-                {branch.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
+            {camera ? <CameraOff className="size-4" /> : <Camera className="size-4" />}
+            <span className="hidden sm:inline">{camera ? "Close camera" : "Camera"}</span>
+          </Button>
+        </CodeInput>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Scan or type a code</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <CodeInput onSubmit={setCode} autoFocus />
-          <CameraScanner onDetected={setCode} />
-        </CardContent>
-      </Card>
+        {/* Only mounted when asked for, so the camera is released the moment it's closed —
+            and so it never costs the screen space staff need for the result. */}
+        {camera && (
+          <div className="max-w-sm">
+            <CameraScanner
+              onDetected={(scanned) => {
+                setCamera(false)
+                setCode(scanned)
+              }}
+            />
+          </div>
+        )}
+      </div>
 
-      {lookup.isFetching && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      {/* The answer, immediately under the field. */}
+      {showingSuggestions ? (
+        <Suggestions
+          query={typed}
+          rows={suggestions.data ?? []}
+          loading={suggestions.isFetching}
+          onPick={pick}
+        />
+      ) : lookup.isFetching ? (
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
           <Spinner /> Looking up {code}…
-        </div>
-      )}
-
-      {lookup.isError && (
-        <div className="flex items-start gap-3 rounded-lg border border-dashed p-6">
-          <AlertTriangle className="mt-0.5 size-5 text-muted-foreground" />
+        </p>
+      ) : lookup.isError ? (
+        <div className="flex items-start gap-3 rounded-lg border border-dashed p-5">
+          <AlertTriangle className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
           <div className="space-y-1">
-            <p className="font-medium">Nothing matches that code</p>
+            <p className="font-medium">Nothing matches {code}</p>
             <p className="text-sm text-muted-foreground">
-              {lookup.error instanceof Error ? lookup.error.message : "Try another code."} You can also{" "}
+              Type part of the product name to search instead, or{" "}
               <Link href="/products" className="underline">
-                search the products list
+                open the products list
               </Link>
               .
             </p>
           </div>
         </div>
-      )}
+      ) : lookup.data ? (
+        <Found
+          product={lookup.data}
+          onHand={lookup.data.stock[defaultBranchId] ?? 0}
+          canRent={canRent}
+          canTakeReturns={canTakeReturns}
+        />
+      ) : null}
 
-      {lookup.data && !lookup.isFetching && (
-        <Card>
-          <CardHeader>
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="space-y-1">
-                <CardTitle>{lookup.data.name}</CardTitle>
-                <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                  <Badge variant="outline" className="font-mono text-xs">
-                    {lookup.data.sku}
-                  </Badge>
-                  {lookup.data.category && <span>{lookup.data.category}</span>}
-                  {!lookup.data.rentable && <Badge variant="secondary">Not for rent</Badge>}
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-semibold tabular-nums">{count(onHand)}</div>
-                <div className="text-xs text-muted-foreground">on the shelf</div>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {lookup.data.rentable && (
-              <div className="flex flex-wrap gap-4 text-sm">
-                {lookup.data.rentDaily != null && (
-                  <span>
-                    <strong>{money(lookup.data.rentDaily, currency)}</strong> / day
-                  </span>
-                )}
-                {lookup.data.rentWeekly != null && (
-                  <span>
-                    <strong>{money(lookup.data.rentWeekly, currency)}</strong> / week
-                  </span>
-                )}
-                {lookup.data.rentMonthly != null && (
-                  <span>
-                    <strong>{money(lookup.data.rentMonthly, currency)}</strong> / month
-                  </span>
-                )}
-                {lookup.data.deposit > 0 && (
-                  <span className="text-muted-foreground">
-                    Deposit {money(lookup.data.deposit, currency)} each
-                  </span>
-                )}
-              </div>
-            )}
-
-            <div className="flex flex-wrap gap-2">
-              {canRent && lookup.data.rentable && (
-                <ButtonLink
-                  href={`/rent-out?code=${encodeURIComponent(lookup.data.barcode || lookup.data.sku)}`}
-                  disabled={onHand === 0}
-                >
-                  <Package className="size-4" />
-                  Rent this out
-                  <ArrowRight className="size-4" />
-                </ButtonLink>
-              )}
-              {canTakeReturns && (
-                <ButtonLink
-                  href={`/take-back?code=${encodeURIComponent(lookup.data.barcode || lookup.data.sku)}`}
-                  variant="outline"
-                >
-                  <Undo2 className="size-4" />
-                  Take one back
-                </ButtonLink>
-              )}
-              <ButtonLink href={`/products/${lookup.data.id}`} variant="ghost">
-                Product details
-              </ButtonLink>
-            </div>
-
-            {onHand === 0 && lookup.data.rentable && (
-              <p className="text-sm text-amber-600 dark:text-amber-500">
-                None are on the shelf at this branch — they may all be out on rent.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {!lookup.data && !lookup.isFetching && !lookup.isError && (
-        <div className="rounded-lg border border-dashed p-10 text-center">
-          <ScanLine className="mx-auto size-8 text-muted-foreground" />
-          <p className="mt-3 text-sm text-muted-foreground">
-            Scan a barcode, or type a SKU and press Enter. A USB scanner works too.
-          </p>
-        </div>
-      )}
+      {/* Context, not the task: last, quiet, and still one glance. */}
+      <dl className="flex flex-wrap gap-x-10 gap-y-4 border-t pt-5 text-sm">
+        <Stat label="Out on rent" value={count(summary?.unitsOut ?? 0)} hint={plural(summary?.open ?? 0, "rental")} />
+        <Stat label="Due back today" value={count(summary?.dueToday ?? 0)} />
+        <Stat
+          label="Overdue"
+          value={count(summary?.overdue ?? 0)}
+          hint={summary?.overdue ? "Chase these up" : "Nothing late"}
+          href={summary?.overdue ? "/rentals?status=overdue" : undefined}
+          bad={!!summary?.overdue}
+        />
+      </dl>
     </div>
+  )
+}
+
+/** Barcodes and SKUs are codes; "sewing mach" is a search. */
+function isCode(text: string) {
+  const value = text.trim()
+  return value.length > 0 && !value.includes(" ") && /^[\w\-./:]+$/.test(value) && /\d/.test(value)
+}
+
+function Suggestions({
+  query,
+  rows,
+  loading,
+  onPick,
+}: {
+  query: string
+  rows: ProductLookup[]
+  loading: boolean
+  onPick: (product: ProductLookup) => void
+}) {
+  if (loading && rows.length === 0) {
+    return (
+      <p className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Spinner /> Searching for “{query.trim()}”…
+      </p>
+    )
+  }
+  if (rows.length === 0) {
+    return (
+      <p className="rounded-lg border border-dashed p-5 text-sm text-muted-foreground">
+        No product matches “{query.trim()}”. Check the spelling, or scan the label.
+      </p>
+    )
+  }
+  return (
+    <ul className="divide-y overflow-hidden rounded-lg border">
+      {rows.slice(0, 8).map((product) => (
+        <li key={product.id}>
+          <button
+            type="button"
+            onClick={() => onPick(product)}
+            className="flex w-full items-center justify-between gap-3 p-3 text-left hover:bg-accent/60"
+          >
+            <span>
+              <span className="font-medium">{product.name}</span>
+              <span className="block font-mono text-xs text-muted-foreground">{product.sku}</span>
+            </span>
+            <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
+          </button>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/** One scanned product: what it is, how many are on the shelf, and the two things to do with it. */
+function Found({
+  product,
+  onHand,
+  canRent,
+  canTakeReturns,
+}: {
+  product: ProductLookup
+  onHand: number
+  canRent: boolean
+  canTakeReturns: boolean
+}) {
+  const currency = useCurrency()
+  const code = encodeURIComponent(product.barcode || product.sku)
+
+  return (
+    <div className="rounded-lg border">
+      <div className="flex flex-wrap items-start justify-between gap-4 border-b p-4">
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold">{product.name}</h2>
+          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <Badge variant="outline" className="font-mono text-xs">
+              {product.sku}
+            </Badge>
+            {product.category && <span>{product.category}</span>}
+            {!product.rentable && <Badge variant="secondary">Not for rent</Badge>}
+          </div>
+          {product.rentable && (
+            <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1 text-sm">
+              {product.rentDaily != null && (
+                <span>
+                  <strong className="tabular-nums">{money(product.rentDaily, currency)}</strong> / day
+                </span>
+              )}
+              {product.rentWeekly != null && (
+                <span>
+                  <strong className="tabular-nums">{money(product.rentWeekly, currency)}</strong> / week
+                </span>
+              )}
+              {product.rentMonthly != null && (
+                <span>
+                  <strong className="tabular-nums">{money(product.rentMonthly, currency)}</strong> / month
+                </span>
+              )}
+              {product.deposit > 0 && (
+                <span className="text-muted-foreground">Deposit {money(product.deposit, currency)} each</span>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="text-right">
+          <div className="text-[1.75rem] leading-tight font-semibold tabular-nums">{count(onHand)}</div>
+          <div className="text-xs text-muted-foreground">on the shelf</div>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 p-4">
+        {canRent && product.rentable && (
+          <ButtonLink href={`/rent-out?code=${code}`} disabled={onHand === 0}>
+            <Package className="size-4" />
+            Rent this out
+            <ArrowRight className="size-4" />
+          </ButtonLink>
+        )}
+        {canTakeReturns && (
+          <ButtonLink href={`/take-back?code=${code}`} variant="outline">
+            <Undo2 className="size-4" />
+            Take one back
+          </ButtonLink>
+        )}
+        <ButtonLink href={`/products/${product.id}`} variant="ghost">
+          Product details
+        </ButtonLink>
+        {onHand === 0 && product.rentable && (
+          <p className="text-sm text-amber-700 dark:text-amber-500">
+            None on the shelf — they may all be out on rent.
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function Stat({
+  label,
+  value,
+  hint,
+  href,
+  bad,
+}: {
+  label: string
+  value: string
+  hint?: string
+  href?: string
+  bad?: boolean
+}) {
+  const body = (
+    <>
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className={bad ? "mt-0.5 font-medium tabular-nums text-destructive" : "mt-0.5 font-medium tabular-nums"}>
+        {value}
+        {hint && <span className="ml-2 text-xs font-normal text-muted-foreground">{hint}</span>}
+      </dd>
+    </>
+  )
+  return href ? (
+    <Link href={href} className="underline-offset-4 hover:underline">
+      {body}
+    </Link>
+  ) : (
+    <div>{body}</div>
   )
 }

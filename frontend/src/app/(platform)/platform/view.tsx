@@ -190,7 +190,6 @@ function CreateDialog({ onClose }: { onClose: () => void }) {
     industry: "",
     phone: "",
     address: "",
-    branchName: "Main branch",
     ownerName: "",
     ownerEmail: "",
     ownerPassword: "",
@@ -233,10 +232,6 @@ function CreateDialog({ onClose }: { onClose: () => void }) {
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="b-address">Address</Label>
               <Input id="b-address" value={form.address} onChange={set("address")} />
-            </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="b-branch">First branch</Label>
-              <Input id="b-branch" value={form.branchName} onChange={set("branchName")} />
             </div>
           </div>
 

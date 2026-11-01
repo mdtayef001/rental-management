@@ -21,7 +21,14 @@ import type {
   Supplier,
   SupplierPayment,
   SupplierReturn,
+  CustomerReportRow,
   Page,
+  ProductReportRow,
+  ReportExport,
+  ReportGroup,
+  ReportRange,
+  ReportSummary,
+  RevenueRow,
 } from "@/lib/types"
 
 // Reads from the Django API, cached by TanStack Query.
@@ -247,3 +254,52 @@ export const useActivity = (params: Params & { page: number }, o?: ListOptions) 
 export const useUsers = (params: Params & { page: number }, o?: ListOptions) => usePage<SessionUser>("users/", params, o)
 export const usePlatformBusinesses = (params: Params & { page: number }, o?: ListOptions) =>
   usePage<PlatformBusiness>("platform/businesses/", params, o)
+
+// ---------- Reports ----------
+
+/**
+ * One report over a date range.
+ *
+ * Reports are read far more often than the data behind them changes within a session, and
+ * each one is a handful of aggregates, so they are cached for a minute and the previous
+ * range stays on screen while a new one loads — changing the dates shouldn't blank the page.
+ */
+function reportQuery<T>(name: string, params: Params, enabled: boolean) {
+  return {
+    ...apiQuery<T>(`reports/${name}/`, params),
+    enabled,
+    staleTime: 60_000,
+    placeholderData: keepPreviousData,
+  }
+}
+
+export function useReportSummary(range: ReportRange, enabled = true) {
+  return useQuery(reportQuery<ReportSummary>("summary", { ...range }, enabled))
+}
+
+export function useRevenueReport(range: ReportRange, group: ReportGroup | "" = "", enabled = true) {
+  return useQuery(
+    reportQuery<ReportRange & { group: ReportGroup; results: RevenueRow[] }>("revenue", { ...range, group }, enabled),
+  )
+}
+
+export function useProductReport(range: ReportRange, enabled = true) {
+  return useQuery(reportQuery<ReportRange & { results: ProductReportRow[] }>("products", { ...range }, enabled))
+}
+
+export function useCustomerReport(range: ReportRange, enabled = true) {
+  return useQuery(reportQuery<ReportRange & { results: CustomerReportRow[] }>("customers", { ...range }, enabled))
+}
+
+/**
+ * The href that downloads a report as CSV.
+ *
+ * A plain link, not a fetch: the login token travels in an httpOnly cookie, which the
+ * browser sends on a navigation of its own accord, and the file streams to disk without
+ * ever being held in the page's memory.
+ */
+export function exportUrl(report: ReportExport, range: ReportRange, group: ReportGroup | "" = "") {
+  // No trailing slash: Next redirects one away (308) and the route handler puts it back
+  // before calling Django, so writing it here only costs the browser a round trip.
+  return `/api/backend/${withParams("reports/export", { report, ...range, group })}`
+}

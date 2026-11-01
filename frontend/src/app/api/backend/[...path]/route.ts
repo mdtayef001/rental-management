@@ -28,7 +28,10 @@ async function forward(req: NextRequest, path: string[]) {
   // turns every write into a 500. Add it back unconditionally.
   const route = path.join("/").replace(/\/+$/, "")
   const target = `${API_URL}/${route}/${req.nextUrl.search}`
-  const body = req.method === "GET" || req.method === "DELETE" ? undefined : await req.text()
+  // DELETE carries a body here — deleting a business makes the super admin type its name
+  // back, and that confirmation travels with the request. Dropping it would turn every
+  // such delete into a 400.
+  const body = req.method === "GET" ? undefined : await req.text()
 
   let res: Response
   try {
@@ -52,12 +55,24 @@ async function forward(req: NextRequest, path: string[]) {
   }
 
   if (res.status === 204) return new Response(null, { status: 204 })
-  // Pass the body through untouched, so DRF's error shapes survive for errorMessage().
+
+  // A file download (the CSV exports) is piped straight through rather than read into a
+  // string: a year of returns is a big file, and the owner's browser should start saving it
+  // while Django is still writing it. The disposition header has to survive too, or the
+  // browser names the file after this route instead of the report.
+  const type = res.headers.get("Content-Type") ?? "application/json"
+  const disposition = res.headers.get("Content-Disposition")
+  if (res.ok && disposition) {
+    return new Response(res.body, {
+      status: res.status,
+      headers: { "Content-Type": type, "Content-Disposition": disposition, "Cache-Control": "no-store" },
+    })
+  }
+
+  // Everything else: pass the body through untouched, so DRF's error shapes survive for
+  // errorMessage().
   const text = await res.text()
-  return new Response(text, {
-    status: res.status,
-    headers: { "Content-Type": res.headers.get("Content-Type") ?? "application/json" },
-  })
+  return new Response(text, { status: res.status, headers: { "Content-Type": type } })
 }
 
 type Params = { params: Promise<{ path: string[] }> }

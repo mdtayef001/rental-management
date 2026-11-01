@@ -239,7 +239,7 @@ export function useDeleteCustomer() {
   })
 }
 
-// ---------- Team and branches ----------
+// ---------- The team ----------
 
 export function useSaveUser(id?: string) {
   const refresh = useRefresh()
@@ -272,19 +272,6 @@ export function useSetUserPassword() {
       request<void>(`users/${id}/password/`, { method: "POST", body: { password } }),
     onSuccess: () => toast.success("Password changed"),
     onError: (err) => showError(err, "Couldn't change the password."),
-  })
-}
-
-export function useSaveBranch(id?: string) {
-  const refresh = useRefresh()
-  return useMutation({
-    mutationFn: (body: Record<string, unknown>) =>
-      request(id ? `branches/${id}/` : "branches/", { method: id ? "PATCH" : "POST", body }),
-    onSuccess: () => {
-      refresh("branches", "stock", "activity")
-      toast.success(id ? "Branch saved" : "Branch added")
-    },
-    onError: (err) => showError(err, "Couldn't save the branch."),
   })
 }
 
@@ -365,7 +352,6 @@ export function useCreateBusiness() {
       industry?: string
       phone?: string
       address?: string
-      branchName?: string
       ownerName: string
       ownerEmail: string
       ownerPassword: string

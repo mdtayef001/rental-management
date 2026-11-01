@@ -17,7 +17,6 @@ const MANAGER_PERMISSIONS: { id: PermissionId; label: string; hint: string }[] =
   { id: "managerUsers", label: "Manage the team", hint: "Add and edit staff accounts." },
   { id: "managerProducts", label: "Change products", hint: "Add products and edit rates." },
   { id: "managerCustomers", label: "Edit customers", hint: "Change or remove customer records." },
-  { id: "managerBranches", label: "Manage branches", hint: "Add and edit branches." },
   { id: "managerActivity", label: "See the activity log", hint: "Read what everyone has done." },
   { id: "managerPurchases", label: "See purchasing", hint: "Suppliers, bills and what you owe." },
   { id: "managerProfit", label: "See profit and reports", hint: "What things cost and what they earn." },

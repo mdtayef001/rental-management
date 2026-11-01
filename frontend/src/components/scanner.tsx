@@ -132,19 +132,37 @@ export function CameraScanner({ onDetected, active = true }: { onDetected: (code
  * screen.
  */
 export function CodeInput({
+  value: controlled,
   onSubmit,
+  onChange,
   placeholder = "Scan or type a barcode / SKU, then press Enter",
   autoFocus,
   busy,
+  children,
 }: {
+  /** Pass this with `onChange` to drive the field from the page, so the page can clear it. */
+  value?: string
   onSubmit: (code: string) => void
+  /** Every keystroke, for screens that search by name while someone types. */
+  onChange?: (text: string) => void
   placeholder?: string
   autoFocus?: boolean
   /** A lookup is in flight. The field stays usable — see below. */
   busy?: boolean
+  /** Buttons to sit beside the field, e.g. a camera toggle. */
+  children?: React.ReactNode
 }) {
-  const [value, setValue] = useState("")
+  // Uncontrolled by default — most screens only want the submitted code — but a screen
+  // that searches as you type owns the text, so it can also clear the field when the
+  // search is answered.
+  const [own, setOwn] = useState("")
+  const value = controlled ?? own
   const inputRef = useRef<HTMLInputElement>(null)
+
+  function update(text: string) {
+    if (controlled === undefined) setOwn(text)
+    onChange?.(text)
+  }
 
   return (
     <form
@@ -155,7 +173,7 @@ export function CodeInput({
         if (!code) return
         onSubmit(code)
         // Cleared straight away, so the next scan doesn't append to the last one.
-        setValue("")
+        update("")
         // And focus is put back deliberately: a hardware scanner fires the next code
         // immediately, and anything that steals focus between scans drops items silently.
         inputRef.current?.focus()
@@ -169,7 +187,7 @@ export function CodeInput({
         <Input
           ref={inputRef}
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => update(e.target.value)}
           placeholder={placeholder}
           className="h-11 pl-9 font-mono"
           autoFocus={autoFocus}
@@ -183,6 +201,7 @@ export function CodeInput({
       <Button type="submit" className="h-11" disabled={busy || !value.trim()}>
         Look up
       </Button>
+      {children}
     </form>
   )
 }
