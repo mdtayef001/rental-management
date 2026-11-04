@@ -161,7 +161,10 @@ export function StatGrid({ children, className }: { children: React.ReactNode; c
 }
 
 const TONES = {
-  default: "bg-primary/10 text-primary",
+  // Neutral on purpose. A tinted tile on every figure is a row of decoration; colour here
+  // has to stay rare enough that catching sight of it means something. Ink Blue in
+  // particular marks where a hand should go, not what kind of number this is.
+  default: "bg-muted text-muted-foreground",
   good: "bg-success-soft text-success-soft-foreground",
   warning: "bg-warning-soft text-warning-soft-foreground",
   danger: "bg-destructive-soft text-destructive-soft-foreground",
@@ -174,6 +177,10 @@ export type Tone = keyof typeof TONES
  * The tone sits on the icon tile rather than on the figure. A whole row of coloured
  * numbers reads as decoration and stops meaning anything; a coloured tile next to a plain
  * figure still says "this is the one to look at", and the figure stays legible.
+ *
+ * That only works while most tiles are uncoloured, so `default` is deliberately neutral:
+ * in a row of four, the one or two that are actually warning or danger are the ones that
+ * catch the eye, and a quiet day is a quiet row.
  */
 export function StatCard({
   label,

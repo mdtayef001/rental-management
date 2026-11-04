@@ -14,6 +14,13 @@ import { ACCESS_COOKIE, REFRESH_COOKIE, cookieOptions, refreshAccess, verifyAcce
 // stops a logged-out browser from flashing a page it can't have.
 export default async function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname
+
+  // Logging out: pass straight through without renewing. Renewing here would attach a
+  // fresh access cookie to the very response /logout clears the cookies on, and the
+  // browser would arrive at /login still holding a valid session — which this proxy then
+  // bounces to the role's home page, so the logout looks like it went somewhere random.
+  if (path === "/logout") return NextResponse.next({ request: { headers: req.headers } })
+
   let session = await verifyAccess(req.cookies.get(ACCESS_COOKIE)?.value)
   let renewed: string | null = null
   const refresh = req.cookies.get(REFRESH_COOKIE)?.value

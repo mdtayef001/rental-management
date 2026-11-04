@@ -58,7 +58,7 @@ export function OverdueList({ limit = 5 }: { limit?: number }) {
   return (
     // The one card on the dashboard with a coloured edge: it is the only thing here that
     // asks somebody to pick up the phone.
-    <Card className="h-full border-l-2 border-l-destructive">
+    <Card className="h-full border-l border-l-destructive">
       <CardHeader>
         <CardTitle className="text-destructive">{plural(total, "rental")} overdue</CardTitle>
         <CardDescription>Worst first. Ring them, or send a WhatsApp.</CardDescription>
@@ -71,7 +71,7 @@ export function OverdueList({ limit = 5 }: { limit?: number }) {
         )}
       </CardHeader>
       <CardContent>
-        <ul className="space-y-px">
+        <ul className="space-y-0.5">
           {rentals.map((rental) => (
             <OverdueRow key={rental.id} rental={rental} currency={currency} />
           ))}
@@ -93,30 +93,29 @@ function OverdueRow({ rental, currency }: { rental: Rental; currency: string }) 
   )
 
   return (
-    <li className="group flex items-stretch gap-3 rounded-r-md py-2.5 transition-colors hover:bg-accent/40 sm:gap-4">
+    <li className="group flex items-center gap-2.5 rounded-md py-1 transition-colors hover:bg-accent/40">
       <DayBlock days={days} />
 
-      <Link href={`/rentals/${rental.id}`} className="flex min-w-0 flex-1 flex-col justify-center">
-        <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
-          <span className="truncate font-medium group-hover:underline">{rental.customerName}</span>
-          <span className="font-mono text-xs text-muted-foreground">{rental.code}</span>
-        </div>
-        <div className="mt-0.5 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-sm text-muted-foreground">
-          <span>{plural(rental.unitsOut, "unit")} still out</span>
-          {rental.balance > 0 && (
-            <span className="font-medium text-foreground">{money(rental.balance, currency)} owed</span>
-          )}
-        </div>
+      <Link
+        href={`/rentals/${rental.id}`}
+        className="flex min-w-0 flex-1 items-baseline gap-x-2.5 rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      >
+        <span className="truncate font-medium group-hover:underline">{rental.customerName}</span>
+        <span className="hidden shrink-0 font-mono text-xs text-muted-foreground sm:inline">{rental.code}</span>
+        <span className="truncate text-xs text-muted-foreground">
+          {plural(rental.unitsOut, "unit")} out
+          {rental.balance > 0 && <> · {money(rental.balance, currency)} owed</>}
+        </span>
       </Link>
 
       {/* The next action after reading this row is ringing the customer, so the number is
           here rather than two screens away. Hidden when we have no number for them. */}
       {rental.customerPhone && (
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-center gap-0.5">
           <a
             href={`tel:${rental.customerPhone}`}
             aria-label={`Call ${rental.customerName} on ${rental.customerPhone}`}
-            className="flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
             <Phone className="size-4" />
           </a>
@@ -126,7 +125,7 @@ function OverdueRow({ rental, currency }: { rental: Rental; currency: string }) 
               target="_blank"
               rel="noreferrer"
               aria-label={`Message ${rental.customerName} on WhatsApp`}
-              className="flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
               <MessageCircle className="size-4" />
             </a>
@@ -138,13 +137,17 @@ function OverdueRow({ rental, currency }: { rental: Rental; currency: string }) 
 }
 
 /**
- * How late, as a block you can rank by eye.
+ * How late, as a marker you can rank by eye.
  *
  * Three steps rather than a continuous scale, because the useful question is not "how many
  * days" but "is this a nudge, a problem, or a loss":
  *   1–3 days   a nudge — people are late, it happens
  *   4–14 days  a problem worth chasing properly
  *   15+ days   treat the stock as at risk
+ *
+ * On the dashboard this is an index into a queue, not the queue itself: each rental has its
+ * own page, so the marker only has to rank rows against each other, which a badge does as
+ * well as a block did at three times the height.
  */
 function DayBlock({ days }: { days: number }) {
   const tone =
@@ -155,12 +158,15 @@ function DayBlock({ days }: { days: number }) {
         : "bg-warning-soft text-warning-soft-foreground ring-1 ring-warning/30"
 
   return (
-    <div
-      className={cn("flex w-14 shrink-0 flex-col items-center justify-center rounded-md px-1 py-1.5 sm:w-16", tone)}
+    <span
+      className={cn(
+        "inline-flex h-6 w-9 shrink-0 items-center justify-center rounded text-xs font-semibold tabular-nums",
+        tone,
+      )}
+      title={`${count(days)} ${days === 1 ? "day" : "days"} overdue`}
     >
-      <span className="text-xl leading-none font-semibold tabular-nums">{count(days)}</span>
-      <span className="mt-0.5 text-[10px] leading-none">{days === 1 ? "day" : "days"}</span>
-    </div>
+      {count(days)}d
+    </span>
   )
 }
 

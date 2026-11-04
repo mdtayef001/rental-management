@@ -110,6 +110,26 @@ export function SettingsView({ business }: { business: Business }) {
         </CardContent>
       </Card>
 
+      {/* Modules come before the detail settings on purpose: what the business tracks
+          decides which of the screens below are even worth reading. */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">What this business tracks</CardTitle>
+          <CardDescription>
+            Switch off what you don&apos;t use and it leaves the app entirely — the nav items, the screens, and the
+            figures that come from them.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Toggle
+            checked={settings.modules.purchases}
+            onChange={(v) => patch("modules", { ...settings.modules, purchases: v })}
+            label="Purchasing"
+            hint="Suppliers, bills, and stock sent back to them. Leave it off if you don't buy stock through the app."
+          />
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Renting</CardTitle>

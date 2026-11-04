@@ -62,6 +62,11 @@
 }
 
 :root {
+  /* Tell the browser which way round we are, so the parts we did not draw — scrollbars,
+     the text caret, the inside of a date or search field — come up in the same theme as
+     the parts we did. Without this they stay light on a dark page. */
+  color-scheme: light;
+
   /* Paper, not pure white: a counter screen is looked at all day under tube lighting. */
   --background: oklch(0.986 0.002 258);
   --foreground: oklch(0.192 0.013 263);
@@ -123,6 +128,8 @@
 }
 
 .dark {
+  color-scheme: dark;
+
   --background: oklch(0.172 0.011 265);
   --foreground: oklch(0.956 0.004 258);
   --card: oklch(0.213 0.013 265);
@@ -181,6 +188,12 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+  /* Selected text is a surface we ship whether we style it or not; left alone it is the
+     browser's blue, which belongs to no design system. */
+  ::selection {
+    background-color: color-mix(in oklch, var(--primary) 22%, transparent);
+    color: var(--foreground);
   }
   html {
     @apply font-sans;

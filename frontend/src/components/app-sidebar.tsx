@@ -26,6 +26,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -208,13 +209,17 @@ function UserMenu() {
             align="start"
             className="w-(--anchor-width) min-w-56"
           >
-            <DropdownMenuLabel className="space-y-0.5">
-              <div className="truncate font-medium">{user.email}</div>
-              <div className="truncate text-xs font-normal text-muted-foreground">
-                {roleLabel(user)}
-                {business && ` · ${business.name}`}
-              </div>
-            </DropdownMenuLabel>
+            {/* Base UI's GroupLabel reads its group from context, so it has to sit inside a
+                Group — on its own it throws and takes the whole menu down with it. */}
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="space-y-0.5">
+                <div className="truncate font-medium">{user.email}</div>
+                <div className="truncate text-xs font-normal text-muted-foreground">
+                  {roleLabel(user)}
+                  {business && ` · ${business.name}`}
+                </div>
+              </DropdownMenuLabel>
+            </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}>
               {/* Both icons render and CSS picks one: the server cannot know which theme the

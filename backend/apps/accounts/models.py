@@ -18,7 +18,10 @@ def default_settings():
     return {
         "currency": "BDT",
         # Features the owner can switch off for their business.
-        "modules": {"rentals": True, "sales": True, "purchases": True},
+        # Purchasing is opt-in: a shop that does not buy stock through the app should not
+        # carry suppliers, bills and supplier returns it will never open. `sales` has no
+        # screens yet, so it stays off until it does.
+        "modules": {"rentals": True, "sales": False, "purchases": False},
         # What managers may do. Owners can always do everything.
         "permissions": {
             "managerUsers": True,

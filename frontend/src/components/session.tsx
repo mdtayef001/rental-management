@@ -77,7 +77,7 @@ export function useHasPermission(permission: PermissionId) {
 
 const FALLBACK: BusinessSettings = {
   currency: "BDT",
-  modules: { rentals: true, sales: false, purchases: true },
+  modules: { rentals: true, sales: false, purchases: false },
   permissions: {
     managerUsers: false,
     managerProducts: false,

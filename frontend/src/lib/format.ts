@@ -15,6 +15,29 @@ export function money(amount: number | string | null | undefined, currency = "BD
 
 const CURRENCY_SYMBOL: Record<string, string> = { BDT: "৳", USD: "$", EUR: "€", GBP: "£", INR: "₹" }
 
+/**
+ * A big amount at a glance: ৳43.6k, ৳1.25 lakh, ৳3.4 crore.
+ *
+ * Scaled the way the shop counts — thousands, then lakh, then crore — because a figure
+ * someone reads in passing only has to carry the order of magnitude. Anything under a
+ * thousand is already short enough to state exactly. The precise amount is never lost:
+ * it is one hover away here, and Reports has every row of it.
+ */
+export function compactMoney(amount: number | string | null | undefined, currency = "BDT") {
+  const value = Number(amount ?? 0)
+  const symbol = CURRENCY_SYMBOL[currency] ?? currency + " "
+  const abs = Math.abs(value)
+  const sign = value < 0 ? "−" : ""
+  if (abs < 1_000) return money(value, currency)
+
+  const [scaled, unit] =
+    abs >= 10_000_000 ? [abs / 10_000_000, " crore"] : abs >= 100_000 ? [abs / 100_000, " lakh"] : [abs / 1_000, "k"]
+
+  // Two decimals while the number is small enough for them to mean something, one after.
+  const rounded = scaled < 10 ? Math.round(scaled * 100) / 100 : Math.round(scaled * 10) / 10
+  return `${sign}${symbol}${rounded.toLocaleString()}${unit}`
+}
+
 /** A whole number with thousands separators. */
 export function count(value: number | null | undefined) {
   return Number(value ?? 0).toLocaleString()
