@@ -73,6 +73,45 @@ Open http://localhost:3000.
 Scan **`8801234567890`** on Take back: it is out with three rentals (two of them the same
 customer), so the chooser has to ask which one.
 
+## The deployed demo
+
+| | |
+|---|---|
+| App | <https://rental-management-henna.vercel.app> |
+| API | <https://rental-management-api-navy.vercel.app> |
+
+Two Vercel projects off this one repository — `rental-management` (root `frontend/`) and
+`rental-management-api` (root `backend/`) — both deploying on a push to `master`. The
+database is a free Neon Postgres provisioned through the Vercel marketplace and connected
+to the API project, so `DATABASE_URL` arrives as a pooled connection and
+`DATABASE_TRANSACTION_POOLER=true` is set to match.
+
+SQLite stays the development database and is not used in the deployment: Vercel's
+filesystem is read-only apart from `/tmp`, which is per-instance and wiped when the
+instance recycles, so a rental taken during a demo could vanish or appear only to some
+requests.
+
+Django runs as a single Vercel Python function. `backend/api/index.py` exposes the WSGI
+app and `backend/vercel.json` routes every path to it with `routes`/`dest` rather than
+`rewrites` — a rewrite replaces the path the function is handed, which makes Django answer
+404 to everything, `/admin/` included.
+
+The seeded one-click logins on the login page are shown in a production build only when
+`NEXT_PUBLIC_SHOW_DEMO_LOGINS=true`. It is set on the demo deployment and should stay
+unset anywhere real.
+
+To rebuild the demo data against the deployment's database:
+
+```bash
+cd backend
+DATABASE_URL="$NEON_UNPOOLED_URL" .venv/bin/python manage.py migrate
+DATABASE_URL="$NEON_UNPOOLED_URL" .venv/bin/python manage.py createcachetable
+DATABASE_URL="$NEON_UNPOOLED_URL" .venv/bin/python manage.py seed_demo --reset
+```
+
+`createcachetable` is needed because the login rate limit moves from local memory to a
+database table whenever the database is PostgreSQL.
+
 ## Tests
 
 ```bash
