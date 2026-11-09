@@ -156,7 +156,11 @@ def pay_supplier(*, user, supplier, amount, method="", purchase=None, note="", s
 @transaction.atomic
 def create_supplier_return(*, user, item, quantity, reason, branch=None):
     """Send faulty stock back. It leaves the shelf now and the supplier owes for it."""
-    item = PurchaseItem.objects.select_for_update().select_related("purchase", "product").get(pk=item.pk)
+    item = (
+        PurchaseItem.objects.select_for_update(of=("self",))
+        .select_related("purchase", "product")
+        .get(pk=item.pk)
+    )
     purchase = item.purchase
     quantity = int(quantity)
     if quantity <= 0:
@@ -193,7 +197,11 @@ def create_supplier_return(*, user, item, quantity, reason, branch=None):
 @transaction.atomic
 def settle_return(*, user, supplier_return, replaced_quantity=0, refunded_amount=ZERO, credited_amount=ZERO, close_note=""):
     """Settle a supplier return by replacement, refund, credit — or close it as a loss."""
-    sr = SupplierReturn.objects.select_for_update().select_related("product", "branch", "supplier").get(pk=supplier_return.pk)
+    sr = (
+        SupplierReturn.objects.select_for_update(of=("self",))
+        .select_related("product", "branch", "supplier")
+        .get(pk=supplier_return.pk)
+    )
     if sr.status != SupplierReturn.Status.OPEN:
         raise ValidationError("This return is already finished.")
 

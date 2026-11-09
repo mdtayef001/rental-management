@@ -353,7 +353,11 @@ def take_return(*, user, rental, lines, at=None, discount=ZERO, paid_amount=ZERO
 
     # Lock the rental first, then the business for the number: always the same order, so two
     # returns on different rentals can never deadlock each other.
-    rental = Rental.objects.select_for_update().select_related("business", "branch", "customer").get(pk=rental.pk)
+    rental = (
+        Rental.objects.select_for_update(of=("self",))
+        .select_related("business", "branch", "customer")
+        .get(pk=rental.pk)
+    )
     if not rental.is_open:
         raise ValidationError("Everything on this rental is already back.")
 
@@ -380,7 +384,11 @@ def take_return(*, user, rental, lines, at=None, discount=ZERO, paid_amount=ZERO
     rent_total = late_total = damage_total = ZERO
 
     for line in lines:
-        item = RentalItem.objects.select_for_update().select_related("product").get(pk=line["item"].pk, rental=rental)
+        item = (
+            RentalItem.objects.select_for_update(of=("self",))
+            .select_related("product")
+            .get(pk=line["item"].pk, rental=rental)
+        )
         quantity = int(line["quantity"])
         condition = line.get("condition", RentalReturnLine.Condition.GOOD)
 
@@ -576,7 +584,7 @@ def cancel_rental(*, user, rental, reason=""):
     Only while nothing has been returned yet — once a return exists, the rental has a
     history and must be finished properly rather than erased.
     """
-    rental = Rental.objects.select_for_update().select_related("branch").get(pk=rental.pk)
+    rental = Rental.objects.select_for_update(of=("self",)).select_related("branch").get(pk=rental.pk)
     if rental.status == Rental.Status.CANCELLED:
         return rental
     if RentalReturn.objects.filter(rental=rental).exists():
