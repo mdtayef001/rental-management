@@ -157,7 +157,7 @@ call, services do the work in one transaction.
 The UI is shadcn/ui on Base UI, with the stock neutral theme replaced by one of our own.
 
 **Colour carries meaning or it isn't used.** The chrome is a near-neutral ink, and a single
-blue marks the primary action and the page you are on — nothing else. Amber, red and green
+teal marks the primary action and the page you are on — nothing else. Amber, red and green
 are reserved for rental status (due, late, settled), so a coloured figure on any screen
 always means the same thing. Each status has a soft tint for badge backgrounds and a
 separate darker ink for text on that tint, because an amber that reads well as a 3px bar

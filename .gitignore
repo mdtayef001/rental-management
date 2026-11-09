@@ -20,3 +20,8 @@ out/
 .DS_Store
 .idea/
 .vscode/
+
+.impeccable
+DESIGN.md
+PLAN.md
+PRODUCT.md

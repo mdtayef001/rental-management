@@ -6,10 +6,14 @@ import { Button } from "@/components/ui/button"
 /**
  * The seeded demo accounts, as one-click logins.
  *
- * Only rendered outside production: `seed_demo` creates these four with a shared password,
- * and typing them out on every reload is friction nobody needs while developing. Each button
- * fills the real fields and submits the real form, so the login path being exercised is the
- * same one a user takes.
+ * `seed_demo` creates these four with a shared password, and typing them out on every
+ * reload is friction nobody needs while developing. Each button fills the real fields and
+ * submits the real form, so the login path being exercised is the same one a user takes.
+ *
+ * Shown automatically outside production, and on a deployed demo when
+ * NEXT_PUBLIC_SHOW_DEMO_LOGINS is set — a demo in front of a client should not stall on
+ * someone mistyping a password. A real production deployment leaves the flag unset and
+ * these buttons never render.
  */
 const ACCOUNTS = [
   { role: "Super admin", email: "admin@example.com" },
@@ -21,7 +25,9 @@ const ACCOUNTS = [
 const PASSWORD = "rental-demo-2026"
 
 export function DemoLogins({ formRef, disabled }: { formRef: RefObject<HTMLFormElement | null>; disabled?: boolean }) {
-  if (process.env.NODE_ENV === "production") return null
+  const show =
+    process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_SHOW_DEMO_LOGINS === "true"
+  if (!show) return null
 
   function fillAndSubmit(email: string) {
     const form = formRef.current
