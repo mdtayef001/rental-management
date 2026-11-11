@@ -265,6 +265,26 @@ class ReturnTests(RentalTestCase):
         with self.assertRaises(ValidationError):
             services.take_return(user=self.owner, rental=rental, lines=[{"item": item, "quantity": 41}])
 
+    def test_two_tills_taking_back_the_same_items_only_the_first_counts(self):
+        """Both screens show 100 out. The second to press the button is working from a
+        screen that is out of date, and must be refused rather than counted twice."""
+        rental = self.rent(self.mr_x, [{"product": self.machine, "quantity": 100, "plan": "daily"}])
+        # Each till loaded the rental before the other acted, so both hold the same copy.
+        first_till = rental.items.get()
+        second_till = rental.items.get()
+        services.take_return(user=self.owner, rental=rental, lines=[{"item": first_till, "quantity": 100}])
+        with self.assertRaises(ValidationError):
+            services.take_return(user=self.owner, rental=rental, lines=[{"item": second_till, "quantity": 100}])
+        # Back on the shelf once, not twice.
+        self.assertEqual(self.on_hand(self.machine), 1000)
+
+    def test_two_tills_renting_out_the_last_of_the_stock_only_the_first_gets_it(self):
+        """Both screens show 1,000 on the shelf. Two rentals of 600 cannot both go out."""
+        self.rent(self.mr_x, [{"product": self.machine, "quantity": 600, "plan": "daily"}])
+        with self.assertRaises(ValidationError):
+            self.rent(self.mr_x, [{"product": self.machine, "quantity": 600, "plan": "daily"}])
+        self.assertEqual(self.on_hand(self.machine), 400)
+
     def test_lost_units_are_charged_and_never_return_to_stock(self):
         rental = self.rent(self.mr_x, [{"product": self.machine, "quantity": 10, "plan": "daily"}])
         item = rental.items.get()

@@ -234,14 +234,13 @@ export function qtyAt(product: Pick<Product, "stock"> | Pick<ProductLookup, "sto
 
 // ---------- Totals ----------
 
-/** The dashboard tiles and sidebar badges. Rechecked every two minutes: other people change them too. */
+/** The dashboard tiles and sidebar badges. Rechecked every minute: other people change them too. */
 export function useRentalSummary({ enabled = true, live = false } = {}) {
   return useQuery({
     ...apiQuery<RentalSummary>("rentals/summary/"),
     enabled,
     // Only while the tab is on screen; a tab left open overnight asks for nothing.
-    refetchInterval: live ? 2 * 60_000 : false,
-    staleTime: 60_000,
+    refetchInterval: live ? 60_000 : false,
   })
 }
 

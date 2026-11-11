@@ -86,7 +86,12 @@ export function useRentOut() {
       refresh("rentals", "products", "stock", "customers", "activity")
       toast.success(`${rental.code} rented out`)
     },
-    onError: (err) => showError(err, "Couldn't save the rental."),
+    onError: (err) => {
+      // Refused, most often because another till rented the same stock first. Reload the
+      // shelf counts so the form shows what is really left.
+      refresh("products", "stock")
+      showError(err, "Couldn't save the rental.")
+    },
   })
 }
 
@@ -136,7 +141,11 @@ export function useTakeReturn() {
       refresh("rentals", "returns", "products", "stock", "customers", "activity")
       toast.success(`${taken.code} recorded`)
     },
-    onError: (err) => showError(err, "Couldn't record the return."),
+    onError: (err) => {
+      // Refused, most often because another till took the same items back first.
+      refresh("rentals", "returns", "products", "stock")
+      showError(err, "Couldn't record the return.")
+    },
   })
 }
 
@@ -366,7 +375,11 @@ export function useCreateSupplierReturn() {
       refresh("purchases", "products", "stock", "suppliers", "activity")
       toast.success("Return to supplier recorded")
     },
-    onError: (err) => showError(err, "Couldn't record the return."),
+    onError: (err) => {
+      // Refused, most often because another till took the same items back first.
+      refresh("rentals", "returns", "products", "stock")
+      showError(err, "Couldn't record the return.")
+    },
   })
 }
 

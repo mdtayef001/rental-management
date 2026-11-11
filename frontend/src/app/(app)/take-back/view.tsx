@@ -129,6 +129,7 @@ export function TakeBackView() {
           key={picked.itemId}
           match={picked}
           onBack={hadChoice ? () => setStep("choose") : reset}
+          onRecheck={() => lookup({ rental: picked.rentalId })}
           onDone={(finished) => {
             setDone(finished)
             setStep("done")
@@ -490,10 +491,13 @@ function SettleReturn({
   match,
   onDone,
   onBack,
+  onRecheck,
 }: {
   match: ReturnMatch
   onDone: (done: Done) => void
   onBack: () => void
+  /** Look the rental up again, after the server said this screen is out of date. */
+  onRecheck: () => void
 }) {
   const currency = useCurrency()
   const settings = useSettings()
@@ -551,6 +555,21 @@ function SettleReturn({
           )}
         </CardContent>
       </Card>
+
+      {/* The server refused: someone else changed this rental while it was on screen —
+          usually another till taking the same items back. Nothing was recorded. */}
+      {take.isError && (
+        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-destructive/40 bg-destructive-soft p-3 text-sm text-destructive-soft-foreground">
+          <AlertTriangle className="size-4 shrink-0" />
+          <p className="min-w-0 flex-1">
+            <strong>Nothing was recorded.</strong> {take.error instanceof Error ? take.error.message : ""} This rental
+            may have changed on another till.
+          </p>
+          <Button variant="outline" size="sm" onClick={onRecheck}>
+            Check again
+          </Button>
+        </div>
+      )}
 
       <div className="grid items-start gap-4 lg:grid-cols-[1fr_22rem]">
         <Card>
