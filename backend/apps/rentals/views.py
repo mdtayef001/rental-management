@@ -8,17 +8,19 @@ from django.utils import timezone
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, PermissionDenied
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.models import User
-from apps.accounts.permissions import TEAM
+from apps.accounts.permissions import LEADS, TEAM, IsTenantMember
+from apps.api import Pagination
 from apps.catalog.views import TenantViewSet
 from apps.catalog.models import Customer
 
-from . import services
-from .models import Rental, RentalItem, RentalReturn
+from . import services, statements
+from .models import Rental, RentalItem, RentalPayment, RentalReturn
+from .services import ZERO
 from .serializers import (
     CancelSerializer,
     PaymentCreateSerializer,
@@ -196,15 +198,15 @@ class RentalViewSet(TenantViewSet, mixins.ListModelMixin, mixins.RetrieveModelMi
         services.add_payment(user=request.user, rental=rental, **serializer.validated_data)
         return Response(self.full(rental))
 
-    @action(detail=True, methods=["post"], url_path="refund-deposit")
-    def refund_deposit(self, request, pk=None):
+    @action(detail=True, methods=["post"])
+    def refund(self, request, pk=None):
+        """Give back money the customer paid in advance and didn't use."""
+        if not request.user.may_take_returns:
+            raise PermissionDenied("You haven't been given permission to give money back.")
         rental = self.get_object()
         serializer = PaymentCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
-        services.refund_deposit(
-            user=request.user, rental=rental, amount=data["amount"], method=data["method"], note=data["note"]
-        )
+        services.refund(user=request.user, rental=rental, **serializer.validated_data)
         return Response(self.full(rental))
 
     @action(detail=True, methods=["post"])
@@ -237,13 +239,16 @@ class RentalViewSet(TenantViewSet, mixins.ListModelMixin, mixins.RetrieveModelMi
             overdue=Count("id", filter=Rental.overdue_q()),
             due_today=Count("id", filter=Q(status__in=Rental.OPEN, due_at__gte=start, due_at__lt=start + timedelta(days=1))),
             returned_today=Count("id", filter=Q(status=Rental.Status.RETURNED, returned_at__gte=start)),
-            deposits_held=Coalesce(Sum(F("deposit") - F("deposit_refunded"), filter=Q(status__in=Rental.OPEN)), Value(0), output_field=MONEY),
-            owed=Coalesce(
-                Sum(F("rent_total") + F("late_fee") + F("damage_fee") - F("discount") - F("paid_amount")),
-                Value(0),
-                output_field=MONEY,
-            ),
         )
+        # Two figures, not one net sum: a customer who has paid in advance must not hide
+        # another who owes. `owed` is what is still to collect; `advances` is money the shop
+        # is holding against rent it hasn't charged yet.
+        balance = F("rent_total") + F("late_fee") + F("damage_fee") - F("discount") - F("paid_amount")
+        money = qs.exclude(status=Rental.Status.CANCELLED).annotate(owing=balance).aggregate(
+            owed=Coalesce(Sum("owing", filter=Q(owing__gt=0)), Value(0), output_field=MONEY),
+            advances=Coalesce(Sum(-F("owing"), filter=Q(owing__lt=0)), Value(0), output_field=MONEY),
+        )
+        counts.update(money)
         # Rent is *earned* when the items come back, because that is when the length of the
         # hire — and so the price — is finally known. Summing the rentals that happened to
         # start this month would credit October's money to October even though it was only
@@ -330,6 +335,7 @@ class PublicReceiptView(APIView):
 
     def body(self, rental, highlight=None):
         business = rental.business
+        payments = list(rental.payments.all())
         return {
             "business": {
                 "name": business.name,
@@ -337,6 +343,9 @@ class PublicReceiptView(APIView):
                 "address": business.address,
                 "currency": business.settings.get("currency", "BDT"),
                 "receiptNote": business.receipt_note,
+                # So the receipt can show what an overdue rental is running up.
+                "lateFeeMultiplier": float(business.rental_setting("lateFeeMultiplier", 1.0) or 0),
+                "logoVersion": business.logo_version,
             },
             "branch": {"name": rental.branch.name, "phone": rental.branch.phone, "address": rental.branch.address}
             if rental.branch
@@ -348,12 +357,13 @@ class PublicReceiptView(APIView):
                 "startedAt": rental.started_at,
                 "dueAt": rental.due_at,
                 "returnedAt": rental.returned_at,
-                "deposit": rental.deposit,
-                "depositRefunded": rental.deposit_refunded,
                 "rentTotal": rental.rent_total,
                 "lateFee": rental.late_fee,
                 "damageFee": rental.damage_fee,
                 "discount": rental.discount,
+                # Paid before anything was charged, and anything since handed back.
+                "advancePaid": sum((p.amount for p in payments if p.kind == RentalPayment.Kind.ADVANCE), ZERO),
+                "refunded": -sum((p.amount for p in payments if p.kind == RentalPayment.Kind.REFUND), ZERO),
                 "paidAmount": rental.paid_amount,
                 "charges": rental.charges,
                 "balance": rental.balance,
@@ -381,7 +391,7 @@ class PublicReceiptView(APIView):
                     "damageFee": r.damage_fee,
                     "discount": r.discount,
                     "paidAmount": r.paid_amount,
-                    "depositRefunded": r.deposit_refunded,
+                    "refunded": r.refunded,
                     "paymentMethod": r.payment_method,
                     "lines": [
                         {
@@ -401,3 +411,117 @@ class PublicReceiptView(APIView):
             # Which return the customer followed the link for, so that one can be highlighted.
             "highlightReturn": highlight.code if highlight else None,
         }
+
+
+class PublicReceiptLogoView(APIView):
+    """The shop's logo for the customer's copy of a receipt.
+
+    Reached with the same token as the receipt itself, so it gives away nothing the receipt
+    link doesn't already show.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request, token):
+        from apps.accounts.views import logo_response
+
+        rental = Rental.objects.filter(token=token).select_related("business").first()
+        if rental is None:
+            taken = RentalReturn.objects.filter(token=token).select_related("business").first()
+            if taken is None:
+                raise NotFound("This receipt link is no longer valid.")
+            return logo_response(taken.business)
+        return logo_response(rental.business)
+
+
+# ---------- Bills ----------
+
+
+class BillView(APIView):
+    """Shared gate for bills: owners and managers, in a business that rents.
+
+    A bill puts everything one customer owes on a single sheet, across every branch, so it
+    is kept to the people who already see the whole shop's money.
+    """
+
+    permission_classes = [IsAuthenticated, IsTenantMember]
+    allowed_roles = LEADS
+    module = "rentals"
+
+    @property
+    def business(self):
+        return self.request.user.business
+
+    @property
+    def period(self):
+        return statements.parse_period(self.request.query_params)
+
+    def customer(self, customer_id):
+        customer = Customer.objects.filter(business=self.business, pk=customer_id).first()
+        if customer is None:
+            raise NotFound("That customer isn't here any more.")
+        return customer
+
+
+class BillListView(BillView):
+    """Month end: every customer with something to bill, and how much."""
+
+    def get(self, request):
+        rng = self.period
+        rows = statements.period_bills(self.business, rng, request.query_params.get("search", ""))
+        totals = {
+            "customers": len(rows),
+            "charges": sum((r["charges"] for r in rows), statements.ZERO),
+            "paid": sum((r["paid"] for r in rows), statements.ZERO),
+            "units_out": sum(r["units_out"] for r in rows),
+        }
+        paginator = Pagination()
+        page = paginator.paginate_queryset(rows, request)
+        head = {**rng.as_json(), "kind": statements.period_kind(rng), "label": statements.period_label(rng), "totals": totals}
+        if page is None:
+            return Response({**head, "count": len(rows), "page": 1, "results": rows[: Pagination.max_page_size]})
+        return Response({**head, "count": paginator.page.paginator.count, "page": paginator.page.number, "results": page})
+
+
+class BillDetailView(BillView):
+    """One customer's bill for the period, as the screen shows it."""
+
+    def get(self, request, customer_id):
+        return Response(statements.build_statement(self.business, self.customer(customer_id), self.period))
+
+
+class BillPdfView(BillView):
+    """The same bill as a PDF file to send."""
+
+    def get(self, request, customer_id):
+        from django.http import HttpResponse
+
+        from . import bill_pdf
+
+        statement = statements.build_statement(self.business, self.customer(customer_id), self.period)
+        response = HttpResponse(
+            bill_pdf.render(statement, logo=bill_pdf.logo_of(self.business)), content_type="application/pdf"
+        )
+        response["Content-Disposition"] = f'attachment; filename="{bill_pdf.filename(statement)}"'
+        # Nothing about a customer's account should sit in a shared cache.
+        response["Cache-Control"] = "no-store"
+        return response
+
+
+class BillPaymentView(BillView):
+    """One payment against everything a customer owes, oldest rental first."""
+
+    def post(self, request, customer_id):
+        serializer = PaymentCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        paid = statements.receive_payment(
+            user=request.user,
+            customer=self.customer(customer_id),
+            amount=data["amount"],
+            method=data["method"],
+            reference=data["reference"],
+            note=data["note"],
+        )
+        return Response({"payments": paid}, status=status.HTTP_201_CREATED)

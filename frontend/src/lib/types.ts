@@ -21,7 +21,7 @@ export type PermissionId =
   | "staffCreateProducts"
 
 /** Per-person rights, which only limit staff: owners and managers always have them. */
-export type RightId = "canRent" | "canTakeReturns" | "canSell" | "canAddStock" | "canHandleDeposits"
+export type RightId = "canRent" | "canTakeReturns" | "canSell" | "canAddStock"
 
 export type RentalPlan = "daily" | "weekly" | "monthly" | "fixed"
 export type RentalStatus = "active" | "partly_returned" | "returned" | "cancelled"
@@ -52,7 +52,6 @@ export interface BusinessSettings {
   rentals: {
     defaultPlan: RentalPlan
     lateFeeMultiplier: number
-    depositRequired: boolean
     allowOpenEnded: boolean
   }
   receiptNote: string
@@ -76,6 +75,8 @@ export interface Business {
   suspended: boolean
   suspendedReason: string
   settings: BusinessSettings
+  /** Changes whenever the logo does. Empty when the business has no logo. */
+  logoVersion: string
   branches: Branch[]
   createdAt: string
 }
@@ -95,7 +96,6 @@ export interface SessionUser {
   canTakeReturns: boolean
   canSell: boolean
   canAddStock: boolean
-  canHandleDeposits: boolean
   /** Which roles this user may hand out. Only present on `auth/me`. */
   creatableRoles?: TenantRole[]
 }
@@ -112,10 +112,7 @@ export interface Product {
   rentDaily: number | null
   rentWeekly: number | null
   rentMonthly: number | null
-  deposit: number
   replacementCost: number
-  sellable: boolean
-  price: number
   cost: number
   lowStockThreshold: number
   /** Quantity on the shelf, keyed by branch id. */
@@ -135,13 +132,10 @@ export interface ProductLookup {
   unit: string
   category: string
   rentable: boolean
-  sellable: boolean
   rentDaily: number | null
   rentWeekly: number | null
   rentMonthly: number | null
-  deposit: number
   replacementCost: number
-  price: number
   stock: Record<string, number>
   onHand: number
 }
@@ -199,8 +193,6 @@ export interface RentalItem {
   quantityOut: number
   plan: RentalPlan
   rate: number
-  deposit: number
-  depositTotal: number
   replacementCost: number
   holidays: number
   daysOut: number | null
@@ -237,7 +229,8 @@ export interface RentalReturn {
   discount: number
   charges: number
   paidAmount: number
-  depositRefunded: number
+  /** Unused advance handed back at this return. */
+  refunded: number
   paymentMethod: PaymentMethod | ""
   paymentReference: string
   note: string
@@ -249,7 +242,8 @@ export interface RentalReturn {
 export interface RentalPayment {
   id: string
   amount: number
-  kind: "deposit" | "deposit_refund" | "rent" | "refund"
+  /** `advance` was paid when the items went out; `refund` is money given back (negative). */
+  kind: "advance" | "rent" | "refund"
   method: PaymentMethod | ""
   reference: string
   note: string
@@ -268,14 +262,14 @@ export interface Rental {
   startedAt: string
   dueAt: string | null
   returnedAt: string | null
-  deposit: number
-  depositRefunded: number
   rentTotal: number
   lateFee: number
   damageFee: number
   discount: number
+  /** Everything paid, less anything given back. Includes money paid in advance. */
   paidAmount: number
   charges: number
+  /** What is still owed. Negative while the customer has paid more than has been charged. */
   balance: number
   isOverdue: boolean
   daysLate: number
@@ -314,8 +308,9 @@ export interface ReturnMatch {
   quantityOut: number
   plan: RentalPlan
   rate: number
-  deposit: number
   replacementCost: number
+  /** Paid in advance on this rental and not yet used up. */
+  rentalCredit: number
   startedAt: string
   dueAt: string | null
   daysOut: number
@@ -336,7 +331,6 @@ export interface ResolveReturnResult {
     customerName: string
     startedAt: string
     dueAt: string | null
-    deposit: number
     balance: number
   } | null
   matches: ReturnMatch[]
@@ -349,8 +343,9 @@ export interface RentalSummary {
   overdue: number
   dueToday: number
   returnedToday: number
-  depositsHeld: number
+  /** Still to collect, and money held that customers paid ahead. Never netted together. */
   owed: number
+  advances: number
   revenueMonth: number
   unitsOut: number
 }
@@ -467,7 +462,7 @@ export interface PlatformBusiness {
 export type ReportGroup = "day" | "week" | "month"
 
 /** The reports that can be downloaded as CSV. */
-export type ReportExport = "revenue" | "products" | "customers" | "rentals" | "returns" | "payments"
+export type ReportExport = "revenue" | "products" | "customers" | "rentals" | "returns" | "payments" | "debtors"
 
 export interface ReportRange {
   /** Both ends inclusive, as `YYYY-MM-DD` local dates. */
@@ -494,7 +489,6 @@ export interface ReportSummary extends ReportRange {
   unitsReturned: number
   unitsLost: number
   unitsDamaged: number
-  depositsTaken: number
   newCustomers: number
   purchaseBills: number
   purchaseSpend: number
@@ -507,8 +501,9 @@ export interface ReportSummary extends ReportRange {
   openRentals: number
   overdue: number
   unitsOut: number
-  depositsHeld: number
   outstanding: number
+  /** Paid in advance by customers and not yet charged. */
+  advancesHeld: number
 }
 
 export interface RevenueRow {
@@ -520,6 +515,16 @@ export interface RevenueRow {
   damageFees: number
   discounts: number
   revenue: number
+  /** What the bucket is made of: one entry for each product a customer brought back. */
+  details: {
+    customer: string
+    rentalCode: string
+    product: string
+    sku: string
+    barcode: string
+    units: number
+    amount: number
+  }[]
 }
 
 export interface ProductReportRow {
@@ -550,4 +555,158 @@ export interface CustomerReportRow {
   revenue: number
   /** Unpaid across every rental they have ever had, not just this range. */
   outstanding: number
+}
+
+/** A customer who owes money today, whatever the report's dates. */
+export interface DebtorRow {
+  id: string | null
+  name: string
+  phone: string
+  openRentals: number
+  oldestOpen: string | null
+  owed: number
+}
+
+/** A price agreed with one customer for one product, beside the product's own. */
+export interface CustomerRate {
+  id: string
+  productId: string
+  productName: string
+  productSku: string
+  plan: RentalPlan
+  rate: number
+  /** What everyone else pays, or null when the product has no rate for this plan. */
+  defaultRate: number | null
+  updatedAt: string
+}
+
+// ---------- Bills ----------
+
+/** What a bill is called: a whole calendar month, a whole year, or any other stretch. */
+export type BillKind = "month" | "year" | "custom"
+
+/** Units of one rental line coming back during the bill's period. */
+export interface BillReturn {
+  at: string
+  quantity: number
+  condition: "good" | "damaged" | "lost"
+}
+
+/**
+ * Units of one rental line that share their dates: a row of the printed bill.
+ * "50 machines, out 3 Nov, back 20 Nov, 17 days, 2 off."
+ */
+export interface BillStretch {
+  quantity: number
+  outAt: string
+  /** Null while the units were still out when the period closed. */
+  backAt: string | null
+  condition: "" | "good" | "damaged" | "lost"
+  /** Days out that fall inside the bill's period. */
+  days: number
+  /** How many of those days were not charged. */
+  daysOff: number
+  rent: number
+  lateFee: number
+  damageFee: number
+  total: number
+}
+
+/** One product on one rental, as it stood across the bill's period. */
+export interface BillLine {
+  productName: string
+  productSku: string
+  plan: RentalPlan
+  rate: number
+  /** How many went out when the rental started. */
+  quantity: number
+  outAtStart: number
+  /** Non-zero only when the rental started inside the period. */
+  taken: number
+  returned: number
+  returns: BillReturn[]
+  stretches: BillStretch[]
+  outAtEnd: number
+  billedFrom: string | null
+  billedTo: string | null
+  rent: number
+  lateFee: number
+  damageFee: number
+  total: number
+}
+
+export interface BillRental {
+  id: string
+  code: string
+  status: string
+  /** The day the customer took the items. */
+  startedAt: string
+  dueAt: string | null
+  returnedAt: string | null
+  lines: BillLine[]
+  rent: number
+  lateFee: number
+  damageFee: number
+  discount: number
+  total: number
+  unitsOut: number
+}
+
+export interface BillPayment {
+  id: string
+  at: string
+  rentalCode: string
+  method: string
+  reference: string
+  note: string
+  amount: number
+}
+
+/** One customer's bill for one period. */
+export interface Bill extends ReportRange {
+  number: string
+  kind: BillKind
+  label: string
+  /** Set while the period is still running: the bill only goes up to this moment. */
+  asOf: string | null
+  issuedAt: string
+  business: { name: string; phone: string; address: string; currency: string; note: string; logoVersion: string }
+  customer: { id: string; name: string; company: string; phone: string; email: string; address: string }
+  rentals: BillRental[]
+  payments: BillPayment[]
+  totals: {
+    rent: number
+    lateFee: number
+    damageFee: number
+    discount: number
+    charges: number
+    paid: number
+    openingBalance: number
+    closingBalance: number
+    unitsOut: number
+    unitsTaken: number
+    unitsReturned: number
+    daysOff: number
+  }
+}
+
+/** A customer's line on the month-end list of bills. */
+export interface BillRow {
+  customerId: string
+  customerName: string
+  company: string
+  phone: string
+  rentals: number
+  unitsOut: number
+  charges: number
+  paid: number
+}
+
+export interface BillList extends ReportRange {
+  kind: BillKind
+  label: string
+  totals: { customers: number; charges: number; paid: number; unitsOut: number }
+  count: number
+  page: number
+  results: BillRow[]
 }

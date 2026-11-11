@@ -105,7 +105,7 @@ export function SuppliersView() {
       )}
 
       <Toolbar>
-        <SearchInput value={text} onChange={setText} placeholder="Name, company or phone" label="Search suppliers" />
+        <SearchInput value={text} onChange={setText} placeholder="Name, company or phone" label="Search suppliers" suggest="suppliers" />
         <Button
           size="sm"
           variant={owing ? "default" : "outline"}

@@ -1,9 +1,12 @@
 import type { Metadata } from "next"
+import { headers } from "next/headers"
 import { notFound } from "next/navigation"
 import { API_URL } from "@/lib/api/config"
 import { SERVER_TIMEOUT_MS } from "@/lib/api/errors"
+import { PrintButton } from "@/components/paper"
 import { ReceiptDocument } from "@/components/receipt"
 import { count, dateTime, money } from "@/lib/format"
+import { publicLogoUrl } from "@/lib/logo"
 import type { ReceiptView } from "@/lib/receipt"
 
 export const metadata: Metadata = {
@@ -13,7 +16,7 @@ export const metadata: Metadata = {
 }
 
 interface Receipt {
-  business: { name: string; phone: string; address: string; currency: string; receiptNote: string }
+  business: { name: string; phone: string; address: string; currency: string; receiptNote: string; logoVersion: string; lateFeeMultiplier?: number }
   branch: { name: string; phone: string; address: string } | null
   rental: {
     code: string
@@ -22,12 +25,12 @@ interface Receipt {
     startedAt: string
     dueAt: string | null
     returnedAt: string | null
-    deposit: number
-    depositRefunded: number
     rentTotal: number
     lateFee: number
     damageFee: number
     discount: number
+    advancePaid: number
+    refunded: number
     paidAmount: number
     charges: number
     balance: number
@@ -51,19 +54,19 @@ interface Receipt {
     damageFee: number
     discount: number
     paidAmount: number
-    depositRefunded: number
+    refunded: number
     lines: { productName: string; quantity: number; condition: string; daysOut: number }[]
   }[]
   highlightReturn: string | null
 }
 
 /**
- * The receipt a customer opens from the QR code on their printed slip.
+ * The receipt a customer opens from the link they were sent, or the QR code on their paper.
  *
  * No login: the long random token in the URL is the credential, which is why it is 16
- * random bytes rather than the rental number. It is fetched on the server and rendered as
- * It shows the same receipt the shop prints, from the same component, so the slip in the
- * customer's hand and the page on their phone can never disagree.
+ * random bytes rather than the rental number. It shows the same receipt the shop prints,
+ * from the same component, so the paper in the customer's hand and the page on their phone
+ * can never disagree.
  */
 export default async function PublicReceiptPage({ params }: PageProps<"/r/[token]">) {
   const { token } = await params
@@ -83,11 +86,18 @@ export default async function PublicReceiptPage({ params }: PageProps<"/r/[token
   const { business, branch, rental, items, returns } = data
   const currency = business.currency
 
+  // The address this page was opened at, for the QR code: the customer's printed copy then
+  // scans at the counter exactly like the shop's own.
+  const head = await headers()
+  const host = head.get("x-forwarded-host") ?? head.get("host")
+  const link = host ? `${head.get("x-forwarded-proto") ?? "https"}://${host}/r/${token}` : null
+
   const receipt: ReceiptView = {
     businessName: business.name,
     branchName: branch?.name,
     address: branch?.address || business.address,
     phone: branch?.phone || business.phone,
+    logo: publicLogoUrl(token, business.logoVersion),
     code: rental.code,
     startedAt: rental.startedAt,
     dueAt: rental.dueAt,
@@ -100,25 +110,30 @@ export default async function PublicReceiptPage({ params }: PageProps<"/r/[token
       quantityLost: item.quantityLost,
       plan: item.plan,
       rate: item.rate,
+      daysOut: item.daysOut,
+      lineTotal: item.lineTotal,
     })),
     rentTotal: rental.rentTotal,
     lateFee: rental.lateFee,
     damageFee: rental.damageFee,
     discount: rental.discount,
-    deposit: rental.deposit,
-    depositRefunded: rental.depositRefunded,
+    advancePaid: rental.advancePaid,
+    refunded: rental.refunded,
     paidAmount: rental.paidAmount,
     balance: rental.balance,
     currency,
+    lateFeeMultiplier: business.lateFeeMultiplier,
     note: business.receiptNote,
-    // No QR code on the customer's own copy: they are already looking at the page it
-    // would open.
-    link: null,
+    link,
     state: rental.status === "cancelled" ? "cancelled" : rental.status === "returned" ? "returned" : "out",
   }
 
   return (
-    <main className="mx-auto w-full max-w-md space-y-4 p-4 sm:py-8">
+    <main className="mx-auto w-full max-w-3xl space-y-4 p-4 sm:py-8">
+      <div className="flex justify-end print:hidden">
+        <PrintButton label="Print or save as PDF" />
+      </div>
+
       <ReceiptDocument receipt={receipt} />
 
       {returns.length > 0 && (

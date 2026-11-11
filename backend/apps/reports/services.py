@@ -19,7 +19,7 @@ credit a month with money it had not charged yet.
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 
-from django.db.models import Count, DecimalField, F, IntegerField, Max, Q, Sum, Value
+from django.db.models import Count, DecimalField, F, IntegerField, Max, Min, Q, Sum, Value
 from django.db.models.functions import Coalesce, TruncDay, TruncMonth, TruncWeek
 from django.utils import timezone
 
@@ -30,6 +30,9 @@ from apps.rentals.models import Rental, RentalItem, RentalPayment, RentalReturn,
 
 MONEY = DecimalField(max_digits=14, decimal_places=2)
 COUNT = IntegerField()
+
+#: What a rental still has to be paid: negative while the customer is ahead.
+BALANCE = F("rent_total") + F("late_fee") + F("damage_fee") - F("discount") - F("paid_amount")
 
 #: How many rows a grouped report will return at most. A report is for reading, so the long
 #: tail belongs in the CSV export rather than on screen.
@@ -130,7 +133,6 @@ def summary(business: Business, rng: Range):
     activity = started.aggregate(
         rentals=Count("id"),
         cancelled=Count("id", filter=Q(status=Rental.Status.CANCELLED)),
-        deposits_taken=total("deposit"),
     )
     sent_out = RentalItem.objects.filter(
         rental__business=business, rental__started_at__gte=rng.start, rental__started_at__lt=rng.end
@@ -145,19 +147,25 @@ def summary(business: Business, rng: Range):
     )
 
     # Money actually through the till in the range, which is not the same as money earned:
-    # a deposit taken is cash in hand that isn't revenue, and a refund is cash out.
+    # an advance is cash in hand before any rent is charged, and a refund is cash out.
     cash = RentalPayment.objects.filter(business=business, at__gte=rng.start, at__lt=rng.end).aggregate(
         collected=total("amount", filter=Q(amount__gt=0)),
         refunded=total("amount", filter=Q(amount__lt=0)),
     )
 
     # Where things stand right now, which no date range changes: what is still out, what
-    # deposits are being held, and what customers owe across every open rental.
-    standing = Rental.objects.filter(business=business).aggregate(
-        open=Count("id", filter=Q(status__in=Rental.OPEN)),
-        overdue=Count("id", filter=Rental.overdue_q()),
-        deposits_held=total(F("deposit") - F("deposit_refunded"), filter=Q(status__in=Rental.OPEN)),
-        outstanding=total(F("rent_total") + F("late_fee") + F("damage_fee") - F("discount") - F("paid_amount")),
+    # customers owe, and what they have paid in advance that hasn't been charged yet. Owed
+    # and advances are kept apart, so one customer's advance never hides another's debt.
+    standing = (
+        Rental.objects.filter(business=business)
+        .exclude(status=Rental.Status.CANCELLED)
+        .annotate(owing=BALANCE)
+        .aggregate(
+            open=Count("id", filter=Q(status__in=Rental.OPEN)),
+            overdue=Count("id", filter=Rental.overdue_q()),
+            outstanding=total("owing", filter=Q(owing__gt=0)),
+            advances_held=total(-F("owing"), filter=Q(owing__lt=0)),
+        )
     )
     out_now = RentalItem.objects.filter(rental__business=business, rental__status__in=Rental.OPEN).aggregate(
         units=units(F("quantity") - F("quantity_returned") - F("quantity_lost"))
@@ -178,7 +186,6 @@ def summary(business: Business, rng: Range):
         "returns": earned["returns"],
         "rentals": activity["rentals"],
         "cancelled": activity["cancelled"],
-        "depositsTaken": activity["deposits_taken"],
         "unitsRented": sent_out["units"],
         "lines": sent_out["lines"],
         "unitsReturned": came_back["units"],
@@ -192,8 +199,8 @@ def summary(business: Business, rng: Range):
         "openRentals": standing["open"],
         "overdue": standing["overdue"],
         "unitsOut": out_now["units"],
-        "depositsHeld": standing["deposits_held"],
         "outstanding": standing["outstanding"],
+        "advancesHeld": standing["advances_held"],
         "purchaseBills": bought["bills"],
         "purchaseSpend": bought["spent"],
     }
@@ -221,6 +228,40 @@ def revenue_series(business: Business, rng: Range, group=""):
         )
         .order_by("period")
     )
+    # What each bucket is made of: who brought what back. A total on its own cannot be
+    # checked against anything; a customer and a product code can be.
+    lines = (
+        RentalReturnLine.objects.filter(
+            rental_return__business=business, rental_return__at__gte=rng.start, rental_return__at__lt=rng.end
+        )
+        .annotate(period=GROUPS[group]("rental_return__at"))
+        .values(
+            "period",
+            "quantity",
+            "rent_amount",
+            "late_fee",
+            "damage_fee",
+            customer=F("rental_return__rental__customer__name"),
+            rental_number=F("rental_return__rental__number"),
+            product=F("item__product_name"),
+            sku=F("item__product_sku"),
+            barcode=F("item__product__barcode"),
+        )
+        .order_by("rental_return__at", "id")
+    )
+    details = {}
+    for line in lines:
+        details.setdefault(line["period"], []).append(
+            {
+                "customer": line["customer"] or "Walk-in",
+                "rentalCode": f"RN-{line['rental_number']:06d}",
+                "product": line["product"],
+                "sku": line["sku"] or "",
+                "barcode": line["barcode"] or "",
+                "units": line["quantity"],
+                "amount": line["rent_amount"] + line["late_fee"] + line["damage_fee"],
+            }
+        )
     return group, [
         {
             "period": timezone.localtime(row["period"]).date().isoformat(),
@@ -230,6 +271,7 @@ def revenue_series(business: Business, rng: Range, group=""):
             "damageFees": row["damage_fees"],
             "discounts": row["discounts"],
             "revenue": row["rent"] + row["late_fees"] + row["damage_fees"] - row["discounts"],
+            "details": details.get(row["period"], []),
         }
         for row in rows
     ]
@@ -325,6 +367,40 @@ def top_customers(business: Business, rng: Range, limit=TOP_N):
     ]
 
 
+def debtors(business: Business, limit=TOP_N):
+    """Who owes money right now, most first. Not tied to the date range: a debt is a debt.
+
+    Added up per customer across all their rentals, so someone who paid one rental in
+    advance and owes on another is listed for the difference, and not at all if they are
+    ahead overall.
+    """
+    rows = (
+        Rental.objects.filter(business=business)
+        .exclude(status=Rental.Status.CANCELLED)
+        .values("customer_id")
+        .annotate(
+            name=_latest("customer__name"),
+            phone=_latest("customer__phone"),
+            rentals=Count("id", filter=Q(status__in=Rental.OPEN)),
+            oldest=Min("started_at", filter=Q(status__in=Rental.OPEN)),
+            owed=total(BALANCE),
+        )
+        .filter(owed__gt=0)
+        .order_by("-owed")
+    )
+    return [
+        {
+            "id": str(row["customer_id"]) if row["customer_id"] else None,
+            "name": row["name"] or "Walk-in",
+            "phone": row["phone"] or "",
+            "openRentals": row["rentals"],
+            "oldestOpen": row["oldest"],
+            "owed": row["owed"],
+        }
+        for row in rows[:limit]
+    ]
+
+
 def _latest(field):
     """A label for a group, taken from the frozen text on its rows.
 
@@ -392,8 +468,7 @@ def _export_rentals(business, rng, group):
     """Every rental started in the range, one row each. The owner's audit trail."""
     header = [
         "Rental", "Started", "Due", "Status", "Customer", "Phone", "Items", "Units out",
-        "Rent", "Late fees", "Damage fees", "Discount", "Charges", "Paid", "Balance",
-        "Deposit", "Deposit refunded", "Taken by",
+        "Rent", "Late fees", "Damage fees", "Discount", "Charges", "Paid", "Balance", "Taken by",
     ]
     qs = (
         Rental.objects.filter(business=business, started_at__gte=rng.start, started_at__lt=rng.end)
@@ -423,8 +498,6 @@ def _export_rentals(business, rng, group):
                 rental.charges,
                 rental.paid_amount,
                 rental.balance,
-                rental.deposit,
-                rental.deposit_refunded,
                 rental.created_by.name if rental.created_by else "",
             ]
 
@@ -493,6 +566,12 @@ def _export_payments(business, rng, group):
     return "payments", header, rows()
 
 
+def _export_debtors(business, rng, group):
+    header = ["Customer", "Phone", "Rentals still out", "Owes"]
+    rows = ([r["name"], r["phone"], r["openRentals"], r["owed"]] for r in debtors(business, limit=MAX_TOP_N))
+    return "who_owes", header, rows
+
+
 def _when(value):
     """A timestamp as the shop's own local time, written so a spreadsheet reads it as one."""
     return timezone.localtime(value).strftime("%Y-%m-%d %H:%M") if value else ""
@@ -505,4 +584,40 @@ EXPORTS = {
     "rentals": _export_rentals,
     "returns": _export_returns,
     "payments": _export_payments,
+    "debtors": _export_debtors,
 }
+
+
+# ---------- The whole report ----------
+
+
+def overview(business: Business, rng: Range, group=""):
+    """Everything the printed report shows, in one dictionary.
+
+    The PDF is drawn from this, so it carries the same figures as the screen: both are
+    built from the functions above.
+    """
+    group, series = revenue_series(business, rng, group)
+    return {
+        "business": {
+            "name": business.name,
+            "phone": business.phone,
+            "address": business.address,
+            "currency": business.settings.get("currency", "BDT"),
+        },
+        "generated_at": timezone.now(),
+        "label": range_label(rng),
+        "summary": summary(business, rng),
+        "group": group,
+        "revenue": series,
+        "products": top_products(business, rng, limit=10),
+        "customers": top_customers(business, rng, limit=10),
+        "debtors": debtors(business, limit=15),
+    }
+
+
+def range_label(rng: Range):
+    first, last = rng.start.date(), rng.last_day
+    if first == last:
+        return f"{first.day} {first:%B %Y}"
+    return f"{first.day} {first:%b %Y} – {last.day} {last:%b %Y}"

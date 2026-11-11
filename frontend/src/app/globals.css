@@ -203,24 +203,123 @@
     font-variant-numeric: tabular-nums;
   }
 }
+/* A screen arriving after a navigation. Opacity only, so nothing shifts under a finger
+   that is already on its way to a button, and skipped entirely for reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .page-enter {
+    animation: page-enter 160ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+  }
+}
+
+/* The printed sheet: receipts, bills and reports (see `components/paper.tsx`).
+   Its colours are fixed rather than themed, because it is paper. `print-color-adjust`
+   makes the browser put the few tints there are on the page instead of dropping them,
+   which is what left printouts looking washed out. */
+.bill-paper {
+  --sheet-accent: #0b4f59;
+  --sheet-tint: #dcecee;
+  --sheet-line: #1f1f1f;
+  --sheet-rule: #6b6b6b;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* A table on the sheet, ruled both ways: a line under every row and between every column,
+   so a figure can be followed across to its row and down to its heading. */
+.sheet-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--sheet-line);
+}
+
+.sheet-table th,
+.sheet-table td {
+  padding: 0.4em 0.55em;
+  border: 1px solid var(--sheet-rule);
+  /* Centred on the row, so a one-line cell sits level with a two-line one beside it. */
+  vertical-align: middle;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.sheet-table th {
+  border-color: var(--sheet-line);
+  background: var(--sheet-tint);
+  color: var(--sheet-accent);
+  font-size: 0.82em;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.sheet-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.sheet-table tfoot td {
+  border-top: 1px solid var(--sheet-line);
+  font-weight: 700;
+}
+
 /* Printing.
-   Only a receipt goes on paper. Everything else — sidebar, buttons, the screen copy of
-   the receipt itself — is hidden, and the till copy is lifted out of the layout so it
-   starts at the top of the roll. `ReceiptPaper` sets the page size to the slip's own
-   measured height, so nothing feeds out after it. */
+   Only a sheet or a till slip goes on paper. Everything else — sidebar, buttons, the
+   screen around the document — is hidden. `ReceiptPaper` sets the page size to the slip's
+   own measured height, so nothing feeds out after it. */
 @media print {
   body * {
     visibility: hidden;
   }
 
   .receipt-paper,
-  .receipt-paper * {
+  .receipt-paper *,
+  .bill-paper,
+  .bill-paper * {
     visibility: visible;
+  }
+
+  /* A sheet is an A4 document: lifted to the top of the first page and left to run over
+     as many pages as it needs. On paper the type is a size up from the screen and pure
+     black, since a printout is read at arm's length and often photocopied. */
+  .bill-paper {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0;
+    color: #000;
+    font-size: 10.5pt;
+    line-height: 1.35;
+  }
+
+  .bill-paper .bill-block {
+    break-inside: avoid;
+  }
+
+  /* A long table repeats its heading on each page and never splits a row. */
+  .sheet-table thead {
+    display: table-header-group;
+  }
+
+  .sheet-table tr {
+    break-inside: avoid;
   }
 
   .receipt-paper {
     position: absolute;
     top: 0;
     left: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 }

@@ -117,6 +117,7 @@ export function CustomersView() {
           onChange={setText}
           placeholder="Name, phone number, company or ID"
           label="Search customers"
+          suggest="customers"
         />
         <FilterTabs value={filter} onChange={setFilter} options={FILTERS} label="Filter customers" />
       </Toolbar>

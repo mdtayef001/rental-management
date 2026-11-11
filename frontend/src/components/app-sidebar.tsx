@@ -8,11 +8,14 @@ import {
   ChartColumn,
   ChevronsUpDown,
   FileSpreadsheet,
+  History,
+  PackagePlus,
   LogOut,
   Moon,
   Package,
   PackageX,
   Palette,
+  ReceiptText,
   ScanLine,
   Settings,
   ShoppingCart,
@@ -46,8 +49,9 @@ import {
   SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar"
+import { logoUrl } from "@/lib/logo"
 import { useCanAccess, useSession } from "@/components/session"
-import { canAccess, roleLabel } from "@/lib/auth/roles"
+import { ROLE_HOME, canAccess, roleLabel } from "@/lib/auth/roles"
 import { useRentalSummary } from "@/lib/data/queries"
 
 interface Item {
@@ -64,22 +68,27 @@ interface Item {
  * Thirteen links in one flat list is a list nobody reads — the eye has nothing to anchor
  * to. Grouped, it becomes four short lists, each answering a different question: what am
  * I doing at the counter right now, who has what, what do we own, where did the money go.
- * "Today" sits first because it is where the day starts and where staff live.
+ * "Today" sits first because it is where the day starts and where staff live — and it
+ * carries the two things the counter actually does, renting out and taking back, so they
+ * are one click from every screen rather than a button on some of them.
  */
 const GROUPS: { label: string; items: Item[] }[] = [
   {
     label: "Today",
     items: [
-      { href: "/scan", label: "Scan", icon: ScanLine },
       { href: "/dashboard", label: "Dashboard", icon: ChartColumn },
+      { href: "/rent-out", label: "Rent out", icon: PackagePlus },
+      { href: "/take-back", label: "Take back", icon: Undo2 },
+      { href: "/scan", label: "Scan", icon: ScanLine },
     ],
   },
   {
     label: "Hire",
     items: [
       { href: "/rentals", label: "Rentals", icon: Boxes, badge: "overdue" },
-      { href: "/returns", label: "Returns", icon: Undo2 },
+      { href: "/returns", label: "Returns", icon: History },
       { href: "/customers", label: "Customers", icon: Users },
+      { href: "/bills", label: "Bills", icon: ReceiptText },
     ],
   },
   {
@@ -104,7 +113,9 @@ const GROUPS: { label: string; items: Item[] }[] = [
 
 export function AppSidebar() {
   const path = usePathname()
-  const { business } = useSession()
+  const { business, user } = useSession()
+  // Staff without the dashboard land on their own first screen instead of being bounced.
+  const home = canAccess(user, "/dashboard", business?.settings) ? "/dashboard" : ROLE_HOME[user.role]
   // Only the people who can see rentals need the overdue count polled.
   const canSeeRentals = useCanAccess("/rentals")
   const { data: summary } = useRentalSummary({ enabled: canSeeRentals, live: true })
@@ -112,15 +123,30 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b">
-        <div className="flex items-center gap-2.5 px-1 py-1.5 group-data-[collapsible=icon]:px-0">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary font-heading text-sm font-semibold text-primary-foreground">
-            {initials(business?.name)}
-          </div>
+        {/* The business's name is the way home, as a logo is on any site. */}
+        <Link
+          href={home}
+          aria-label={`${business?.name ?? "Rental Manager"}, go to the dashboard`}
+          className="flex items-center gap-2.5 rounded-md px-1 py-1.5 outline-none transition-colors group-data-[collapsible=icon]:px-0 hover:bg-sidebar-accent focus-visible:ring-[3px] focus-visible:ring-sidebar-ring/50"
+        >
+          {logoUrl(business?.logoVersion) ? (
+            // The business's own logo, on white so it reads the same in the dark theme.
+            // eslint-disable-next-line @next/next/no-img-element -- already small, served by the API
+            <img
+              src={logoUrl(business?.logoVersion) ?? undefined}
+              alt=""
+              className="size-8 shrink-0 rounded-md bg-white object-contain p-0.5"
+            />
+          ) : (
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary font-heading text-sm font-semibold text-primary-foreground">
+              {initials(business?.name)}
+            </div>
+          )}
           <div className="min-w-0 group-data-[collapsible=icon]:hidden">
             <div className="truncate text-sm font-semibold">{business?.name ?? "Rental Manager"}</div>
             <div className="truncate text-xs text-muted-foreground">Rental Manager</div>
           </div>
-        </div>
+        </Link>
       </SidebarHeader>
 
       <SidebarContent>
@@ -161,7 +187,13 @@ function NavGroup({ group, path, overdue }: { group: (typeof GROUPS)[number]; pa
             const Icon = item.icon
             return (
               <SidebarMenuItem key={item.href}>
-                <SidebarMenuButton isActive={active} tooltip={item.label} render={<Link href={item.href} />}>
+                <SidebarMenuButton
+                  isActive={active}
+                  tooltip={item.label}
+                  // The signal colour means "you are here": the one place it tints a row.
+                  className="h-9 data-active:bg-primary/12 data-active:text-primary dark:data-active:bg-primary/15"
+                  render={<Link href={item.href} aria-current={active ? "page" : undefined} />}
+                >
                   <Icon className="size-4" />
                   <span>{item.label}</span>
                 </SidebarMenuButton>

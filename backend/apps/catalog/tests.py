@@ -150,7 +150,7 @@ class LookupTests(CatalogTestCase):
         self.assertEqual(body[0]["name"], "Sewing machine")
 
     def test_rentable_only_hides_items_that_are_not_for_rent(self):
-        create_product(user=self.owner, sku="SALE-1", barcode="111", name="For sale only", rentable=False, sellable=True)
+        create_product(user=self.owner, sku="SALE-1", barcode="111", name="Not for rent", rentable=False)
         self.login(self.owner)
         self.assertEqual(self.client.get("/api/products/lookup/?code=111&rentableOnly=1").status_code, 404)
         self.assertEqual(self.client.get("/api/products/lookup/?code=111").status_code, 200)
@@ -303,3 +303,179 @@ class PaginationTests(CatalogTestCase):
         self.assertEqual(res.status_code, 200)
         # Capped at 200 by Pagination.max_page_size, so one caller can't ask for everything.
         self.assertLessEqual(len(self.body(res)["results"]), 200)
+
+
+class CustomerRateTests(APITestCase):
+    """A company's own price: used when renting to them, and nobody else's business."""
+
+    def setUp(self):
+        from apps.catalog.models import Customer
+
+        cache.clear()
+        self.business, self.branch, self.owner = create_business(
+            name="Dhaka Rentals", owner_name="Owner", owner_email="owner@example.com", owner_password=PASSWORD
+        )
+        self.staff = create_user(
+            actor=self.owner, name="Staff", email="staff@example.com", password=PASSWORD, role="staff"
+        )
+        self.machine = create_product(
+            user=self.owner, sku="SM-100", name="Sewing machine", rentable=True, rent_daily=Decimal("50.00")
+        )
+        adjust_stock(user=self.owner, product=self.machine, branch=self.branch, quantity=100, reason="adjustment", note="Opening count")
+        self.x = Customer.objects.create(business=self.business, name="X Company")
+        self.y = Customer.objects.create(business=self.business, name="Y Company")
+        self.client.force_authenticate(self.owner)
+
+    def put(self, customer, rate):
+        return self.client.put(
+            f"/api/customers/{customer.id}/rates/",
+            {"product": str(self.machine.id), "plan": "daily", "rate": rate},
+            format="json",
+        )
+
+    def rent(self, customer, **line):
+        return self.client.post(
+            "/api/rentals/",
+            {
+                "customer": str(customer.id),
+                "branch": str(self.branch.id),
+                "lines": [{"product": str(self.machine.id), "quantity": 10, "plan": "daily", **line}],
+            },
+            format="json",
+        )
+
+    def test_a_customer_pays_their_own_price_and_others_the_default(self):
+        self.assertEqual(self.put(self.x, "42.50").json()[0]["rate"], 42.5)
+        self.assertEqual(self.rent(self.x).json()["items"][0]["rate"], 42.5)
+        self.assertEqual(self.rent(self.y).json()["items"][0]["rate"], 50)
+
+    def test_a_typed_rate_still_wins_on_the_day(self):
+        self.put(self.x, "42.50")
+        self.assertEqual(self.rent(self.x, rate="40.00").json()["items"][0]["rate"], 40)
+        # ...and the agreed price is untouched unless they asked to remember it.
+        self.assertEqual(self.client.get(f"/api/customers/{self.x.id}/rates/").json()[0]["rate"], 42.5)
+
+    def test_remembering_the_rates_of_a_rental(self):
+        response = self.client.post(
+            "/api/rentals/",
+            {
+                "customer": str(self.x.id),
+                "branch": str(self.branch.id),
+                "rememberRates": True,
+                "lines": [{"product": str(self.machine.id), "quantity": 10, "plan": "daily", "rate": "45.00"}],
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(self.client.get(f"/api/customers/{self.x.id}/rates/").json()[0]["rate"], 45)
+
+    def test_null_or_the_default_goes_back_to_the_products_own_rate(self):
+        self.put(self.x, "42.50")
+        self.assertEqual(self.put(self.x, None).json(), [])
+        self.assertEqual(self.put(self.x, "50.00").json(), [])
+
+    def test_staff_can_read_but_not_change_prices(self):
+        self.put(self.x, "42.50")
+        self.client.force_authenticate(self.staff)
+        self.assertEqual(self.client.get(f"/api/customers/{self.x.id}/rates/").status_code, 200)
+        self.assertEqual(self.put(self.x, "1.00").status_code, 403)
+
+    def test_another_business_cannot_see_or_set_them(self):
+        self.put(self.x, "42.50")
+        _, _, them = create_business(
+            name="Sylhet Tools", owner_name="Them", owner_email="them@example.com", owner_password=PASSWORD
+        )
+        self.client.force_authenticate(them)
+        self.assertEqual(self.client.get(f"/api/customers/{self.x.id}/rates/").status_code, 404)
+        self.assertEqual(self.put(self.x, "1.00").status_code, 404)
+
+
+class SimpleProductTests(CatalogTestCase):
+    """Adding a product asks for a name and a rate. The rest is optional."""
+
+    def test_a_product_added_without_a_sku_is_numbered(self):
+        self.login(self.owner)
+        first = self.client.post("/api/products/", {"name": "Steam iron", "rentDaily": "30.00"}, format="json")
+        second = self.client.post("/api/products/", {"name": "Generator", "rentDaily": "900.00", "sku": ""}, format="json")
+        self.assertEqual(first.status_code, 201, first.content)
+        self.assertEqual(self.body(first)["sku"], "P-0001")
+        self.assertEqual(self.body(second)["sku"], "P-0002")
+
+    def test_the_count_on_the_shelf_can_be_given_when_adding(self):
+        self.login(self.owner)
+        res = self.client.post(
+            "/api/products/", {"name": "Work table", "rentDaily": "20.00", "openingStock": 40}, format="json"
+        )
+        self.assertEqual(res.status_code, 201, res.content)
+        product = Product.objects.get(pk=self.body(res)["id"])
+        self.assertEqual(self.body(res)["onHand"], 40)
+        # It went through the ledger, so the product's history says where its stock came from.
+        move = StockMovement.objects.get(product=product)
+        self.assertEqual((move.change, move.note), (40, "Opening stock"))
+
+    def test_editing_a_product_never_changes_its_stock(self):
+        change_stock(product=self.machine, branch=self.branch, change=5, reason=StockMovement.Reason.ADJUSTMENT)
+        self.login(self.owner)
+        res = self.client.patch(
+            f"/api/products/{self.machine.id}/", {"name": "Sewing machine", "sku": "", "openingStock": 99}, format="json"
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        self.machine.refresh_from_db()
+        # A blank SKU on an edit keeps the one it has.
+        self.assertEqual(self.machine.sku, "SM-100")
+        self.assertEqual(StockLevel.objects.get(product=self.machine).quantity, 5)
+
+
+# A 1×1 PNG: the smallest picture there is.
+PIXEL = (
+    "data:image/png;base64,"
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+)
+
+
+class LogoTests(CatalogTestCase):
+    """The owner's logo: uploaded once, then printed on every receipt, bill and report."""
+
+    def test_the_owner_uploads_a_logo_and_the_team_can_see_it(self):
+        self.login(self.owner)
+        res = self.client.put("/api/business/logo/", {"image": PIXEL}, format="json")
+        self.assertEqual(res.status_code, 200, res.content)
+        version = self.body(res)["logoVersion"]
+        self.assertTrue(version)
+
+        staff = create_user(
+            actor=self.owner, name="Staff", email="staff@example.com", password=PASSWORD, role=User.Role.STAFF
+        )
+        self.login(staff)
+        image = self.client.get("/api/business/logo/")
+        self.assertEqual(image.status_code, 200)
+        self.assertEqual(image["Content-Type"], "image/png")
+        # ...but only the owner may change it.
+        self.assertEqual(self.client.put("/api/business/logo/", {"image": PIXEL}, format="json").status_code, 403)
+
+    def test_only_a_real_picture_is_accepted(self):
+        self.login(self.owner)
+        for bad in (
+            "not a picture",
+            "data:image/svg+xml;base64,PHN2Zy8+",
+            "data:image/png;base64,aGVsbG8=",
+        ):
+            res = self.client.put("/api/business/logo/", {"image": bad}, format="json")
+            self.assertEqual(res.status_code, 400, bad)
+        self.assertEqual(self.client.get("/api/business/logo/").status_code, 404)
+
+    def test_removing_the_logo(self):
+        self.login(self.owner)
+        self.client.put("/api/business/logo/", {"image": PIXEL}, format="json")
+        res = self.client.delete("/api/business/logo/")
+        self.assertEqual(self.body(res)["logoVersion"], "")
+        self.assertEqual(self.client.get("/api/business/logo/").status_code, 404)
+
+    def test_another_business_never_sees_this_logo(self):
+        self.login(self.owner)
+        self.client.put("/api/business/logo/", {"image": PIXEL}, format="json")
+        _, _, other = create_business(
+            name="Other", owner_name="Other", owner_email="other@example.com", owner_password=PASSWORD
+        )
+        self.login(other)
+        self.assertEqual(self.client.get("/api/business/logo/").status_code, 404)

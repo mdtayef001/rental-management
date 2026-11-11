@@ -9,5 +9,10 @@ router.register("returns", views.RentalReturnViewSet, basename="rental-return")
 
 urlpatterns = [
     path("receipts/<str:token>/", views.PublicReceiptView.as_view(), name="public-receipt"),
+    path("receipts/<str:token>/logo/", views.PublicReceiptLogoView.as_view(), name="public-receipt-logo"),
+    path("bills/", views.BillListView.as_view(), name="bill-list"),
+    path("bills/<int:customer_id>/", views.BillDetailView.as_view(), name="bill-detail"),
+    path("bills/<int:customer_id>/pdf/", views.BillPdfView.as_view(), name="bill-pdf"),
+    path("bills/<int:customer_id>/payment/", views.BillPaymentView.as_view(), name="bill-payment"),
     *router.urls,
 ]

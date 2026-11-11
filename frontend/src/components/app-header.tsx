@@ -20,6 +20,7 @@ const TITLES: Record<string, string> = {
   rentals: "Rentals",
   returns: "Returns",
   customers: "Customers",
+  bills: "Bills",
   products: "Products",
   purchases: "Purchases",
   suppliers: "Suppliers",

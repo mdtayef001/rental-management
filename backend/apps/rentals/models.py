@@ -52,16 +52,15 @@ class Rental(TenantModel):
     # When the last item came back.
     returned_at = models.DateTimeField(null=True, blank=True)
 
-    # Security held against the rental, given back at return less any charges.
-    deposit = models.DecimalField(max_digits=14, decimal_places=2, default=0, validators=[MinValueValidator(0)])
-    deposit_refunded = models.DecimalField(max_digits=14, decimal_places=2, default=0, validators=[MinValueValidator(0)])
-
     # Running totals, kept on the row so lists and reports don't have to add up items.
     # `rent_total` is what the items have earned so far (final once everything is back).
     rent_total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     late_fee = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     damage_fee = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     discount = models.DecimalField(max_digits=14, decimal_places=2, default=0, validators=[MinValueValidator(0)])
+    # Everything the customer has paid, less anything given back. Money paid in advance is
+    # counted here from the moment it is taken, so the balance is negative — the shop is
+    # holding their money — until the items come back and the rent is charged against it.
     paid_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
 
     notes = models.TextField(blank=True)
@@ -92,8 +91,13 @@ class Rental(TenantModel):
 
     @property
     def charges(self):
-        """Everything owed on the rental before the deposit and payments."""
+        """Everything charged on the rental so far, before payments."""
         return self.rent_total + self.late_fee + self.damage_fee - self.discount
+
+    @property
+    def credit(self):
+        """Money the shop is holding for the customer: paid in advance and not yet used up."""
+        return max(-self.balance, 0)
 
     @property
     def balance(self):
@@ -149,8 +153,7 @@ class RentalItem(models.Model):
     plan = models.CharField(max_length=10, choices=Plan.choices)
     # Price per day / week / month, or the flat amount when the plan is "fixed".
     rate = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(0)])
-    # Per-unit deposit and replacement cost as they stood when the item went out.
-    deposit = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    # What replacing one unit cost when the item went out.
     replacement_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
     # Days the business agreed not to charge for (the shop was shut, the item was faulty).
@@ -183,10 +186,6 @@ class RentalItem(models.Model):
     @property
     def is_open(self):
         return self.quantity_out > 0
-
-    @property
-    def deposit_total(self):
-        return self.deposit * self.quantity
 
     # ---------- Pricing ----------
     #
@@ -249,9 +248,9 @@ class RentalReturn(TenantModel):
     late_fee = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     damage_fee = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     discount = models.DecimalField(max_digits=14, decimal_places=2, default=0, validators=[MinValueValidator(0)])
-    # Taken from the customer at this return, and deposit handed back at it.
+    # Taken from the customer at this return, and any unused advance handed back at it.
     paid_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
-    deposit_refunded = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    refunded = models.DecimalField(max_digits=14, decimal_places=2, default=0)
 
     class Method(models.TextChoices):
         CASH = "cash", "Cash"
@@ -321,16 +320,16 @@ class RentalPayment(TenantModel):
 
     rental = models.ForeignKey(Rental, on_delete=models.CASCADE, related_name="payments")
     rental_return = models.ForeignKey(RentalReturn, null=True, blank=True, on_delete=models.SET_NULL, related_name="payments")
-    # Positive is money in from the customer; negative is money given back (a deposit refund).
+    # Positive is money in from the customer; negative is money given back to them.
     amount = models.DecimalField(max_digits=14, decimal_places=2)
     method = models.CharField(max_length=10, choices=RentalReturn.Method.choices, blank=True)
     reference = models.CharField(max_length=60, blank=True)
 
     class Kind(models.TextChoices):
-        DEPOSIT = "deposit", "Deposit taken"
-        DEPOSIT_REFUND = "deposit_refund", "Deposit returned"
-        RENT = "rent", "Rent"
-        REFUND = "refund", "Refund"
+        # Paid when the items went out, before any rent was charged.
+        ADVANCE = "advance", "Paid in advance"
+        RENT = "rent", "Payment"
+        REFUND = "refund", "Given back"
 
     kind = models.CharField(max_length=20, choices=Kind.choices)
     note = models.CharField(max_length=300, blank=True)

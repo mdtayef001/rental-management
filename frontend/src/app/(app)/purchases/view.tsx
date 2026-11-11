@@ -133,6 +133,7 @@ export function PurchasesView() {
           onChange={setText}
           placeholder="Supplier, invoice number or product"
           label="Search purchases"
+          suggest="purchases"
         />
         <FilterTabs value={status} onChange={setStatus} options={FILTERS} label="Filter purchases" />
       </Toolbar>

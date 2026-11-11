@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Ban, MessageCircle, ReceiptText, Undo2, Wallet } from "lucide-react"
+import { Ban, FileText, MessageCircle, ReceiptText, Undo2, Wallet } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ButtonLink } from "@/components/ui/button-link"
@@ -22,7 +22,7 @@ import { ErrorState, PageHeader, Spinner, TableSkeleton } from "@/components/com
 import { Code, DataView, Primary } from "@/components/data-view"
 
 import { useCurrency, useCurrentUser, useSession } from "@/components/session"
-import { useCancelRental, useRefundDeposit, useRentalPayment } from "@/lib/data/mutations"
+import { useCancelRental, useRefund, useRentalPayment } from "@/lib/data/mutations"
 import { useRental } from "@/lib/data/queries"
 import { count, dateTime, dueLabel, friendlyDateTime, money, plural, whatsappLink } from "@/lib/format"
 import { PLAN_LABEL } from "@/lib/rental"
@@ -46,7 +46,11 @@ export function RentalDetailView({ id }: { id: string }) {
   if (isError) return <ErrorState error={error} onRetry={() => refetch()} />
   if (isLoading || !rental) return <TableSkeleton rows={6} columns={4} />
 
-  const held = rental.deposit - rental.depositRefunded
+  // Paid beyond what has been charged. While items are out this is their advance, waiting
+  // for the rent; once everything is back it is simply money to hand back.
+  const credit = Math.max(0, -rental.balance)
+  const open = rental.status === "active" || rental.status === "partly_returned"
+  const advance = (rental.payments ?? []).filter((p) => p.kind === "advance").reduce((sum, p) => sum + p.amount, 0)
   const share = rental.token
     ? whatsappLink(
         rental.customerPhone,
@@ -72,6 +76,12 @@ export function RentalDetailView({ id }: { id: string }) {
           <ReceiptText className="size-4" />
           Receipt
         </ButtonLink>
+        {rental.customerId && user.role !== "staff" && (
+          <ButtonLink href={`/bills/${rental.customerId}`} variant="outline">
+            <FileText className="size-4" />
+            Monthly bill
+          </ButtonLink>
+        )}
         {share && (
           <Button variant="outline" render={<a href={share} target="_blank" rel="noreferrer" />}>
             <MessageCircle className="size-4" />
@@ -205,7 +215,7 @@ export function RentalDetailView({ id }: { id: string }) {
                     {rental.payments?.map((payment) => (
                       <TableRow key={payment.id}>
                         <TableCell className="text-sm">{friendlyDateTime(payment.at)}</TableCell>
-                        <TableCell className="text-sm capitalize">{payment.kind.replace("_", " ")}</TableCell>
+                        <TableCell className="text-sm">{PAYMENT_KIND[payment.kind] ?? payment.kind}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{payment.method}</TableCell>
                         <TableCell className="text-right tabular-nums">{money(payment.amount, currency)}</TableCell>
                       </TableRow>
@@ -236,32 +246,28 @@ export function RentalDetailView({ id }: { id: string }) {
               {rental.lateFee > 0 && <Line label="Late fee" value={money(rental.lateFee, currency)} warn />}
               {rental.damageFee > 0 && <Line label="Damage" value={money(rental.damageFee, currency)} warn />}
               {rental.discount > 0 && <Line label="Discount" value={`− ${money(rental.discount, currency)}`} />}
-              <Line label="Paid" value={money(rental.paidAmount, currency)} />
+              {advance > 0 && <Line label="Paid in advance" value={money(advance, currency)} />}
+              <Line label={advance > 0 ? "Paid in total" : "Paid"} value={money(rental.paidAmount, currency)} />
               <div className="flex items-baseline justify-between border-t pt-2 font-semibold">
-                <span>{rental.balance >= 0 ? "Balance due" : "To refund"}</span>
+                <span>{rental.balance >= 0 ? "Balance due" : open ? "In credit" : "To give back"}</span>
                 <span className="tabular-nums">{money(Math.abs(rental.balance), currency)}</span>
               </div>
-
-              {rental.deposit > 0 && (
-                <div className="space-y-1 border-t pt-2">
-                  <Line label="Deposit taken" value={money(rental.deposit, currency)} />
-                  {rental.depositRefunded > 0 && (
-                    <Line label="Given back" value={money(rental.depositRefunded, currency)} />
-                  )}
-                  <Line label="Still held" value={money(held, currency)} />
-                </div>
+              {credit > 0 && open && (
+                <p className="text-xs text-muted-foreground">
+                  Paid ahead. The rent comes off this when the items come back.
+                </p>
               )}
 
               <div className="flex flex-wrap gap-2 pt-2">
-                {rental.balance > 0 && (
-                  <Button size="sm" onClick={() => setPaying(true)}>
+                {rental.status !== "cancelled" && (
+                  <Button size="sm" variant={rental.balance > 0 ? "default" : "outline"} onClick={() => setPaying(true)}>
                     <Wallet className="size-4" />
                     Take payment
                   </Button>
                 )}
-                {held > 0 && user.canHandleDeposits && (
+                {credit > 0 && user.canTakeReturns && (
                   <Button size="sm" variant="outline" onClick={() => setRefunding(true)}>
-                    Return deposit
+                    Give money back
                   </Button>
                 )}
               </div>
@@ -293,10 +299,16 @@ export function RentalDetailView({ id }: { id: string }) {
       </div>
 
       <PaymentDialog open={paying} onOpenChange={setPaying} rental={rental} />
-      <DepositDialog open={refunding} onOpenChange={setRefunding} rental={rental} held={held} />
+      {refunding && <RefundDialog onClose={() => setRefunding(false)} rental={rental} credit={credit} />}
       <CancelDialog open={cancelling} onOpenChange={setCancelling} rentalId={rental.id} code={rental.code} />
     </div>
   )
+}
+
+const PAYMENT_KIND: Record<string, string> = {
+  advance: "Paid in advance",
+  rent: "Payment",
+  refund: "Given back",
 }
 
 function Line({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
@@ -328,7 +340,11 @@ function PaymentDialog({
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>Take a payment</DialogTitle>
-          <DialogDescription>{money(rental.balance, currency)} is outstanding.</DialogDescription>
+          <DialogDescription>
+            {rental.balance > 0
+              ? `${money(rental.balance, currency)} is outstanding.`
+              : "Nothing is owed yet. Money taken now is kept on this rental as an advance."}
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5">
@@ -386,27 +402,27 @@ function PaymentDialog({
   )
 }
 
-function DepositDialog({
-  open,
-  onOpenChange,
+function RefundDialog({
+  onClose,
   rental,
-  held,
+  credit,
 }: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
+  onClose: () => void
   rental: { id: string }
-  held: number
+  credit: number
 }) {
   const currency = useCurrency()
-  const refund = useRefundDeposit()
-  const [amount, setAmount] = useState<number | "">(held)
+  const refund = useRefund()
+  const [amount, setAmount] = useState<number | "">(credit)
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>Return the deposit</DialogTitle>
-          <DialogDescription>{money(held, currency)} is still held against this rental.</DialogDescription>
+          <DialogTitle>Give money back</DialogTitle>
+          <DialogDescription>
+            {money(credit, currency)} has been paid beyond what this rental has been charged.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-1.5">
           <Label htmlFor="d-amount">Amount to give back</Label>
@@ -414,7 +430,7 @@ function DepositDialog({
             id="d-amount"
             type="number"
             min={0}
-            max={held}
+            max={credit}
             value={amount}
             onChange={(e) => setAmount(e.target.value === "" ? "" : Math.max(0, Number(e.target.value)))}
             className="tabular-nums"
@@ -422,20 +438,17 @@ function DepositDialog({
           />
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
           <Button
-            disabled={refund.isPending || !amount}
+            disabled={refund.isPending || !amount || Number(amount) > credit}
             onClick={() =>
-              refund.mutate(
-                { rentalId: rental.id, amount: Number(amount), method: "cash" },
-                { onSuccess: () => onOpenChange(false) },
-              )
+              refund.mutate({ rentalId: rental.id, amount: Number(amount), method: "cash" }, { onSuccess: onClose })
             }
           >
             {refund.isPending && <Spinner />}
-            Return it
+            Give it back
           </Button>
         </DialogFooter>
       </DialogContent>

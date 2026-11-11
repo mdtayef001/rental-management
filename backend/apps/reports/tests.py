@@ -302,3 +302,50 @@ class CsvTests(ReportsTestCase):
         self.login(self.owner)
         res, _ = self.rows("report=revenue")
         self.assertEqual(res["Cache-Control"], "no-store")
+
+
+class PrintedReportTests(ReportsTestCase):
+    """The report as a sheet: who owes, and the PDF the owner prints or sends."""
+
+    def test_who_owes_lists_customers_with_an_unpaid_balance(self):
+        rows = services.debtors(self.business)
+        # Mr. X was charged for the 60 machines that came back and has paid nothing.
+        self.assertEqual([row["name"] for row in rows], ["Mr. X"])
+        self.assertEqual(rows[0]["owed"], self.x_return.charges)
+
+    def test_money_paid_in_advance_is_not_a_debt(self):
+        """Mr. Y pays ahead: he owes nothing, and his advance doesn't hide what Mr. X owes."""
+        rentals.add_payment(user=self.owner, rental=self.y_rental, amount=Decimal("500.00"), kind="advance")
+        summary = services.summary(self.business, self.this_month())
+        self.assertEqual(summary["advancesHeld"], Decimal("500.00"))
+        self.assertEqual(summary["outstanding"], self.x_return.charges)
+        self.assertEqual([row["name"] for row in services.debtors(self.business)], ["Mr. X"])
+
+    def test_the_report_downloads_as_a_pdf(self):
+        self.login(self.owner)
+        res = self.client.get("/api/reports/pdf/")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res["Content-Type"], "application/pdf")
+        self.assertTrue(res.content.startswith(b"%PDF"))
+        self.assertIn("attachment", res["Content-Disposition"])
+
+    def test_the_pdf_carries_the_logo_when_there_is_one(self):
+        self.login(self.owner)
+        plain = self.client.get("/api/reports/pdf/").content
+        pixel = (
+            "data:image/png;base64,"
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+        )
+        self.assertEqual(self.client.put("/api/business/logo/", {"image": pixel}, format="json").status_code, 200)
+        with_logo = self.client.get("/api/reports/pdf/").content
+        self.assertTrue(with_logo.startswith(b"%PDF"))
+        self.assertIn(b"/Subtype /Image", with_logo)
+        self.assertNotIn(b"/Subtype /Image", plain)
+
+    def test_the_pdf_is_as_private_as_the_rest_of_the_reports(self):
+        manager = create_user(
+            actor=self.owner, name="Manager", email="manager@example.com", password=PASSWORD, role=User.Role.MANAGER
+        )
+        self.login(manager)
+        self.assertEqual(self.client.get("/api/reports/pdf/").status_code, 403)
+        self.assertEqual(self.client.get("/api/reports/debtors/").status_code, 403)

@@ -27,7 +27,6 @@ import type { Product } from "@/lib/types"
 
 const FILTERS = [
   { value: "", label: "All" },
-  { value: "rentable", label: "For rent" },
   { value: "lowStock", label: "Low stock" },
 ] as const
 
@@ -158,7 +157,7 @@ export function ProductsView({
       </PageHeader>
 
       <Toolbar>
-        <SearchInput value={text} onChange={setText} placeholder="Name, SKU or barcode" label="Search products" />
+        <SearchInput value={text} onChange={setText} placeholder="Name, SKU or barcode" label="Search products" suggest="products" />
         {categories.length > 0 && (
           <select
             value={category}

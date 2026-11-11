@@ -2,57 +2,89 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, Check, Package, Receipt, Search, User } from "lucide-react"
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Camera,
+  CameraOff,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  CircleCheck,
+  Minus,
+  Package,
+  Plus,
+  Receipt,
+  User,
+} from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { ButtonLink } from "@/components/ui/button-link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { EmptyState, ErrorState, PageHeader, Spinner } from "@/components/common"
+import { EmptyState, ErrorState, PageHeader, Pill, Spinner } from "@/components/common"
 import { NotRecognised, NothingOut, ReturnChooser } from "@/components/return-chooser"
-import { ScanField } from "@/components/scanner"
-import { useCurrency, useCurrentUser, useSettings } from "@/components/session"
+import { CameraScanner, CodeInput } from "@/components/scanner"
+import { useCurrency, useSettings } from "@/components/session"
 import { useResolveReturn, useTakeReturn } from "@/lib/data/mutations"
-import { useCustomers, useDebounced } from "@/lib/data/queries"
-import { count, dateTime, money, plural } from "@/lib/format"
+import { useCustomers, useDebounced, useProductSearch, useRentals } from "@/lib/data/queries"
+import { count, dateTime, dueLabel, money, plural, round2 } from "@/lib/format"
 import { quoteRental } from "@/lib/rental"
+import { cn } from "@/lib/utils"
 import type { ResolveReturnResult, ReturnCondition, ReturnMatch } from "@/lib/types"
+
+type Lookup = { code?: string; customer?: string; rental?: string }
+type Step = "find" | "choose" | "settle" | "done"
+interface Done {
+  match: ReturnMatch
+  quantity: number
+  code: string
+  stillOut: number
+}
 
 /**
  * Taking items back.
  *
- * The flow the client asked for, in three steps:
+ * Three steps, always shown across the top so nobody is lost:
  *
- *   1. **Find it.** Scan anything — a product barcode, the QR on the customer's receipt —
- *      or search by customer name. One endpoint resolves all of them.
- *   2. **Pick it, if there's a choice.** One match goes straight through. Several (the same
- *      customer renting the same thing twice, or two customers with the same item) show the
- *      chooser, because the system must never guess which rental is being closed.
- *   3. **Settle it.** How many came back, in what state, what's owed, deposit returned.
+ *   1. **Find.** One box takes anything — a scanned barcode, the QR on a receipt, or a few
+ *      letters of a customer's or product's name — and everything that is out on rent is
+ *      listed underneath, so the rental can simply be picked with no typing at all.
+ *   2. **Choose**, only if there is a choice. One match goes straight through. Several (the
+ *      same customer renting the same thing twice, or two customers with the same item)
+ *      show the chooser, because the system must never guess which rental is being closed.
+ *   3. **Settle.** How many came back, in what state, and what is owed after any advance.
  *      Partial returns are normal: 60 of 100 back today, the other 40 keep running.
+ *
+ * It ends on a confirmation with the next things staff usually do, rather than dropping
+ * silently back to an empty search box.
  */
 export function TakeBackView() {
-  const [step, setStep] = useState<"find" | "settle">("find")
+  const [step, setStep] = useState<Step>("find")
   const [picked, setPicked] = useState<ReturnMatch | null>(null)
   const [result, setResult] = useState<ResolveReturnResult | null>(null)
   const [lastCode, setLastCode] = useState("")
+  const [done, setDone] = useState<Done | null>(null)
 
   const resolve = useResolveReturn()
 
-  function lookup(input: { code?: string; customer?: string; rental?: string }) {
+  function lookup(input: Lookup) {
     setLastCode(input.code ?? "")
+    setDone(null)
     resolve.mutate(input, {
       onSuccess: (data) => {
         setResult(data)
         // Exactly one candidate: skip the chooser entirely. This is the common case and it
         // should cost no taps.
-        if (data.exact) {
-          const match = data.matches.find((m) => m.itemId === data.exact)
-          if (match) {
-            setPicked(match)
-            setStep("settle")
-          }
+        const exact = data.exact ? data.matches.find((m) => m.itemId === data.exact) : undefined
+        if (exact) {
+          setPicked(exact)
+          setStep("settle")
+        } else {
+          setPicked(null)
+          setStep("choose")
         }
       },
     })
@@ -62,140 +94,336 @@ export function TakeBackView() {
     setPicked(null)
     setResult(null)
     setLastCode("")
+    setDone(null)
     setStep("find")
     resolve.reset()
   }
 
-  if (step === "settle" && picked) {
-    return <SettleReturn match={picked} onDone={reset} onBack={() => setStep("find")} />
-  }
+  // Whether stepping back from "settle" has a chooser to land on, or only the search.
+  const hadChoice = !!result && result.matches.length > 1
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Take back"
-        description="Scan the item or the customer's receipt. If it's out with more than one person, you'll be asked which."
+    <div className="space-y-5">
+      <PageHeader title="Take back" />
+      <Steps
+        step={step}
+        hadChoice={hadChoice}
+        onFind={reset}
+        onChoose={hadChoice && step === "settle" ? () => setStep("choose") : undefined}
       />
 
-      <FindPanel onLookup={lookup} busy={resolve.isPending} />
-
-      {resolve.isPending && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Spinner /> Looking that up…
-        </div>
-      )}
-
-      {resolve.isError && <ErrorState error={resolve.error} onRetry={() => resolve.reset()} />}
-
-      {result && !resolve.isPending && (
-        <Outcome result={result} code={lastCode} onPick={(m) => (setPicked(m), setStep("settle"))} onReset={reset} />
-      )}
-    </div>
-  )
-}
-
-/** Step 1: scan, type, or search by customer. */
-function FindPanel({
-  onLookup,
-  busy,
-}: {
-  onLookup: (input: { code?: string; customer?: string }) => void
-  busy: boolean
-}) {
-  const [mode, setMode] = useState<"scan" | "customer">("scan")
-
-  return (
-    <Card>
-      <CardHeader className="flex-row items-center justify-between gap-2">
-        <CardTitle className="text-base">{mode === "scan" ? "Scan a code" : "Find the customer"}</CardTitle>
-        <Button variant="ghost" size="sm" onClick={() => setMode(mode === "scan" ? "customer" : "scan")}>
-          {mode === "scan" ? (
-            <>
-              <User className="size-4" /> By customer
-            </>
-          ) : (
-            <>
-              <Package className="size-4" /> By code
-            </>
-          )}
-        </Button>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {mode === "scan" ? (
-          <>
-            {/* Typing first: a USB gun scanner needs nothing else, and it works when the
-                camera is refused or missing. */}
-            <ScanField onScan={(code) => onLookup({ code })} autoFocus busy={busy} />
-            <p className="text-xs text-muted-foreground">
-              Works with a product barcode, a SKU, or the QR code on the customer&apos;s receipt.
-            </p>
-          </>
-        ) : (
-          <CustomerSearch onPick={(id) => onLookup({ customer: id })} busy={busy} />
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
-function CustomerSearch({ onPick, busy }: { onPick: (id: string) => void; busy: boolean }) {
-  const [text, setText] = useState("")
-  const search = useDebounced(text.trim(), 250)
-  // Only customers who actually have something out: nobody else can be returning anything.
-  const { data, isFetching } = useCustomers(
-    { page: 1, search, hasOpenRentals: true, stats: true },
-    { pageSize: 10, enabled: search.length > 1 },
-  )
-
-  return (
-    <div className="space-y-3">
-      <div className="relative">
-        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Customer name or phone number"
-          className="h-11 pl-9"
-          autoFocus
-          aria-label="Customer name or phone"
-        />
-      </div>
-
-      {search.length > 1 && (
+      {step === "find" && (
         <>
-          {isFetching && !data && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Spinner /> Searching…
-            </div>
-          )}
-          {data && data.results.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              No customer matching “{search}” has anything out on rent.
-            </p>
-          )}
-          <ul className="divide-y rounded-md border">
-            {data?.results.map((customer) => (
-              <li key={customer.id}>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => onPick(customer.id)}
-                  className="flex w-full items-center justify-between gap-3 p-3 text-left hover:bg-accent disabled:opacity-50"
-                >
-                  <div className="min-w-0">
-                    <div className="truncate font-medium">{customer.name}</div>
-                    <div className="truncate text-sm text-muted-foreground">
-                      {customer.phone || customer.company || "—"}
-                    </div>
-                  </div>
-                  <Badge variant="secondary">{plural(customer.openRentalCount ?? 0, "rental")} out</Badge>
-                </button>
-              </li>
-            ))}
-          </ul>
+          <FindPanel onLookup={lookup} busy={resolve.isPending} />
+          {resolve.isError && <ErrorState error={resolve.error} onRetry={() => resolve.reset()} />}
         </>
       )}
+
+      {step === "choose" && result && (
+        <Outcome result={result} code={lastCode} onPick={(m) => (setPicked(m), setStep("settle"))} onReset={reset} />
+      )}
+
+      {step === "settle" && picked && (
+        <SettleReturn
+          // A different line is a different form: nothing typed for one carries to the next.
+          key={picked.itemId}
+          match={picked}
+          onBack={hadChoice ? () => setStep("choose") : reset}
+          onDone={(finished) => {
+            setDone(finished)
+            setStep("done")
+          }}
+        />
+      )}
+
+      {step === "done" && done && (
+        <DonePanel
+          done={done}
+          busy={resolve.isPending}
+          onAgain={reset}
+          onSameCustomer={done.match.customerId ? () => lookup({ customer: done.match.customerId! }) : undefined}
+        />
+      )}
     </div>
+  )
+}
+
+/** Where you are in the return, and the way back to an earlier step. */
+function Steps({
+  step,
+  hadChoice,
+  onFind,
+  onChoose,
+}: {
+  step: Step
+  hadChoice: boolean
+  onFind: () => void
+  onChoose?: () => void
+}) {
+  const order: Step[] = ["find", "choose", "settle", "done"]
+  const at = order.indexOf(step)
+  const items: { id: Step; label: string; onClick?: () => void }[] = [
+    { id: "find", label: "Find", onClick: step === "find" ? undefined : onFind },
+    { id: "choose", label: "Choose", onClick: onChoose },
+    { id: "settle", label: "Settle" },
+  ]
+  return (
+    <ol className="flex items-center gap-1 text-sm" aria-label="Steps">
+      {items.map((item, index) => {
+        const here = item.id === step
+        const passed = order.indexOf(item.id) < at
+        // "Choose" was never shown when the scan had only one match.
+        const skipped = item.id === "choose" && passed && !hadChoice
+        const body = (
+          <>
+            <span
+              className={cn(
+                "flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold tabular-nums",
+                here && "bg-primary text-primary-foreground",
+                passed && !here && "bg-success-soft text-success-soft-foreground",
+                !here && !passed && "bg-muted text-muted-foreground",
+              )}
+            >
+              {passed ? <Check className="size-3.5" /> : index + 1}
+            </span>
+            <span className={cn(here ? "font-semibold" : "text-muted-foreground", skipped && "line-through")}>
+              {item.label}
+            </span>
+          </>
+        )
+        return (
+          <li key={item.id} className="flex items-center gap-1" aria-current={here ? "step" : undefined}>
+            {index > 0 && <ChevronRight className="size-4 text-muted-foreground" />}
+            {item.onClick ? (
+              <button
+                type="button"
+                onClick={item.onClick}
+                className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+              >
+                {body}
+              </button>
+            ) : (
+              <span className="flex items-center gap-2 px-1.5 py-1">{body}</span>
+            )}
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
+/**
+ * Step 1. One box for everything, and the list of what is out underneath it.
+ *
+ * A scanner sends a whole code and Enter, which is looked up exactly. Someone typing a
+ * name gets matching customers and products as they type and taps one. And someone who
+ * would rather not type picks the rental straight off the list.
+ */
+function FindPanel({ onLookup, busy }: { onLookup: (input: Lookup) => void; busy: boolean }) {
+  const [text, setText] = useState("")
+  const [camera, setCamera] = useState(false)
+  const typed = text.trim()
+  const settled = useDebounced(typed, 200)
+
+  // Only customers who actually have something out: nobody else can be returning anything.
+  const customers = useCustomers(
+    { page: 1, search: settled, hasOpenRentals: true, stats: true },
+    { pageSize: 5, enabled: settled.length > 0 },
+  )
+  const products = useProductSearch(typed, { enabled: typed.length > 0 })
+  const people = typed ? (customers.data?.results ?? []) : []
+  const items = typed ? (products.data ?? []).slice(0, 5) : []
+  const searching = typed.length > 0 && (customers.isFetching || products.isFetching)
+
+  return (
+    <div className="space-y-5">
+      <Card>
+        <CardContent className="space-y-3">
+          <CodeInput
+            value={text}
+            onChange={setText}
+            onSubmit={(code) => {
+              // Enter on a name with exactly one match means "that one"; anything else is
+              // treated as a code, which is what a scanner sends.
+              const exact = items.find((p) => [p.sku, p.barcode].includes(code))
+              if (!exact && people.length === 1 && items.length === 0) onLookup({ customer: people[0].id })
+              else if (!exact && items.length === 1 && people.length === 0) onLookup({ code: items[0].sku })
+              else onLookup({ code })
+            }}
+            busy={busy}
+            autoFocus
+            placeholder="Scan a code, or type a customer or product name"
+          >
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCamera((on) => !on)}
+              aria-pressed={camera}
+              aria-label={camera ? "Close camera" : "Scan with the camera"}
+              className="h-11 shrink-0"
+            >
+              {camera ? <CameraOff className="size-4" /> : <Camera className="size-4" />}
+              <span className="hidden sm:inline">{camera ? "Close camera" : "Camera"}</span>
+            </Button>
+          </CodeInput>
+
+          {camera && (
+            <div className="max-w-sm">
+              <CameraScanner
+                onDetected={(code) => {
+                  if (!busy) onLookup({ code })
+                }}
+              />
+            </div>
+          )}
+
+          {busy && (
+            <p className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Spinner /> Looking that up…
+            </p>
+          )}
+
+          {typed && (people.length > 0 || items.length > 0) && (
+            <ul className="divide-y overflow-hidden rounded-lg border" aria-label="Matches">
+              {people.map((customer) => (
+                <Suggestion
+                  key={customer.id}
+                  icon={User}
+                  title={customer.name}
+                  sub={customer.phone || customer.company}
+                  end={`${plural(customer.openRentalCount ?? 0, "rental")} out`}
+                  disabled={busy}
+                  onClick={() => onLookup({ customer: customer.id })}
+                />
+              ))}
+              {items.map((product) => (
+                <Suggestion
+                  key={product.id}
+                  icon={Package}
+                  title={product.name}
+                  sub={product.sku}
+                  end="Product"
+                  disabled={busy}
+                  onClick={() => onLookup({ code: product.sku })}
+                />
+              ))}
+            </ul>
+          )}
+          {typed && !searching && people.length === 0 && items.length === 0 && (
+            <p className="text-sm text-muted-foreground">No name matches “{typed}”. Press Enter to look it up as a code.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {!typed && <OutNow onPick={(rental) => onLookup({ rental })} busy={busy} />}
+    </div>
+  )
+}
+
+function Suggestion({
+  icon: Icon,
+  title,
+  sub,
+  end,
+  disabled,
+  onClick,
+}: {
+  icon: React.ComponentType<{ className?: string }>
+  title: string
+  sub?: string
+  end: string
+  disabled?: boolean
+  onClick: () => void
+}) {
+  return (
+    <li>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={onClick}
+        className="flex min-h-12 w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none disabled:opacity-50"
+      >
+        <Icon className="size-4 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-medium">{title}</span>
+          {sub && <span className="block truncate text-xs text-muted-foreground">{sub}</span>}
+        </span>
+        <span className="shrink-0 text-xs text-muted-foreground">{end}</span>
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+      </button>
+    </li>
+  )
+}
+
+/** Everything out on rent, most overdue first: the return is usually one tap from here. */
+function OutNow({ onPick, busy }: { onPick: (rentalId: string) => void; busy: boolean }) {
+  const [onlyLate, setOnlyLate] = useState(false)
+  const { data, isLoading } = useRentals(
+    { page: 1, status: onlyLate ? "overdue" : "open", sort: "due" },
+    { pageSize: 50 },
+  )
+  // Soonest due first, and the ones with no return date after everything that has one.
+  const rentals = [...(data?.results ?? [])].sort(
+    (a, b) => (a.dueAt ? Date.parse(a.dueAt) : Infinity) - (b.dueAt ? Date.parse(b.dueAt) : Infinity),
+  )
+
+  return (
+    <section className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-heading font-semibold">
+          Out on rent now
+          {data && <span className="ml-2 font-normal text-muted-foreground tabular-nums">{count(data.count)}</span>}
+        </h2>
+        <div className="flex gap-1">
+          <Button size="sm" variant={onlyLate ? "outline" : "default"} onClick={() => setOnlyLate(false)}>
+            All
+          </Button>
+          <Button size="sm" variant={onlyLate ? "default" : "outline"} onClick={() => setOnlyLate(true)}>
+            Overdue
+          </Button>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Spinner /> Loading…
+        </p>
+      ) : rentals.length === 0 ? (
+        <p className="rounded-lg border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
+          {onlyLate ? "Nothing is overdue." : "Nothing is out on rent."}
+        </p>
+      ) : (
+        // Ten rows tall, then it scrolls, so the search box above never leaves the screen.
+        <ul className="max-h-[35rem] divide-y overflow-y-auto rounded-lg border bg-card">
+          {rentals.map((rental) => (
+            <li key={rental.id}>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onPick(rental.id)}
+                className="flex min-h-14 w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none disabled:opacity-50"
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">{rental.customerName || "Walk-in"}</span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    <span className="font-mono">{rental.code}</span> · {plural(rental.unitsOut, "unit")} out
+                  </span>
+                </span>
+                {rental.isOverdue ? (
+                  <Pill tone="danger">
+                    <AlertTriangle className="size-3" />
+                    {plural(rental.daysLate, "day")} overdue
+                  </Pill>
+                ) : (
+                  <span className="shrink-0 text-xs text-muted-foreground">{dueLabel(rental.dueAt)}</span>
+                )}
+                <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   )
 }
 
@@ -264,282 +492,397 @@ function SettleReturn({
   onBack,
 }: {
   match: ReturnMatch
-  onDone: () => void
+  onDone: (done: Done) => void
   onBack: () => void
 }) {
   const currency = useCurrency()
-  const user = useCurrentUser()
   const settings = useSettings()
   const take = useTakeReturn()
 
   // Everything back is by far the usual case, so it's the default.
-  const [quantity, setQuantity] = useState(match.quantityOut)
+  const [quantity, setQuantity] = useState<number | "">(match.quantityOut)
   const [condition, setCondition] = useState<ReturnCondition>("good")
   const [holidays, setHolidays] = useState(0)
   const [discount, setDiscount] = useState(0)
   const [paid, setPaid] = useState<number | "">("")
-  const [depositBack, setDepositBack] = useState<number | "">("")
+  const [givenBack, setGivenBack] = useState<number | "">("")
   const [method, setMethod] = useState("cash")
   const [note, setNote] = useState("")
+  const [extras, setExtras] = useState(false)
 
-  const qty = Math.min(Math.max(1, quantity || 1), match.quantityOut)
+  const qty = Math.min(Math.max(1, Math.round(quantity || 1)), match.quantityOut)
   const partial = qty < match.quantityOut
 
   // The same arithmetic the server will charge, so the figure on screen is the figure billed.
   const rent = quoteRental(match.plan, match.rate, match.daysOut, qty, holidays)
   const lateFee =
-    match.overdueDays > 0 ? dailyValue(match) * (settings.rentals.lateFeeMultiplier || 0) * match.overdueDays * qty : 0
+    match.overdueDays > 0
+      ? round2(dailyValue(match) * (settings.rentals.lateFeeMultiplier || 0) * match.overdueDays * qty)
+      : 0
   const damage = condition === "good" ? 0 : match.replacementCost * qty
-  const charges = Math.max(0, rent.total + lateFee + damage - (discount || 0))
+  const charges = round2(Math.max(0, rent.total + lateFee + damage - (discount || 0)))
+  // What they paid in advance is used first; only the rest is asked for now.
+  const credit = match.rentalCredit
+  const fromAdvance = Math.min(credit, charges)
+  const toPay = round2(charges - fromAdvance)
+  const leftOver = round2(credit - fromAdvance)
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" size="sm" onClick={onBack}>
-          <ArrowLeft className="size-4" />
-          Back
-        </Button>
-      </div>
+    <div className="space-y-4">
+      {/* What is being taken back, so it can be checked against the person at the counter. */}
+      <Card>
+        <CardContent className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <Button variant="outline" size="sm" onClick={onBack}>
+            <ArrowLeft className="size-4" />
+            Back
+          </Button>
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-heading text-lg font-semibold">{match.productName}</p>
+            <p className="truncate text-sm text-muted-foreground">
+              {match.customerName} · <span className="font-mono">{match.rentalCode}</span> · out{" "}
+              {plural(match.daysOut, "day")}
+            </p>
+          </div>
+          {match.isOverdue && (
+            <Pill tone="danger">
+              <AlertTriangle className="size-3" />
+              {plural(match.overdueDays, "day")} overdue
+            </Pill>
+          )}
+        </CardContent>
+      </Card>
 
-      <PageHeader
-        title={`Taking back ${match.productName}`}
-        description={`${match.customerName} · ${match.rentalCode} · out ${plural(match.daysOut, "day")}`}
-      />
-
-      {match.isOverdue && (
-        <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">
-          This rental is <strong>{plural(match.overdueDays, "day")} overdue.</strong>{" "}
-          {settings.rentals.lateFeeMultiplier > 0
-            ? "A late fee is included below."
-            : "No late fee is charged, per your settings."}
-        </div>
-      )}
-
-      <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
+      <div className="grid items-start gap-4 lg:grid-cols-[1fr_22rem]">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">What came back</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="quantity">
-                How many of the {count(match.quantityOut)} {match.productSku && `(${match.productSku})`} came back?
-              </Label>
-              <div className="flex items-center gap-2">
+              <Label htmlFor="quantity">How many, of the {count(match.quantityOut)} out</Label>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="size-11"
+                  aria-label="One fewer"
+                  disabled={qty <= 1}
+                  onClick={() => setQuantity(qty - 1)}
+                >
+                  <Minus className="size-4" />
+                </Button>
                 <Input
                   id="quantity"
                   type="number"
+                  inputMode="numeric"
                   min={1}
+                  step={1}
                   max={match.quantityOut}
                   value={quantity}
-                  onChange={(e) => setQuantity(Number(e.target.value))}
-                  className="h-11 w-32 text-lg tabular-nums"
+                  onChange={(e) => setQuantity(e.target.value === "" ? "" : Number(e.target.value))}
+                  onBlur={() => setQuantity(qty)}
+                  className="h-11 w-24 text-center text-lg font-semibold tabular-nums"
                 />
-                <Button type="button" variant="outline" onClick={() => setQuantity(match.quantityOut)}>
-                  All {count(match.quantityOut)}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="size-11"
+                  aria-label="One more"
+                  disabled={qty >= match.quantityOut}
+                  onClick={() => setQuantity(qty + 1)}
+                >
+                  <Plus className="size-4" />
                 </Button>
+                {match.quantityOut > 1 && (
+                  <Button
+                    type="button"
+                    variant={partial ? "outline" : "secondary"}
+                    className="h-11"
+                    onClick={() => setQuantity(match.quantityOut)}
+                  >
+                    All {count(match.quantityOut)}
+                  </Button>
+                )}
               </div>
               {partial && (
                 <p className="text-sm text-warning-soft-foreground dark:text-warning">
-                  {count(match.quantityOut - qty)} will stay out with {match.customerName}, and keep being charged
-                  until they come back.
+                  {count(match.quantityOut - qty)} will stay out and keep being charged.
                 </p>
               )}
             </div>
 
             <div className="space-y-2">
               <Label>Condition</Label>
-              <div className="grid gap-2 sm:grid-cols-3">
+              <div className="grid grid-cols-3 gap-2">
                 {(
                   [
-                    { value: "good", label: "Good", hint: "Back on the shelf" },
-                    { value: "damaged", label: "Damaged", hint: "Charged for replacement" },
-                    { value: "lost", label: "Not returned", hint: "Charged for replacement" },
+                    { value: "good", label: "Good" },
+                    { value: "damaged", label: "Damaged" },
+                    { value: "lost", label: "Not returned" },
                   ] as const
                 ).map((option) => (
                   <button
                     key={option.value}
                     type="button"
+                    aria-pressed={condition === option.value}
                     onClick={() => setCondition(option.value)}
-                    className={`rounded-md border p-3 text-left text-sm transition ${
-                      condition === option.value ? "border-primary bg-accent" : "hover:bg-accent/60"
-                    }`}
+                    className={cn(
+                      "flex min-h-11 items-center justify-center gap-1.5 rounded-md border px-2 text-sm font-medium transition focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
+                      condition === option.value
+                        ? option.value === "good"
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-destructive bg-destructive-soft text-destructive-soft-foreground"
+                        : "hover:bg-accent/60",
+                    )}
                   >
-                    <div className="flex items-center gap-1.5 font-medium">
-                      {condition === option.value && <Check className="size-3.5" />}
-                      {option.label}
-                    </div>
-                    <div className="text-xs text-muted-foreground">{option.hint}</div>
+                    {condition === option.value && <Check className="size-3.5" />}
+                    {option.label}
                   </button>
                 ))}
               </div>
+              {condition !== "good" && (
+                <p className="text-sm text-muted-foreground">
+                  Charged {money(match.replacementCost, currency)} each to replace.
+                </p>
+              )}
             </div>
 
-            {match.plan === "daily" && (
-              <div className="space-y-2">
-                <Label htmlFor="holidays">Days not charged for</Label>
-                <Input
-                  id="holidays"
-                  type="number"
-                  min={0}
-                  max={match.daysOut}
-                  value={holidays}
-                  onChange={(e) => setHolidays(Math.max(0, Number(e.target.value)))}
-                  className="h-11 w-32 tabular-nums"
-                />
-                <p className="text-xs text-muted-foreground">
-                  For days the shop was shut or the item was faulty. Only applies to per-day pricing.
-                </p>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="note">Note (optional)</Label>
-              <Textarea
-                id="note"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="Anything worth recording about this return"
-                rows={2}
-              />
+            {/* The things most returns never need, one tap away rather than always in the way. */}
+            <div className="rounded-lg border">
+              <button
+                type="button"
+                onClick={() => setExtras((on) => !on)}
+                aria-expanded={extras}
+                className="flex min-h-11 w-full items-center justify-between gap-3 px-3 text-left text-sm font-medium"
+              >
+                Days off, discount or a note
+                <ChevronDown className={cn("size-4 shrink-0 transition-transform", extras && "rotate-180")} />
+              </button>
+              {extras && (
+                <div className="grid gap-4 border-t p-3 sm:grid-cols-2">
+                  {match.plan === "daily" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="holidays">Days not charged</Label>
+                      <Input
+                        id="holidays"
+                        type="number"
+                        min={0}
+                        step={1}
+                        max={match.daysOut}
+                        value={holidays || ""}
+                        onChange={(e) => setHolidays(Math.min(match.daysOut, Math.max(0, Number(e.target.value))))}
+                        placeholder="0"
+                        className="tabular-nums"
+                      />
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    <Label htmlFor="discount">Discount ({currency})</Label>
+                    <Input
+                      id="discount"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={discount || ""}
+                      onChange={(e) => setDiscount(Math.max(0, Number(e.target.value)))}
+                      placeholder="0.00"
+                      className="tabular-nums"
+                    />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="note">Note</Label>
+                    <Textarea id="note" value={note} onChange={(e) => setNote(e.target.value)} rows={2} />
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
 
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">What&apos;s owed</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
+        <Card className="lg:sticky lg:top-20">
+          <CardHeader>
+            <CardTitle className="text-base">Payment</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 text-sm">
+            <div className="space-y-2">
               <Row label={`Rent · ${rent.breakdown}`} value={money(rent.total, currency)} />
               {lateFee > 0 && (
                 <Row label={`Late fee · ${plural(match.overdueDays, "day")}`} value={money(lateFee, currency)} warn />
               )}
               {damage > 0 && (
-                <Row
-                  label={`${condition === "lost" ? "Not returned" : "Damage"} · ${count(qty)} × ${money(match.replacementCost, currency)}`}
-                  value={money(damage, currency)}
-                  warn
-                />
+                <Row label={condition === "lost" ? "Not returned" : "Damage"} value={money(damage, currency)} warn />
               )}
+              {discount > 0 && <Row label="Discount" value={`− ${money(discount, currency)}`} />}
+              {credit > 0 && <Row label="Paid in advance" value={`− ${money(fromAdvance, currency)}`} />}
+              <div className="flex items-baseline justify-between border-t pt-2 font-semibold">
+                <span>To pay now</span>
+                <span className="font-heading text-2xl tabular-nums">{money(toPay, currency)}</span>
+              </div>
+            </div>
 
-              <div className="space-y-1.5 border-t pt-3">
-                <Label htmlFor="discount" className="text-xs">
-                  Discount
-                </Label>
+            <div className="space-y-2">
+              <Label htmlFor="paid">Taken now ({currency})</Label>
+              <div className="flex gap-2">
                 <Input
-                  id="discount"
+                  id="paid"
                   type="number"
                   min={0}
-                  value={discount || ""}
-                  onChange={(e) => setDiscount(Math.max(0, Number(e.target.value)))}
+                  step="0.01"
+                  value={paid}
+                  onChange={(e) => setPaid(e.target.value === "" ? "" : Math.max(0, Number(e.target.value)))}
                   placeholder="0.00"
-                  className="h-9 tabular-nums"
+                  className="h-11 text-base tabular-nums"
                 />
+                <Button
+                  type="button"
+                  variant={paid === toPay && toPay > 0 ? "secondary" : "outline"}
+                  className="h-11 shrink-0"
+                  onClick={() => setPaid(toPay)}
+                  disabled={toPay === 0}
+                >
+                  Full
+                </Button>
               </div>
+              {toPay > 0 && (paid === "" ? 0 : paid) < toPay && (
+                <p className="text-xs text-muted-foreground">
+                  {money(round2(toPay - (paid === "" ? 0 : paid)), currency)} will stay owed on the rental.
+                </p>
+              )}
+            </div>
 
-              <div className="flex items-baseline justify-between border-t pt-3 font-semibold">
-                <span>Total</span>
-                <span className="text-lg tabular-nums">{money(charges, currency)}</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Money</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="paid" className="text-xs">
-                  Taken now
-                </Label>
+            {leftOver > 0 && (
+              <div className="space-y-2">
+                <Label htmlFor="given-back">Given back from their advance</Label>
                 <div className="flex gap-2">
                   <Input
-                    id="paid"
+                    id="given-back"
                     type="number"
                     min={0}
-                    value={paid}
-                    onChange={(e) => setPaid(e.target.value === "" ? "" : Math.max(0, Number(e.target.value)))}
+                    step="0.01"
+                    max={leftOver}
+                    value={givenBack}
+                    onChange={(e) =>
+                      setGivenBack(e.target.value === "" ? "" : Math.min(leftOver, Math.max(0, Number(e.target.value))))
+                    }
                     placeholder="0.00"
-                    className="h-9 tabular-nums"
+                    className="h-11 tabular-nums"
                   />
-                  <Button type="button" variant="outline" size="sm" onClick={() => setPaid(charges)}>
-                    Full
+                  <Button type="button" variant="outline" className="h-11 shrink-0" onClick={() => setGivenBack(leftOver)}>
+                    All {money(leftOver, currency)}
                   </Button>
                 </div>
               </div>
+            )}
 
-              {user.canHandleDeposits && match.deposit > 0 && (
-                <div className="space-y-1.5">
-                  <Label htmlFor="deposit" className="text-xs">
-                    Deposit given back
-                  </Label>
-                  <Input
-                    id="deposit"
-                    type="number"
-                    min={0}
-                    value={depositBack}
-                    onChange={(e) =>
-                      setDepositBack(e.target.value === "" ? "" : Math.max(0, Number(e.target.value)))
-                    }
-                    placeholder="0.00"
-                    className="h-9 tabular-nums"
-                  />
-                </div>
-              )}
-
-              <div className="space-y-1.5">
-                <Label htmlFor="method" className="text-xs">
-                  How
-                </Label>
-                <select
-                  id="method"
-                  value={method}
-                  onChange={(e) => setMethod(e.target.value)}
-                  className="h-9 w-full rounded-md border bg-card px-2 text-sm"
-                >
-                  <option value="cash">Cash</option>
-                  <option value="mobile">Mobile banking</option>
-                  <option value="card">Card</option>
-                  <option value="bank">Bank transfer</option>
-                </select>
+            <div className="space-y-2">
+              <Label>Paid by</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {METHODS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-pressed={method === option.value}
+                    onClick={() => setMethod(option.value)}
+                    className={cn(
+                      "min-h-10 rounded-md border px-2 text-sm font-medium transition focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
+                      method === option.value ? "border-primary bg-primary/10 text-primary" : "hover:bg-accent/60",
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                ))}
               </div>
-            </CardContent>
-          </Card>
+            </div>
 
-          <Button
-            className="h-12 w-full text-base"
-            disabled={take.isPending}
-            onClick={() =>
-              take.mutate(
-                {
-                  rentalId: match.rentalId,
-                  lines: [{ item: match.itemId, quantity: qty, condition, holidays, note }],
-                  discount: discount || 0,
-                  paidAmount: paid === "" ? 0 : paid,
-                  depositRefunded: depositBack === "" ? 0 : depositBack,
-                  paymentMethod: method,
-                  note,
-                },
-                { onSuccess: onDone },
-              )
-            }
-          >
-            {take.isPending && <Spinner />}
-            {take.isPending ? "Recording…" : `Take back ${count(qty)} and charge ${money(charges, currency)}`}
-          </Button>
+            <Button
+              className="h-12 w-full text-base"
+              disabled={take.isPending}
+              onClick={() =>
+                take.mutate(
+                  {
+                    rentalId: match.rentalId,
+                    lines: [{ item: match.itemId, quantity: qty, condition, holidays, note }],
+                    discount: discount || 0,
+                    paidAmount: paid === "" ? 0 : paid,
+                    refunded: leftOver > 0 && givenBack !== "" ? givenBack : 0,
+                    paymentMethod: method,
+                    note,
+                  },
+                  {
+                    onSuccess: ({ return: taken, rental }) =>
+                      onDone({ match, quantity: qty, code: taken.code, stillOut: rental.unitsOut }),
+                  },
+                )
+              }
+            >
+              {take.isPending ? <Spinner /> : <Check className="size-4" />}
+              {take.isPending ? "Recording…" : `Take back ${count(qty)}`}
+            </Button>
 
-          <p className="text-center text-xs text-muted-foreground">
-            Out {dateTime(match.startedAt)} ·{" "}
-            <Link href={`/rentals/${match.rentalId}`} className="underline">
-              See the whole rental
-            </Link>
-          </p>
-        </div>
+            <p className="text-center text-xs text-muted-foreground">
+              Out {dateTime(match.startedAt)} ·{" "}
+              <Link href={`/rentals/${match.rentalId}`} className="underline">
+                See the rental
+              </Link>
+            </p>
+          </CardContent>
+        </Card>
       </div>
     </div>
+  )
+}
+
+const METHODS = [
+  { value: "cash", label: "Cash" },
+  { value: "mobile", label: "Mobile banking" },
+  { value: "card", label: "Card" },
+  { value: "bank", label: "Bank transfer" },
+]
+
+/** The return is recorded: say so, and offer what usually comes next. */
+function DonePanel({
+  done,
+  busy,
+  onAgain,
+  onSameCustomer,
+}: {
+  done: Done
+  busy: boolean
+  onAgain: () => void
+  onSameCustomer?: () => void
+}) {
+  return (
+    <Card>
+      <CardContent className="flex flex-col items-center gap-4 py-8 text-center">
+        <CircleCheck className="size-12 text-success" />
+        <div className="space-y-1">
+          <h2 className="font-heading text-lg font-semibold">
+            {count(done.quantity)} × {done.match.productName} taken back
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            From {done.match.customerName} · <span className="font-mono">{done.code}</span>
+            {done.stillOut > 0 && ` · ${plural(done.stillOut, "unit")} still out on this rental`}
+          </p>
+        </div>
+        <div className="flex w-full max-w-md flex-col gap-2 sm:flex-row sm:justify-center">
+          <Button className="h-11" onClick={onAgain} autoFocus>
+            Take back another
+          </Button>
+          {onSameCustomer && (
+            <Button variant="outline" className="h-11" onClick={onSameCustomer} disabled={busy}>
+              {busy ? <Spinner /> : <User className="size-4" />}
+              More from this customer
+            </Button>
+          )}
+          <ButtonLink variant="outline" className="h-11" href={`/rentals/${done.match.rentalId}/receipt`}>
+            <Receipt className="size-4" />
+            Receipt
+          </ButtonLink>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 

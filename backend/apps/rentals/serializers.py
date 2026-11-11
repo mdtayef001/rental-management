@@ -13,14 +13,13 @@ class RentalItemSerializer(serializers.ModelSerializer):
     id = IdField()
     product_id = IdField(source="product.id", default=None)
     quantity_out = serializers.IntegerField(read_only=True)
-    deposit_total = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
 
     class Meta:
         model = RentalItem
         fields = [
             "id", "product_id", "product_name", "product_sku",
             "quantity", "quantity_returned", "quantity_lost", "quantity_out",
-            "plan", "rate", "deposit", "deposit_total", "replacement_cost",
+            "plan", "rate", "replacement_cost",
             "holidays", "days_out", "line_total", "returned_at", "note",
         ]
 
@@ -46,7 +45,7 @@ class RentalListSerializer(serializers.ModelSerializer):
         model = Rental
         fields = [
             "id", "code", "status", "customer_id", "customer_name", "customer_phone", "branch_name",
-            "started_at", "due_at", "returned_at", "deposit", "deposit_refunded",
+            "started_at", "due_at", "returned_at",
             "rent_total", "late_fee", "damage_fee", "discount", "paid_amount",
             "charges", "balance", "is_overdue", "days_late", "item_count", "units_out", "notes", "created_at",
         ]
@@ -90,7 +89,7 @@ class RentalReturnSerializer(serializers.ModelSerializer):
         fields = [
             "id", "code", "rental_id", "rental_code", "customer_name", "at",
             "rent_total", "late_fee", "damage_fee", "discount", "charges",
-            "paid_amount", "deposit_refunded", "payment_method", "payment_reference",
+            "paid_amount", "refunded", "payment_method", "payment_reference",
             "note", "token", "lines", "by_name",
         ]
 
@@ -118,7 +117,6 @@ class RentalLineSerializer(serializers.Serializer):
     plan = serializers.ChoiceField(choices=RentalItem.Plan.choices)
     # Left out to use the product's own rate for the plan.
     rate = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0, required=False, allow_null=True)
-    deposit = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0, required=False, allow_null=True)
     replacement_cost = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0, required=False, allow_null=True)
     holidays = serializers.IntegerField(min_value=0, required=False, default=0)
     note = serializers.CharField(max_length=300, required=False, allow_blank=True, default="")
@@ -130,11 +128,13 @@ class RentalCreateSerializer(serializers.Serializer):
     lines = RentalLineSerializer(many=True)
     started_at = serializers.DateTimeField(required=False, allow_null=True)
     due_at = serializers.DateTimeField(required=False, allow_null=True)
-    deposit = serializers.DecimalField(max_digits=14, decimal_places=2, min_value=0, required=False, default=0)
+    # Paid in advance, before anything has been charged.
     paid_amount = serializers.DecimalField(max_digits=14, decimal_places=2, min_value=0, required=False, default=0)
     payment_method = serializers.ChoiceField(choices=RentalReturn.Method.choices, required=False, allow_blank=True, default="")
     payment_reference = serializers.CharField(max_length=60, required=False, allow_blank=True, default="")
     notes = serializers.CharField(required=False, allow_blank=True, default="")
+    # Keep the rates typed on this rental as the customer's prices from now on.
+    remember_rates = serializers.BooleanField(required=False, default=False)
 
     def validate_lines(self, lines):
         if not lines:
@@ -179,7 +179,8 @@ class ReturnCreateSerializer(serializers.Serializer):
     at = serializers.DateTimeField(required=False, allow_null=True)
     discount = serializers.DecimalField(max_digits=14, decimal_places=2, min_value=0, required=False, default=0)
     paid_amount = serializers.DecimalField(max_digits=14, decimal_places=2, min_value=0, required=False, default=0)
-    deposit_refunded = serializers.DecimalField(max_digits=14, decimal_places=2, min_value=0, required=False, default=0)
+    # Unused advance handed back at this return.
+    refunded = serializers.DecimalField(max_digits=14, decimal_places=2, min_value=0, required=False, default=0)
     payment_method = serializers.ChoiceField(choices=RentalReturn.Method.choices, required=False, allow_blank=True, default="")
     payment_reference = serializers.CharField(max_length=60, required=False, allow_blank=True, default="")
     note = serializers.CharField(max_length=300, required=False, allow_blank=True, default="")

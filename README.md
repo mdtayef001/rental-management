@@ -115,8 +115,8 @@ database table whenever the database is PostgreSQL.
 ## Tests
 
 ```bash
-cd backend  && .venv/bin/python manage.py test   # 111 tests
-cd frontend && npm test && npm run typecheck     # 11 tests
+cd backend  && .venv/bin/python manage.py test   # 184 tests
+cd frontend && npm test && npm run typecheck     # 14 tests
 ```
 
 The rental pricing exists on both sides — staff see it live in the form, the server charges
@@ -243,7 +243,7 @@ action after reading it is a phone call.
 ## Screens
 
 All built: login, dashboard, scan, rent out, take back, rentals (list + detail), returns,
-customers (list + detail), products (list + detail with printable QR labels), stock,
+customers (list + detail), bills (month-end list + one customer's bill), products (list + detail with printable QR labels), stock,
 purchases, suppliers, sent back to supplier, reports, team, activity, settings, the super
 admin's platform page, and the public receipt a customer opens from their QR code.
 
@@ -283,6 +283,59 @@ The team's copy lives at `/rentals/<id>/receipt` with the print button and a lin
 the customer. The customer's own copy at `/r/<token>` is the same document, so the slip in
 their hand and the page on their phone always agree. The QR code on the printed slip opens
 that page — and scanning it at the counter opens the return.
+
+## Bills
+
+A receipt is about one rental. A **bill** is about one customer over a period: a company
+that takes machines whenever it needs them gets one sheet for the month or the year, with
+every rental headed by **the day the items were taken**, what came back and when, what is
+still out, payments received, the balance brought forward and the amount due.
+
+Rent is only final when items come back, and a company's machines may stay out all year,
+so a bill charges what has *run up* in its period:
+
+    charged in a period = run up by the end of it − run up by the start of it
+
+"Run up" is the real amount for anything already back, and for anything still out it is
+what returning it at that moment would cost — the same `RentalItem.quote` the counter
+uses. Because every bill is a difference between two such totals, **twelve monthly bills
+add up to exactly the yearly one**, and both add up to what the rental finally cost. Late
+fees, damage charges and discounts land in the month of the return that decided them. The
+arithmetic is in `backend/apps/rentals/statements.py` and pinned down by `test_bills.py`.
+
+Each rental on a bill is a table with a row for every group of units that share their
+dates: **quantity, the day they went out, the day they came back (or "Still out"), the days
+that fall in this period, the days off given, the rate and the amount**. A hundred machines
+with sixty back on the 5th are two rows. Days off are the "days not charged for" entered
+when taking items back, and the rows always add up to the line. The sheet ends with two
+signature lines — *Received by* the customer and *Authorised signature* for the business —
+on both the printed page and the PDF.
+
+- **Bills** (`/bills`) is month end on one screen: everyone with something to bill, largest
+  first, each with a one-click PDF.
+- **One bill** (`/bills/<customer>`) steps through months and years, or takes any two dates.
+  **Download PDF** is a real file to attach to an email (`/api/bills/<id>/pdf/`, drawn by
+  ReportLab); **Print** uses the browser on an A4 sheet. The same bill always has the same
+  number (`BILL-0005-202611`), so a reprint matches the copy already sent.
+- **Take payment** records one payment for the whole bill and spreads it over the
+  customer's rentals, oldest first — a company pays its month with one cheque.
+
+Bills are for owners and managers. The PDF uses the Latin fonts bundled with ReportLab, so
+it writes money as `BDT 1,200.00`; a name in Bengali script prints correctly from the
+**Print** button, which uses the computer's own fonts.
+
+## A price for each company
+
+Every product has its usual rate. A customer can also have **their own price** for a
+product (`CustomerRate`: customer, product, plan, rate), set under *Their prices* on the
+customer's page. Renting to them starts each line at that price and says so under the rate
+box ("X Garments's price · usual ৳50.00"); anyone else gets the usual rate. The rate can
+still be typed over for one rental, and an owner or manager can tick *Remember this price*
+to keep it. Staff see the prices but cannot change them. A price equal to the usual rate is
+not stored, so the customer follows the next price change.
+
+The product box on Rent out takes a scanned QR or barcode, an SKU, or part of a name: a
+code is looked up exactly, a name shows matches to pick from.
 
 ## Products
 

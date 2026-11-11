@@ -115,6 +115,7 @@ export function PlatformView() {
           onChange={setText}
           placeholder="Business name or owner email"
           label="Search businesses"
+          suggest="businesses"
         />
         <FilterTabs value={status} onChange={setStatus} options={STATUSES} label="Filter businesses" />
       </Toolbar>

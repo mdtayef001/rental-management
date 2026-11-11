@@ -17,7 +17,7 @@ from apps.accounts.services import create_business, create_user
 from apps.catalog.models import StockLevel, StockMovement
 from apps.catalog.services import adjust_stock, find_by_code
 from apps.rentals import services
-from apps.rentals.models import Rental, RentalItem, RentalReturn, RentalReturnLine
+from apps.rentals.models import Rental, RentalItem, RentalPayment, RentalReturn, RentalReturnLine
 
 
 def days_ago(n):
@@ -49,7 +49,6 @@ class RentalTestCase(TestCase):
             name="Sewing machine",
             rentable=True,
             rent_daily=Decimal("50.00"),
-            deposit=Decimal("500.00"),
             replacement_cost=Decimal("8000.00"),
         )
         self.table = create_product(
@@ -375,17 +374,52 @@ class QuoteTests(TestCase):
 
 
 class MoneyTests(RentalTestCase):
-    def test_a_deposit_is_taken_and_can_be_given_back_once(self):
+    def test_money_paid_in_advance_is_credit_until_the_rent_is_charged(self):
+        start = days_ago(2)
         rental = self.rent(
-            self.mr_x, [{"product": self.machine, "quantity": 1, "plan": "daily"}], deposit=Decimal("500.00")
+            self.mr_x, [{"product": self.machine, "quantity": 1, "plan": "daily"}],
+            started_at=start, paid_amount=Decimal("500.00"),
         )
-        self.assertEqual(rental.deposit, Decimal("500.00"))
-        services.refund_deposit(user=self.owner, rental=rental, amount=Decimal("500.00"))
         rental.refresh_from_db()
-        self.assertEqual(rental.deposit_refunded, Decimal("500.00"))
-        # A second refund of the same deposit is refused.
+        self.assertEqual(rental.paid_amount, Decimal("500.00"))
+        self.assertEqual(rental.payments.get().kind, RentalPayment.Kind.ADVANCE)
+        # Nothing is charged yet, so all of it is the customer's credit.
+        self.assertEqual(rental.balance, Decimal("-500.00"))
+        self.assertEqual(rental.credit, Decimal("500.00"))
+
+        # Two days at 50 uses 100 of it; the other 400 is handed back at the counter.
+        taken = services.take_return(
+            user=self.owner, rental=rental, at=start + timedelta(days=2),
+            lines=[{"item": rental.items.first(), "quantity": 1}], refunded=Decimal("400.00"),
+        )
+        rental.refresh_from_db()
+        self.assertEqual(taken.refunded, Decimal("400.00"))
+        self.assertEqual(rental.paid_amount, Decimal("100.00"))
+        self.assertEqual(rental.balance, Decimal("0.00"))
+
+    def test_unused_advance_can_be_given_back_only_once(self):
+        rental = self.rent(
+            self.mr_x, [{"product": self.machine, "quantity": 1, "plan": "daily"}], paid_amount=Decimal("500.00")
+        )
+        services.refund(user=self.owner, rental=rental, amount=Decimal("500.00"))
+        rental.refresh_from_db()
+        self.assertEqual(rental.paid_amount, Decimal("0.00"))
+        # There is nothing left to give back, so a second refund is refused.
         with self.assertRaises(ValidationError):
-            services.refund_deposit(user=self.owner, rental=rental, amount=Decimal("1.00"))
+            services.refund(user=self.owner, rental=rental, amount=Decimal("1.00"))
+
+    def test_money_already_charged_cannot_be_given_back(self):
+        start = days_ago(2)
+        rental = self.rent(
+            self.mr_x, [{"product": self.machine, "quantity": 1, "plan": "daily"}],
+            started_at=start, paid_amount=Decimal("100.00"),
+        )
+        services.take_return(
+            user=self.owner, rental=rental, at=start + timedelta(days=2),
+            lines=[{"item": rental.items.first(), "quantity": 1}],
+        )
+        with self.assertRaises(ValidationError):
+            services.refund(user=self.owner, rental=rental, amount=Decimal("50.00"))
 
     def test_the_balance_is_charges_less_what_was_paid(self):
         start = days_ago(2)
@@ -480,8 +514,7 @@ class RightsTests(RentalTestCase):
         manager = create_user(
             actor=self.owner, name="Manager", email="manager@example.com",
             password="correct-horse-battery", role=User.Role.MANAGER,
-            rights={"can_rent": False, "can_take_returns": False, "can_handle_deposits": False},
+            rights={"can_rent": False, "can_take_returns": False},
         )
         self.assertTrue(manager.may_rent)
         self.assertTrue(manager.may_take_returns)
-        self.assertTrue(manager.may_handle_deposits)

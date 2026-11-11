@@ -261,9 +261,6 @@ function Found({
                 <strong className="tabular-nums">{money(product.rentMonthly, currency)}</strong> / month
               </span>
             )}
-            {product.deposit > 0 && (
-              <span className="text-muted-foreground">Deposit {money(product.deposit, currency)} each</span>
-            )}
           </div>
         )}
 

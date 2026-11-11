@@ -101,7 +101,7 @@ export function ReturnsView() {
       </PageHeader>
 
       <Toolbar>
-        <SearchInput value={text} onChange={setText} placeholder="Customer or product" label="Search returns" />
+        <SearchInput value={text} onChange={setText} placeholder="Customer or product" label="Search returns" suggest="rentals" />
       </Toolbar>
 
       {isError ? (

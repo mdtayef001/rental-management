@@ -272,10 +272,15 @@ heights — ragged beats hollow.
 The sidebar collapses to an icon rail and its open state is stored in a cookie read on the
 server, so the shell renders in the state the person left it rather than snapping wide after
 paint. Below `md`, the sidebar is replaced by a sticky bottom bar respecting
-`env(safe-area-inset-bottom)`. It currently carries Scan, Rentals and Returns — navigation,
-not the counter's two actions. Rent-out and take-back live only in the page header, at the
-top of the screen, which does not satisfy the Thumb Reach Rule below. Treat that as a known
-gap, not the intended design.
+`env(safe-area-inset-bottom)`. It carries Scan, Rent out, Take back and Rentals, plus
+"More", which opens the full menu as a sheet — the counter's two actions sit under the
+thumb on every screen, which is what the Thumb Reach Rule below asks for. The sidebar's
+first group, Today, carries the same actions (Dashboard, Rent out, Take back, Scan), so on
+a laptop they are one click from anywhere rather than a button on some pages.
+
+Moving between screens shows a skeleton of the shared page shape at once
+(`app/(app)/loading.tsx`) and the arriving screen fades in over 160ms (`.page-enter`,
+opacity only, skipped under reduced motion).
 
 Breakpoints follow Tailwind defaults (`sm` 640, `md` 768, `lg` 1024, `xl` 1280). Dashboard-class
 grids go one column on a phone, two at `sm`, and their final three- or four-column form at
@@ -384,8 +389,10 @@ treatment, not a heavier stroke.
   12px Quiet Ink. The active item takes an Ink Blue treatment; counts (e.g. overdue rentals)
   ride as a numeral at the right edge of the row.
 - **Mobile:** A sticky bottom bar below `md` with a translucent background and backdrop blur,
-  carrying Scan, Rentals and Returns (`components/mobile-bar.tsx`). Note these are
-  destinations, not the counter's actions — see the gap flagged under Layout.
+  carrying Scan, Rent out, Take back, Rentals and More (`components/mobile-bar.tsx`).
+- **Active item:** a soft tint of the signal colour with signal-coloured text
+  (`bg-primary/12 text-primary`) — the one place the signal tints a row, because it means
+  "you are here".
 
 ### The Day Marker (signature)
 

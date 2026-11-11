@@ -1,19 +1,27 @@
 "use client"
 
 import { useState } from "react"
-import { MessageCircle, Pencil, Phone, UserX } from "lucide-react"
+import { FileText, MessageCircle, Pencil, Phone, ReceiptText, UserX } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ButtonLink } from "@/components/ui/button-link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { EmptyState, ErrorState, PageHeader, Pagination, TableSkeleton } from "@/components/common"
 import { Code, DataView, Primary } from "@/components/data-view"
 import { CustomerDialog } from "@/components/customer-picker"
+import { CustomerPrices } from "@/components/customer-prices"
 import { useCurrency, useCurrentUser } from "@/components/session"
 import { useCustomer, usePaging, useRentals } from "@/lib/data/queries"
 import { count, date, dueLabel, money, plural, whatsappLink } from "@/lib/format"
 import { StatusBadge } from "../../rentals/view"
 
-/** One customer: their details, what they have out, and everything they have ever rented. */
+/**
+ * One customer: their details, what they have out, and everything they have ever rented.
+ *
+ * Every time they rent is its own rental with its own number and its own receipt, however
+ * many they have running at once. The list shows each one with what it has been charged
+ * and what is still owed on it, and a Receipt button to print or send that one alone. The
+ * Bill button at the top is the other view: all of them together on one sheet for a month.
+ */
 export function CustomerDetailView({ id }: { id: string }) {
   const currency = useCurrency()
   const user = useCurrentUser()
@@ -52,6 +60,12 @@ export function CustomerDetailView({ id }: { id: string }) {
             Edit
           </Button>
         )}
+        {user.role !== "staff" && (
+          <ButtonLink href={`/bills/${id}`} variant="outline">
+            <FileText className="size-4" />
+            Monthly bill
+          </ButtonLink>
+        )}
         <ButtonLink href="/rent-out">Rent to them</ButtonLink>
       </PageHeader>
 
@@ -64,10 +78,11 @@ export function CustomerDetailView({ id }: { id: string }) {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_18rem]">
+      <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Rentals</CardTitle>
+            <CardTitle className="text-base">Rentals and receipts</CardTitle>
+            <p className="text-sm text-muted-foreground">Each rental has its own receipt. Newest first.</p>
           </CardHeader>
           <CardContent className="p-0">
             {rentals.isLoading ? (
@@ -99,15 +114,34 @@ export function CustomerDetailView({ id }: { id: string }) {
                       role: "status",
                       cell: (rental) => <StatusBadge status={rental.status} overdue={rental.isOverdue} />,
                     },
-                    { id: "units", header: "Units", align: "end", cell: (rental) => count(rental.unitsOut) },
                     {
-                      id: "due",
-                      header: "Due",
-                      cell: (rental) => (
-                        <span className={rental.isOverdue ? "text-destructive" : undefined}>
-                          {rental.dueAt ? dueLabel(rental.dueAt) : "Open-ended"}
-                        </span>
-                      ),
+                      id: "units",
+                      header: "Still out",
+                      align: "end",
+                      cell: (rental) =>
+                        rental.unitsOut > 0 ? (
+                          <>
+                            {count(rental.unitsOut)}
+                            {rental.dueAt && (
+                              <div className={`text-xs ${rental.isOverdue ? "text-destructive" : "text-muted-foreground"}`}>
+                                {dueLabel(rental.dueAt)}
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        ),
+                    },
+                    {
+                      id: "charged",
+                      header: "Charged",
+                      align: "end",
+                      cell: (rental) =>
+                        rental.charges > 0 ? (
+                          money(rental.charges, currency)
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        ),
                     },
                     {
                       id: "owed",
@@ -115,12 +149,20 @@ export function CustomerDetailView({ id }: { id: string }) {
                       align: "end",
                       cell: (rental) =>
                         rental.balance > 0 ? (
-                          money(rental.balance, currency)
+                          <span className="font-medium">{money(rental.balance, currency)}</span>
+                        ) : rental.balance < 0 ? (
+                          <span className="text-muted-foreground">{money(-rental.balance, currency)} ahead</span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         ),
                     },
                   ]}
+                  actions={(rental) => (
+                    <ButtonLink href={`/rentals/${rental.id}/receipt`} variant="outline" size="sm">
+                      <ReceiptText className="size-4" />
+                      Receipt
+                    </ButtonLink>
+                  )}
                 />
               </div>
             )}
@@ -135,13 +177,20 @@ export function CustomerDetailView({ id }: { id: string }) {
             <CardContent className="space-y-2 text-sm">
               <Row label="Rentals in total" value={count(customer.rentalCount ?? 0)} />
               <Row label="Out right now" value={plural(customer.openRentalCount ?? 0, "rental")} />
-              <Row
-                label="Still owes"
-                value={money(customer.balanceDue ?? 0, currency)}
-                warn={(customer.balanceDue ?? 0) > 0}
-              />
+              {(customer.balanceDue ?? 0) < 0 ? (
+                // More paid than charged so far: an advance waiting for the rent.
+                <Row label="Paid ahead" value={money(-(customer.balanceDue ?? 0), currency)} />
+              ) : (
+                <Row
+                  label="Still owes"
+                  value={money(customer.balanceDue ?? 0, currency)}
+                  warn={(customer.balanceDue ?? 0) > 0}
+                />
+              )}
             </CardContent>
           </Card>
+
+          <CustomerPrices customerId={id} customerName={customer.name} canEdit={user.role !== "staff"} />
 
           <Card>
             <CardHeader>

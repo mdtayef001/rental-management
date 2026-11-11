@@ -1,10 +1,12 @@
 "use client"
 
+import { useState } from "react"
 import { Copy, MessageCircle } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { ErrorState, PageHeader, TableSkeleton } from "@/components/common"
-import { PrintButton, ReceiptDocument } from "@/components/receipt"
+import { PrintButton } from "@/components/paper"
+import { ReceiptDocument } from "@/components/receipt"
 import { useSession } from "@/components/session"
 import { useRental } from "@/lib/data/queries"
 import { whatsappLink } from "@/lib/format"
@@ -15,11 +17,13 @@ import { fromRental } from "@/lib/receipt"
  *
  * Separate from the rental screen on purpose: this is the thing you hand over or print,
  * and printing it should not mean printing a page full of buttons. Everything here except
- * the till copy is hidden when the page is printed.
+ * the receipt itself is hidden when the page is printed.
  */
 export function ReceiptView({ id }: { id: string }) {
   const { business } = useSession()
   const { data: rental, isLoading, isError, error, refetch } = useRental(id)
+  // Which copy goes on paper: the A4 sheet, or the narrow slip for a till printer.
+  const [paper, setPaper] = useState<"sheet" | "slip">("sheet")
 
   if (isError) return <ErrorState error={error} onRetry={() => refetch()} />
   if (isLoading || !rental) return <TableSkeleton rows={6} columns={3} />
@@ -42,21 +46,26 @@ export function ReceiptView({ id }: { id: string }) {
   }
 
   return (
-    <div className="mx-auto w-full max-w-md space-y-4">
+    <div className="mx-auto w-full max-w-3xl space-y-5">
       <div className="print:hidden">
-        <PageHeader title="Receipt" back={{ href: `/rentals/${id}`, label: rental.code }}>
-          <PrintButton />
+        <PageHeader
+          title={`Receipt ${rental.code}`}
+          description={rental.customerName}
+          back={{ href: `/rentals/${id}`, label: rental.code }}
+        >
+          <PrintButton label="Till slip" before={() => setPaper("slip")} />
+          <PrintButton label="Print" variant="default" before={() => setPaper("sheet")} />
         </PageHeader>
       </div>
 
-      <ReceiptDocument receipt={receipt} />
+      <ReceiptDocument receipt={receipt} paper={paper} />
 
       {receipt.link && (
         <div className="space-y-3 rounded-xl border p-4 print:hidden">
           <div>
             <h2 className="text-sm font-medium">Send it to the customer</h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              They open it on their phone — no login — and the QR code on it starts the return.
+              They open it on their phone — no login — and can print it or save it as a PDF from there.
             </p>
           </div>
           <p className="rounded-md bg-muted px-2.5 py-1.5 font-mono text-xs break-all select-all">{receipt.link}</p>

@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { request } from "@/lib/api/client"
 import { ApiError } from "@/lib/api/errors"
-import type { Customer, Product, Rental, RentalReturn, ResolveReturnResult } from "@/lib/types"
+import type { Customer, CustomerRate, Product, Rental, RentalReturn, ResolveReturnResult } from "@/lib/types"
 
 // Writes, and what each one refreshes.
 //
@@ -26,11 +26,14 @@ type Collection =
   | "users"
   | "activity"
   | "platform"
+  | "bills"
 
 function useRefresh() {
   const client = useQueryClient()
   return (...collections: Collection[]) => {
-    for (const collection of collections) {
+    // A bill is worked out from rentals, so whatever changes a rental changes a bill.
+    const all = collections.includes("rentals") ? [...collections, "bills" as const] : collections
+    for (const collection of all) {
       client.invalidateQueries({ queryKey: [collection] })
     }
   }
@@ -53,7 +56,6 @@ export interface RentalLineInput {
   quantity: number
   plan: string
   rate?: number | null
-  deposit?: number | null
   replacementCost?: number | null
   holidays?: number
   note?: string
@@ -65,11 +67,13 @@ export interface RentalInput {
   lines: RentalLineInput[]
   startedAt?: string | null
   dueAt?: string | null
-  deposit?: number
+  /** Paid in advance, before anything has been charged. */
   paidAmount?: number
   paymentMethod?: string
   paymentReference?: string
   notes?: string
+  /** Keep the rates on this rental as the customer's prices from now on. */
+  rememberRates?: boolean
 }
 
 /** Rent items out. One call, one rental, one receipt. */
@@ -115,7 +119,8 @@ export interface ReturnInput {
   at?: string | null
   discount?: number
   paidAmount?: number
-  depositRefunded?: number
+  /** Unused advance handed back at this return. */
+  refunded?: number
   paymentMethod?: string
   paymentReference?: string
   note?: string
@@ -148,16 +153,45 @@ export function useRentalPayment() {
   })
 }
 
-export function useRefundDeposit() {
+/** Agree a price with a customer. A null rate puts them back on the product's own. */
+export function useSetCustomerRate(customerId: string) {
+  const refresh = useRefresh()
+  return useMutation({
+    mutationFn: (body: { product: string; plan: string; rate: number | null }) =>
+      request<CustomerRate[]>(`customers/${customerId}/rates/`, { method: "PUT", body }),
+    onSuccess: (_, body) => {
+      refresh("customers", "activity")
+      toast.success(body.rate === null ? "Back to the usual price" : "Price saved")
+    },
+    onError: (err) => showError(err, "Couldn't save the price."),
+  })
+}
+
+/** One payment against everything a customer owes, oldest rental first. */
+export function useReceivePayment() {
+  const refresh = useRefresh()
+  return useMutation({
+    mutationFn: ({ customerId, ...body }: { customerId: string; amount: number; method?: string; reference?: string; note?: string }) =>
+      request<{ payments: { rentalCode: string; amount: number }[] }>(`bills/${customerId}/payment/`, { method: "POST", body }),
+    onSuccess: ({ payments }) => {
+      refresh("rentals", "customers", "activity")
+      toast.success(payments.length > 1 ? `Payment recorded across ${payments.length} rentals` : "Payment recorded")
+    },
+    onError: (err) => showError(err, "Couldn't record the payment."),
+  })
+}
+
+/** Give back money a customer paid in advance and didn't use. */
+export function useRefund() {
   const refresh = useRefresh()
   return useMutation({
     mutationFn: ({ rentalId, ...body }: { rentalId: string; amount: number; method?: string; note?: string }) =>
-      request<Rental>(`rentals/${rentalId}/refund-deposit/`, { method: "POST", body }),
+      request<Rental>(`rentals/${rentalId}/refund/`, { method: "POST", body }),
     onSuccess: () => {
       refresh("rentals", "customers", "activity")
-      toast.success("Deposit returned")
+      toast.success("Money given back")
     },
-    onError: (err) => showError(err, "Couldn't return the deposit."),
+    onError: (err) => showError(err, "Couldn't record the refund."),
   })
 }
 

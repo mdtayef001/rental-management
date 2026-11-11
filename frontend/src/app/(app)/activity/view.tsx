@@ -28,7 +28,7 @@ export function ActivityView() {
       <PageHeader title="Activity" description="Everything anyone has done, newest first." />
 
       <Toolbar>
-        <SearchInput value={text} onChange={setText} placeholder="Search what happened" label="Search activity" />
+        <SearchInput value={text} onChange={setText} placeholder="Search what happened" label="Search activity" suggest="activity" />
         {people.length > 0 && (
           <select
             value={person}
@@ -56,7 +56,8 @@ export function ActivityView() {
         <>
           {/* A timeline, not a table: the useful reading here is chronological, and on a
               phone the who-and-when drops to its own line rather than being squeezed. */}
-          <ul className="divide-y overflow-hidden rounded-lg border bg-card">
+          {/* About ten entries tall, then it scrolls, like every table in the app. */}
+          <ul className="max-h-[30rem] divide-y overflow-y-auto rounded-lg border bg-card">
             {data?.results.map((entry) => (
               <li key={entry.id} className="flex flex-col gap-1 px-3 py-2.5 transition-colors hover:bg-accent/40 sm:flex-row sm:items-baseline sm:gap-3">
                 <span className="shrink-0 font-medium">{entry.action}</span>

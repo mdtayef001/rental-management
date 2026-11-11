@@ -11,14 +11,15 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { EmptyState, PageHeader, Spinner } from "@/components/common"
 import { CustomerPicker } from "@/components/customer-picker"
-import { ScanField } from "@/components/scanner"
+import { ProductFinder } from "@/components/product-finder"
 import { useBranchScope, useCurrency, useCurrentUser, useSettings } from "@/components/session"
 import { request } from "@/lib/api/client"
 import { ApiError } from "@/lib/api/errors"
 import { type RentalLineInput, useRentOut } from "@/lib/data/mutations"
+import { useCustomerRates } from "@/lib/data/queries"
 import { count, money, plural } from "@/lib/format"
 import { PLAN_LABEL, availablePlans, quoteRental, rateFor } from "@/lib/rental"
-import type { Customer, ProductLookup, RentalPlan } from "@/lib/types"
+import type { Customer, CustomerRate, ProductLookup, RentalPlan } from "@/lib/types"
 import { toast } from "sonner"
 
 /** A product in the cart, with the terms staff chose for it. */
@@ -27,7 +28,18 @@ interface Line {
   quantity: number
   plan: RentalPlan
   rate: number
-  deposit: number
+  /** Staff typed this rate by hand, so picking a customer must not overwrite it. */
+  rateTyped?: boolean
+}
+
+/** The price agreed with the chosen customer for a product and plan, if there is one. */
+function agreedRate(rates: CustomerRate[] | undefined, productId: string, plan: RentalPlan) {
+  return rates?.find((r) => r.productId === productId && r.plan === plan)?.rate
+}
+
+/** Where a line starts: the customer's own price, else the product's. */
+function startingRate(rates: CustomerRate[] | undefined, product: ProductLookup, plan: RentalPlan, fallback = 0) {
+  return Number(agreedRate(rates, product.id, plan) ?? rateFor(product, plan) ?? fallback)
 }
 
 /**
@@ -35,7 +47,12 @@ interface Line {
  *
  * A cart, because one customer taking a camera, a tripod and two lights is *one* rental
  * with one due date and one receipt — not three rentals to reconcile later. Scan items in,
- * set the terms per line, pick the customer, take a deposit, done.
+ * set the terms per line, pick the customer, done. There is no deposit: a customer who
+ * wants to pay ahead pays an advance, and the rent comes off it when the items come back.
+ *
+ * Each line starts at the price agreed with the chosen customer, or the product's own when
+ * there is none, and can be changed for this rental — a different price for every company
+ * without anyone having to remember it.
  *
  * The price is worked out with the same arithmetic the server will charge
  * (`quoteRental`, mirroring `RentalItem.quote`), so the figure staff quote is the figure
@@ -56,61 +73,79 @@ export function RentOutView() {
   const [customer, setCustomer] = useState<Customer | null>(null)
   const [days, setDays] = useState(7)
   const [openEnded, setOpenEnded] = useState(false)
-  const [deposit, setDeposit] = useState<number | "">("")
   const [paid, setPaid] = useState<number | "">("")
   const [method, setMethod] = useState("cash")
+  const [reference, setReference] = useState("")
   const [notes, setNotes] = useState("")
   const [adding, setAdding] = useState(false)
+  const [remember, setRemember] = useState(false)
+  const { data: rates } = useCustomerRates(customer?.id)
+
+  // Picking (or changing) the customer re-prices the cart at their prices. Rates someone
+  // typed by hand are left alone: they were a decision, not a default.
+  const pricedFor = useRef<CustomerRate[] | undefined>(undefined)
+  useEffect(() => {
+    if (pricedFor.current === rates) return
+    pricedFor.current = rates
+    setLines((current) =>
+      current.map((line) =>
+        line.rateTyped ? line : { ...line, rate: startingRate(rates, line.product, line.plan, line.rate) },
+      ),
+    )
+  }, [rates])
 
   const onHand = (product: ProductLookup) => product.stock[branchId] ?? 0
 
-  /** Look a code up and put it in the cart. Scanning the same thing twice adds one more. */
+  /** Put a product in the cart. Adding the same thing twice means "one more of these". */
+  const addProduct = useCallback(
+    (product: ProductLookup) => {
+      setLines((current) => {
+        const existing = current.findIndex((l) => l.product.id === product.id)
+        const max = product.stock[branchId] ?? 0
+        if (existing >= 0) {
+          const next = [...current]
+          const line = next[existing]
+          if (line.quantity >= max) {
+            toast.warning(`Only ${max} ${product.name} are on the shelf.`)
+            return current
+          }
+          next[existing] = { ...line, quantity: line.quantity + 1 }
+          return next
+        }
+        if (max <= 0) {
+          toast.warning(`No ${product.name} are on the shelf at this branch.`)
+          return current
+        }
+        const plan = (availablePlans(product).includes(settings.rentals.defaultPlan)
+          ? settings.rentals.defaultPlan
+          : availablePlans(product)[0]) as RentalPlan
+        return [
+          ...current,
+          {
+            product,
+            quantity: 1,
+            plan,
+            rate: startingRate(pricedFor.current, product, plan),
+          },
+        ]
+      })
+    },
+    [branchId, settings.rentals.defaultPlan],
+  )
+
+  /** Look a scanned or typed code up and put it in the cart. */
   const addCode = useCallback(
     async (code: string) => {
       setAdding(true)
       try {
-        const product = await request<ProductLookup>(
-          `products/lookup/?code=${encodeURIComponent(code)}&rentable_only=1`,
-        )
-        setLines((current) => {
-          const existing = current.findIndex((l) => l.product.id === product.id)
-          if (existing >= 0) {
-            // Already in the cart: scanning again means "one more of these".
-            const next = [...current]
-            const line = next[existing]
-            const max = product.stock[branchId] ?? 0
-            if (line.quantity >= max) {
-              toast.warning(`Only ${max} ${product.name} are on the shelf.`)
-              return current
-            }
-            next[existing] = { ...line, quantity: line.quantity + 1 }
-            return next
-          }
-          if ((product.stock[branchId] ?? 0) <= 0) {
-            toast.warning(`No ${product.name} are on the shelf at this branch.`)
-            return current
-          }
-          const plan = (availablePlans(product).includes(settings.rentals.defaultPlan)
-            ? settings.rentals.defaultPlan
-            : availablePlans(product)[0]) as RentalPlan
-          return [
-            ...current,
-            {
-              product,
-              quantity: 1,
-              plan,
-              rate: Number(rateFor(product, plan) ?? 0),
-              deposit: Number(product.deposit ?? 0),
-            },
-          ]
-        })
+        addProduct(await request<ProductLookup>(`products/lookup/?code=${encodeURIComponent(code)}&rentable_only=1`))
       } catch (err) {
         toast.error(err instanceof ApiError ? err.message : "Couldn't find that code.")
       } finally {
         setAdding(false)
       }
     },
-    [branchId, settings.rentals.defaultPlan],
+    [addProduct],
   )
 
   // Arriving from the scan screen with ?code=: put that item straight in the cart. The
@@ -131,11 +166,13 @@ export function RentOutView() {
 
   const billedDays = openEnded ? 1 : Math.max(1, days)
   const estimate = lines.reduce((sum, l) => sum + quoteRental(l.plan, l.rate, billedDays, l.quantity).total, 0)
-  const suggestedDeposit = lines.reduce((sum, l) => sum + l.deposit * l.quantity, 0)
-  const depositValue = deposit === "" ? 0 : deposit
 
   const tooMany = lines.filter((l) => l.quantity > onHand(l.product))
   const needsCustomer = !customer && !(settings.permissions.staffWalkInRentals || user.role !== "staff")
+  // Rates on this rental that differ from what the customer normally pays: worth offering
+  // to remember, so the next rental starts from them.
+  const mayRemember = !!customer && user.role !== "staff"
+  const newPrices = lines.filter((l) => l.plan !== "fixed" && l.rate !== startingRate(rates, l.product, l.plan, l.rate))
   const canSubmit = lines.length > 0 && tooMany.length === 0 && !needsCustomer && !rentOut.isPending
 
   function submit() {
@@ -146,7 +183,6 @@ export function RentOutView() {
       quantity: l.quantity,
       plan: l.plan,
       rate: l.rate,
-      deposit: l.deposit,
     }))
     rentOut.mutate(
       {
@@ -154,12 +190,14 @@ export function RentOutView() {
         branch: branchId,
         lines: payload,
         dueAt,
-        deposit: depositValue,
         paidAmount: paid === "" ? 0 : paid,
         paymentMethod: method,
+        paymentReference: method === "cash" ? "" : reference,
         notes,
+        rememberRates: mayRemember && remember && newPrices.length > 0,
       },
-      { onSuccess: (rental) => router.push(`/rentals/${rental.id}`) },
+      // Straight to the receipt: it is the thing to print or send while they are still here.
+      { onSuccess: (rental) => router.push(`/rentals/${rental.id}/receipt`) },
     )
   }
 
@@ -189,21 +227,21 @@ export function RentOutView() {
               <CardTitle className="text-base">Add items</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <ScanField onScan={addCode} autoFocus busy={adding} placeholder="Scan or type a barcode / SKU" />
+              <ProductFinder onCode={addCode} onPick={addProduct} autoFocus busy={adding} />
             </CardContent>
           </Card>
 
           {lines.length === 0 ? (
             <EmptyState
               title="Nothing in the rental yet"
-              description="Scan an item, or type its barcode or SKU above."
+              description="Scan an item's QR code, or type its name or SKU above."
               icon={Package}
             />
           ) : (
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">
-                  {plural(lines.length, "item")} · {count(lines.reduce((n, l) => n + l.quantity, 0))} units
+                  {plural(lines.length, "item")} · {plural(lines.reduce((n, l) => n + l.quantity, 0), "unit")}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -214,6 +252,8 @@ export function RentOutView() {
                     days={billedDays}
                     onHand={onHand(line.product)}
                     currency={currency}
+                    rates={rates}
+                    customerName={customer?.name}
                     onChange={(patch) => update(index, patch)}
                     onRemove={() => setLines((c) => c.filter((_, i) => i !== index))}
                   />
@@ -234,6 +274,22 @@ export function RentOutView() {
                 onChange={setCustomer}
                 allowWalkIn={settings.permissions.staffWalkInRentals || user.role !== "staff"}
               />
+              {mayRemember && newPrices.length > 0 && (
+                <label className="mt-3 flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={remember}
+                    onChange={(e) => setRemember(e.target.checked)}
+                  />
+                  <span>
+                    Remember {newPrices.length === 1 ? "this price" : "these prices"} for {customer?.name}
+                    <span className="block text-xs text-muted-foreground">
+                      Their next rental will start from {newPrices.length === 1 ? "it" : "them"}.
+                    </span>
+                  </span>
+                </label>
+              )}
               {needsCustomer && (
                 <p className="mt-2 text-sm text-warning-soft-foreground dark:text-warning">
                   A customer is required for every rental, per your settings.
@@ -288,66 +344,66 @@ export function RentOutView() {
                 <span className="font-semibold tabular-nums">{money(estimate, currency)}</span>
               </div>
 
-              {user.canHandleDeposits && (
-                <div className="space-y-1.5 border-t pt-3">
-                  <Label htmlFor="deposit" className="text-xs">
-                    Deposit taken
-                  </Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="deposit"
-                      type="number"
-                      min={0}
-                      value={deposit}
-                      onChange={(e) => setDeposit(e.target.value === "" ? "" : Math.max(0, Number(e.target.value)))}
-                      placeholder="0.00"
-                      className="h-9 tabular-nums"
-                    />
-                    {suggestedDeposit > 0 && (
-                      <Button type="button" variant="outline" size="sm" onClick={() => setDeposit(suggestedDeposit)}>
-                        {money(suggestedDeposit, currency)}
-                      </Button>
-                    )}
-                  </div>
-                  {settings.rentals.depositRequired && !depositValue && suggestedDeposit > 0 && (
-                    <p className="text-xs text-warning-soft-foreground dark:text-warning">
-                      These items suggest a {money(suggestedDeposit, currency)} deposit.
-                    </p>
+              <div className="space-y-1.5 border-t pt-3">
+                <Label htmlFor="paid" className="text-xs">
+                  Paid in advance
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="paid"
+                    type="number"
+                    min={0}
+                    value={paid}
+                    onChange={(e) => setPaid(e.target.value === "" ? "" : Math.max(0, Number(e.target.value)))}
+                    placeholder="0.00"
+                    className="h-9 tabular-nums"
+                  />
+                  {estimate > 0 && (
+                    <Button type="button" variant="outline" size="sm" onClick={() => setPaid(estimate)}>
+                      {money(estimate, currency)}
+                    </Button>
                   )}
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Optional. It is kept on the rental and the rent comes off it when the items come back; anything left
+                  over is given back.
+                </p>
+              </div>
+
+              {paid !== "" && paid > 0 && (
+                <>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="method" className="text-xs">
+                      How
+                    </Label>
+                    <select
+                      id="method"
+                      value={method}
+                      onChange={(e) => setMethod(e.target.value)}
+                      className="h-9 w-full rounded-md border bg-card px-2 text-sm"
+                    >
+                      <option value="cash">Cash</option>
+                      <option value="mobile">Mobile banking</option>
+                      <option value="card">Card</option>
+                      <option value="bank">Bank transfer</option>
+                    </select>
+                  </div>
+                  {method !== "cash" && (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="reference" className="text-xs">
+                        {method === "bank" ? "Cheque or transfer number" : "Transaction ID"}
+                      </Label>
+                      <Input
+                        id="reference"
+                        value={reference}
+                        onChange={(e) => setReference(e.target.value)}
+                        maxLength={60}
+                        className="h-9"
+                      />
+                    </div>
+                  )}
+                </>
               )}
-
-              <div className="space-y-1.5">
-                <Label htmlFor="paid" className="text-xs">
-                  Rent paid up front
-                </Label>
-                <Input
-                  id="paid"
-                  type="number"
-                  min={0}
-                  value={paid}
-                  onChange={(e) => setPaid(e.target.value === "" ? "" : Math.max(0, Number(e.target.value)))}
-                  placeholder="0.00"
-                  className="h-9 tabular-nums"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="method" className="text-xs">
-                  How
-                </Label>
-                <select
-                  id="method"
-                  value={method}
-                  onChange={(e) => setMethod(e.target.value)}
-                  className="h-9 w-full rounded-md border bg-card px-2 text-sm"
-                >
-                  <option value="cash">Cash</option>
-                  <option value="mobile">Mobile banking</option>
-                  <option value="card">Card</option>
-                  <option value="bank">Bank transfer</option>
-                </select>
-              </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="notes" className="text-xs">
@@ -379,7 +435,7 @@ export function RentOutView() {
               ? "Saving…"
               : lines.length === 0
                 ? "Add something first"
-                : `Rent out ${count(lines.reduce((n, l) => n + l.quantity, 0))} units`}
+                : `Rent out ${plural(lines.reduce((n, l) => n + l.quantity, 0), "unit")}`}
           </Button>
         </div>
       </div>
@@ -393,6 +449,8 @@ function LineRow({
   days,
   onHand,
   currency,
+  rates,
+  customerName,
   onChange,
   onRemove,
 }: {
@@ -400,12 +458,28 @@ function LineRow({
   days: number
   onHand: number
   currency: string
+  rates: CustomerRate[] | undefined
+  customerName: string | undefined
   onChange: (patch: Partial<Line>) => void
   onRemove: () => void
 }) {
   const plans = availablePlans(line.product)
   const quote = quoteRental(line.plan, line.rate, days, line.quantity)
   const over = line.quantity > onHand
+  const usual = rateFor(line.product, line.plan)
+  const agreed = agreedRate(rates, line.product.id, line.plan)
+  // Says where the number in the Rate box came from, so nobody wonders why it isn't the
+  // price on the label.
+  const source =
+    line.plan === "fixed"
+      ? null
+      : agreed !== undefined && line.rate === Number(agreed)
+        ? `${customerName ?? "Customer"}'s price${usual != null ? ` · usual ${money(usual, currency)}` : ""}`
+        : usual != null && line.rate === Number(usual)
+          ? "Usual price"
+          : usual != null
+            ? `Changed · usual ${money(usual, currency)}`
+            : null
 
   return (
     <div className="space-y-3 rounded-lg border p-3">
@@ -443,8 +517,8 @@ function LineRow({
             value={line.plan}
             onChange={(e) => {
               const plan = e.target.value as RentalPlan
-              // Swap in the product's own rate for the new plan, if it has one.
-              onChange({ plan, rate: Number(rateFor(line.product, plan) ?? line.rate) })
+              // Swap in the rate for the new plan: the customer's, else the product's.
+              onChange({ plan, rate: startingRate(rates, line.product, plan, line.rate), rateTyped: false })
             }}
             className="h-9 w-full rounded-md border bg-card px-2 text-sm"
           >
@@ -461,11 +535,12 @@ function LineRow({
             type="number"
             min={0}
             value={line.rate}
-            onChange={(e) => onChange({ rate: Math.max(0, Number(e.target.value)) })}
+            onChange={(e) => onChange({ rate: Math.max(0, Number(e.target.value)), rateTyped: true })}
             className="h-9 tabular-nums"
           />
         </div>
       </div>
+      {source && <p className="text-xs text-muted-foreground">{source}</p>}
 
       <div className="flex items-baseline justify-between border-t pt-2 text-sm">
         <span className="text-muted-foreground">{quote.breakdown}</span>

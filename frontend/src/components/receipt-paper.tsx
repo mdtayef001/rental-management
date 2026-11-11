@@ -15,10 +15,10 @@ const PX_PER_MM = 96 / 25.4
  * feeding out of the printer. Solid black on white, because thermal printers turn grey
  * into speckles.
  *
- * Printing hides the rest of the app (see `globals.css`), so this can live on a page that
- * also shows the screen copy.
+ * It is always on the page, so it is already measured when someone asks for it, but it
+ * only goes on paper while `active`: the rest of the time the A4 sheet is what prints.
  */
-export function ReceiptPaper({ children }: { children: React.ReactNode }) {
+export function ReceiptPaper({ children, active = true }: { children: React.ReactNode; active?: boolean }) {
   const ref = useRef<HTMLDivElement>(null)
   const [heightMm, setHeightMm] = useState(200)
 
@@ -36,12 +36,16 @@ export function ReceiptPaper({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <style>{`@page { size: ${RECEIPT_PAPER_MM}mm ${heightMm}mm; margin: 0 } @media print { html, body { background: #fff !important } }`}</style>
+      {active && (
+        <style>{`@page { size: ${RECEIPT_PAPER_MM}mm ${heightMm}mm; margin: 0 } @media print { html, body { background: #fff !important } }`}</style>
+      )}
       <div
         ref={ref}
         aria-hidden
         style={{ width: `${RECEIPT_PAPER_MM}mm` }}
-        className="receipt-paper pointer-events-none fixed top-0 -left-[10000px] bg-white px-[4mm] py-[3mm] font-sans text-[12px] leading-snug font-medium text-black print:pointer-events-auto print:static"
+        className={`receipt-paper pointer-events-none fixed top-0 -left-[10000px] bg-white px-[4mm] py-[3mm] font-sans text-[12px] leading-snug font-medium text-black ${
+          active ? "print:pointer-events-auto print:static" : "print:hidden"
+        }`}
       >
         {children}
       </div>

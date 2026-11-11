@@ -61,22 +61,22 @@ class Command(BaseCommand):
         staff = create_user(
             actor=owner, name="Nadia Islam", email="staff@example.com",
             password=PASSWORD, role=User.Role.STAFF,
-            rights={"can_rent": True, "can_take_returns": True, "can_handle_deposits": True},
+            rights={"can_rent": True, "can_take_returns": True},
         )
         staff.branches.set([branch])
 
         products = {}
-        for sku, barcode, name, daily, weekly, deposit, replacement, quantity in [
-            ("SM-100", "8801234567890", "Industrial sewing machine", "50.00", "300.00", "500.00", "8000.00", 1000),
-            ("OL-200", "8801234567891", "Overlock machine", "80.00", "480.00", "800.00", "14000.00", 120),
-            ("TBL-10", "8801234567892", "Work table", "20.00", "120.00", "0.00", "2500.00", 300),
-            ("GEN-5", "8801234567893", "5kVA generator", "900.00", "5400.00", "5000.00", "95000.00", 8),
-            ("IRN-1", "8801234567894", "Steam iron", "30.00", "180.00", "200.00", "3500.00", 60),
+        for sku, barcode, name, daily, weekly, replacement, quantity in [
+            ("SM-100", "8801234567890", "Industrial sewing machine", "50.00", "300.00", "8000.00", 1000),
+            ("OL-200", "8801234567891", "Overlock machine", "80.00", "480.00", "14000.00", 120),
+            ("TBL-10", "8801234567892", "Work table", "20.00", "120.00", "2500.00", 300),
+            ("GEN-5", "8801234567893", "5kVA generator", "900.00", "5400.00", "95000.00", 8),
+            ("IRN-1", "8801234567894", "Steam iron", "30.00", "180.00", "3500.00", 60),
         ]:
             product = create_product(
                 user=owner, sku=sku, barcode=barcode, name=name, category="Machinery",
                 rentable=True, rent_daily=Decimal(daily), rent_weekly=Decimal(weekly),
-                deposit=Decimal(deposit), replacement_cost=Decimal(replacement),
+                replacement_cost=Decimal(replacement),
                 low_stock_threshold=max(2, quantity // 20),
             )
             adjust_stock(
@@ -104,7 +104,8 @@ class Command(BaseCommand):
         big = create_rental(
             user=owner, customer=customers["Mr. X Garments"], branch=branch,
             started_at=now - timedelta(days=12), due_at=now + timedelta(days=18),
-            deposit=Decimal("50000.00"),
+            # Paid in advance: it is used up as the machines come back and are charged.
+            paid_amount=Decimal("50000.00"), payment_method="bank",
             lines=[
                 {"product": products["SM-100"], "quantity": 100, "plan": "daily"},
                 {"product": products["TBL-10"], "quantity": 20, "plan": "daily"},
@@ -117,7 +118,6 @@ class Command(BaseCommand):
         create_rental(
             user=staff, customer=customers["Mr. X Garments"], branch=branch,
             started_at=now - timedelta(days=2), due_at=now + timedelta(days=5),
-            deposit=Decimal("10000.00"),
             lines=[{"product": products["SM-100"], "quantity": 20, "plan": "daily"}],
             notes="Extra machines for a rush order.",
         )
@@ -126,7 +126,7 @@ class Command(BaseCommand):
         create_rental(
             user=staff, customer=customers["Mr. Y Textiles"], branch=branch,
             started_at=now - timedelta(days=5), due_at=now + timedelta(days=9),
-            deposit=Decimal("25000.00"),
+            paid_amount=Decimal("25000.00"), payment_method="cash",
             lines=[{"product": products["SM-100"], "quantity": 50, "plan": "weekly"}],
         )
 
@@ -134,7 +134,6 @@ class Command(BaseCommand):
         create_rental(
             user=manager, customer=customers["Fatima Tailors"], branch=branch,
             started_at=now - timedelta(days=20), due_at=now - timedelta(days=6),
-            deposit=Decimal("1000.00"),
             lines=[
                 {"product": products["IRN-1"], "quantity": 5, "plan": "daily"},
                 {"product": products["OL-200"], "quantity": 2, "plan": "daily"},
@@ -147,13 +146,11 @@ class Command(BaseCommand):
         create_rental(
             user=staff, customer=customers["Dhaka Events"], branch=branch,
             started_at=now - timedelta(days=9), due_at=now - timedelta(days=2),
-            deposit=Decimal("2000.00"),
             lines=[{"product": products["IRN-1"], "quantity": 3, "plan": "daily"}],
         )
         create_rental(
             user=owner, customer=customers["Mr. Y Textiles"], branch=branch,
             started_at=now - timedelta(days=40), due_at=now - timedelta(days=21),
-            deposit=Decimal("8000.00"),
             lines=[{"product": products["OL-200"], "quantity": 4, "plan": "weekly"}],
             notes="No answer on the phone for two weeks.",
         )
@@ -162,7 +159,6 @@ class Command(BaseCommand):
         create_rental(
             user=owner, customer=customers["Dhaka Events"], branch=branch,
             started_at=now - timedelta(days=3), due_at=None,
-            deposit=Decimal("10000.00"),
             lines=[{"product": products["GEN-5"], "quantity": 2, "plan": "daily"}],
         )
 

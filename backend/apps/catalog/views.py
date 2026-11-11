@@ -17,8 +17,10 @@ from apps.accounts.permissions import LEADS, TEAM, IsTenantMember, ManagerNeedsP
 from apps.api import Pagination
 
 from . import services
-from .models import Customer, Product, StockLevel, StockMovement
+from .models import Customer, CustomerRate, Product, StockLevel, StockMovement
 from .serializers import (
+    CustomerRateSerializer,
+    CustomerRateWriteSerializer,
     CustomerSerializer,
     CustomerWriteSerializer,
     LookupSerializer,
@@ -136,8 +138,6 @@ class ProductViewSet(TenantViewSet, viewsets.ModelViewSet):
             qs = qs.filter(archived_at__isnull=True)
         if params.get("rentable") == "1":
             qs = qs.filter(rentable=True)
-        if params.get("sellable") == "1":
-            qs = qs.filter(sellable=True)
         category = params.get("category", "").strip()
         if category:
             qs = qs.filter(category__iexact=category)
@@ -184,6 +184,19 @@ class ProductViewSet(TenantViewSet, viewsets.ModelViewSet):
             .values_list("category", flat=True)
             .distinct()
             .order_by("category")
+        )
+        return Response(list(rows))
+
+    @action(detail=False)
+    def units(self, request):
+        """The units in use ("pcs", "set"), offered when adding a product so the same thing
+        is not spelt three ways."""
+        rows = (
+            Product.objects.filter(business=request.user.business)
+            .exclude(unit="")
+            .values_list("unit", flat=True)
+            .distinct()
+            .order_by("unit")
         )
         return Response(list(rows))
 
@@ -379,3 +392,19 @@ class CustomerViewSet(TenantViewSet, viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         services.delete_customer(user=request.user, customer=self.get_object())
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["get", "put"])
+    def rates(self, request, pk=None):
+        """The prices agreed with this customer.
+
+        GET lists them — the rent-out screen reads this to start each line at the right
+        price. PUT sets one, and a null rate puts the customer back on the product's own.
+        Staff can read but not change them (see `check_permissions`).
+        """
+        customer = self.get_object()
+        if request.method == "PUT":
+            serializer = CustomerRateWriteSerializer(data=request.data, context={"request": request})
+            serializer.is_valid(raise_exception=True)
+            services.set_customer_rate(user=request.user, customer=customer, **serializer.validated_data)
+        rates = CustomerRate.objects.filter(customer=customer).select_related("product")[: Pagination.max_page_size]
+        return Response(CustomerRateSerializer(rates, many=True).data)

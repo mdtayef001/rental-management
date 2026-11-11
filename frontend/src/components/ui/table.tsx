@@ -3,11 +3,38 @@
 import * as React from "react"
 import { cn } from "cn"
 
+/** How many rows a table shows before it scrolls inside its own frame. */
+const VISIBLE_ROWS = 10
+
 function Table({ className, ...props }: React.ComponentProps<"table">) {
+  const container = React.useRef<HTMLDivElement>(null)
+  const [maxHeight, setMaxHeight] = React.useState<number>()
+
+  // Ten rows tall, then it scrolls with its heading pinned, so a long list never pushes
+  // the page controls off the screen. Measured rather than assumed, because rows are not
+  // all one height: the frame ends exactly where the eleventh row would begin.
+  React.useLayoutEffect(() => {
+    const frame = container.current
+    const table = frame?.querySelector("table")
+    if (!frame || !table) return
+    const measure = () => {
+      const next = table.tBodies[0]?.rows[VISIBLE_ROWS]
+      setMaxHeight(next ? next.offsetTop : undefined)
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(table)
+    return () => observer.disconnect()
+  }, [])
+
   return (
     <div
+      ref={container}
       data-slot="table-container"
-      className="relative w-full overflow-x-auto"
+      className="relative w-full overflow-auto"
+      style={maxHeight ? { maxHeight } : undefined}
+      // Reachable by keyboard only when there is something to scroll.
+      tabIndex={maxHeight ? 0 : undefined}
     >
       <table
         data-slot="table"
@@ -22,7 +49,9 @@ function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
   return (
     <thead
       data-slot="table-header"
-      className={cn("[&_tr]:border-b", className)}
+      // Pinned while the body scrolls. Opaque, and with its rule drawn as a shadow, since a
+      // collapsed border does not travel with a sticky row.
+      className={cn("sticky top-0 z-10 bg-card shadow-[0_1px_0_var(--border)] [&_tr]:border-b", className)}
       {...props}
     />
   )

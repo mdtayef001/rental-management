@@ -2,12 +2,15 @@
 
 import { useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { keepPreviousData, queryOptions, useQuery } from "@tanstack/react-query"
+import { keepPreviousData, queryOptions, useQuery, useQueryClient } from "@tanstack/react-query"
 import { request } from "@/lib/api/client"
 import type {
   Activity,
+  Bill,
+  BillList,
   Branch,
   Customer,
+  CustomerRate,
   PlatformBusiness,
   Product,
   ProductLookup,
@@ -22,6 +25,7 @@ import type {
   SupplierPayment,
   SupplierReturn,
   CustomerReportRow,
+  DebtorRow,
   Page,
   ProductReportRow,
   ReportExport,
@@ -144,6 +148,11 @@ export function useCategories() {
   return useQuery({ ...apiQuery<string[]>("products/categories/"), staleTime: 5 * 60_000 }).data ?? (EMPTY as string[])
 }
 
+/** The units already in use ("pcs", "set"), offered when adding a product. */
+export function useUnits() {
+  return useQuery({ ...apiQuery<string[]>("products/units/"), staleTime: 5 * 60_000 }).data ?? (EMPTY as string[])
+}
+
 export function useActivityPeople(enabled = true) {
   return useQuery({ ...apiQuery<{ id: string; name: string }[]>("activity/people/"), enabled }).data ?? EMPTY
 }
@@ -170,15 +179,35 @@ export function useProductSearch(text: string, { rentableOnly = false, enabled =
   const settled = useDebounced(text.trim(), 250)
   return useQuery({
     ...apiQuery<ProductLookup[]>("products/lookup/", { search: settled, rentableOnly }),
-    enabled: enabled && settled.length > 1,
+    enabled: enabled && settled.length > 0,
     staleTime: 30_000,
   })
 }
 
 // ---------- Single records ----------
 
+/**
+ * A row already loaded by a list, found by id.
+ *
+ * Opening a product from the products list should not start from a blank page when the
+ * list was holding that product a moment ago. The row is shown at once and the full record
+ * replaces it when it arrives.
+ */
+function useListed<T extends { id: string }>(collection: string, id: string | null | undefined) {
+  const client = useQueryClient()
+  return () => {
+    if (!id) return undefined
+    for (const [, page] of client.getQueriesData<Page<T>>({ queryKey: [collection] })) {
+      const row = Array.isArray(page?.results) ? page.results.find((item) => String(item?.id) === String(id)) : undefined
+      if (row) return row
+    }
+    return undefined
+  }
+}
+
 export function useProduct(id: string | null | undefined) {
-  return useQuery({ ...apiQuery<Product>(`products/${id}/`), enabled: !!id })
+  const listed = useListed<Product>("products", id)
+  return useQuery({ ...apiQuery<Product>(`products/${id}/`), enabled: !!id, placeholderData: listed })
 }
 
 export function useRental(id: string | null | undefined) {
@@ -187,6 +216,11 @@ export function useRental(id: string | null | undefined) {
 
 export function useCustomer(id: string | null | undefined) {
   return useQuery({ ...apiQuery<Customer>(`customers/${id}/`), enabled: !!id })
+}
+
+/** The prices agreed with one customer. Empty for most; short for the rest. */
+export function useCustomerRates(id: string | null | undefined) {
+  return useQuery({ ...apiQuery<CustomerRate[]>(`customers/${id}/rates/`), enabled: !!id })
 }
 
 export function useSupplier(id: string | null | undefined) {
@@ -200,12 +234,14 @@ export function qtyAt(product: Pick<Product, "stock"> | Pick<ProductLookup, "sto
 
 // ---------- Totals ----------
 
-/** The dashboard tiles and sidebar badges. Rechecked every minute: other people change them too. */
+/** The dashboard tiles and sidebar badges. Rechecked every two minutes: other people change them too. */
 export function useRentalSummary({ enabled = true, live = false } = {}) {
   return useQuery({
     ...apiQuery<RentalSummary>("rentals/summary/"),
     enabled,
-    refetchInterval: live ? 60_000 : false,
+    // Only while the tab is on screen; a tab left open overnight asks for nothing.
+    refetchInterval: live ? 2 * 60_000 : false,
+    staleTime: 60_000,
   })
 }
 
@@ -303,6 +339,16 @@ export function useCustomerReport(range: ReportRange, enabled = true) {
   return useQuery(reportQuery<ReportRange & { results: CustomerReportRow[] }>("customers", { ...range }, enabled))
 }
 
+/** Who owes money today. Not tied to the range: a debt is a debt whenever it was run up. */
+export function useDebtorReport(enabled = true) {
+  return useQuery(reportQuery<{ results: DebtorRow[] }>("debtors", {}, enabled))
+}
+
+/** The whole report as a PDF file, for the same dates as the screen. */
+export function reportPdfUrl(range: ReportRange) {
+  return `/api/backend/${withParams("reports/pdf", { ...range })}`
+}
+
 /**
  * The href that downloads a report as CSV.
  *
@@ -314,4 +360,27 @@ export function exportUrl(report: ReportExport, range: ReportRange, group: Repor
   // No trailing slash: Next redirects one away (308) and the route handler puts it back
   // before calling Django, so writing it here only costs the browser a round trip.
   return `/api/backend/${withParams("reports/export", { report, ...range, group })}`
+}
+
+// ---------- Bills ----------
+
+/** One customer's bill for a period. */
+export function useBill(customerId: string, range: ReportRange) {
+  return useQuery({
+    ...apiQuery<Bill>(`bills/${customerId}/`, { ...range }),
+    placeholderData: keepPreviousData,
+  })
+}
+
+/** Everyone with something to bill in a period, largest first. */
+export function useBills(range: ReportRange, { page, search, pageSize }: { page: number; search?: string; pageSize?: number }) {
+  return useQuery({
+    ...apiQuery<BillList>("bills/", { ...range, search, page, pageSize }),
+    placeholderData: keepPreviousData,
+  })
+}
+
+/** The bill as a PDF file. A plain link, so the browser saves it under the bill's own name. */
+export function billPdfUrl(customerId: string, range: ReportRange) {
+  return `/api/backend/${withParams(`bills/${customerId}/pdf`, { ...range })}`
 }

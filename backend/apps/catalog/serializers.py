@@ -5,12 +5,12 @@ from rest_framework import serializers
 from apps.accounts.models import Branch
 from apps.api import IdField, tenant_field
 
-from .models import Customer, Product, StockLevel, StockMovement
+from .models import Customer, CustomerRate, Product, StockLevel, StockMovement
 
 PRODUCT_FIELDS = [
     "sku", "barcode", "name", "category", "unit", "description",
-    "rentable", "rent_daily", "rent_weekly", "rent_monthly", "deposit", "replacement_cost",
-    "sellable", "price", "low_stock_threshold",
+    "rentable", "rent_daily", "rent_weekly", "rent_monthly", "replacement_cost",
+    "low_stock_threshold",
 ]
 
 
@@ -37,14 +37,26 @@ class ProductSerializer(serializers.ModelSerializer):
 
 
 class ProductWriteSerializer(serializers.ModelSerializer):
+    """Adding or changing a product.
+
+    Only the name and one rate are really needed. The SKU can be left empty and is then
+    numbered for them, and a new product can be given the count on the shelf in the same
+    step, so "add a product" is one form rather than a form and a stock correction.
+    """
+
+    sku = serializers.CharField(max_length=64, required=False, allow_blank=True)
+    # New products only: how many are on the shelf today.
+    opening_stock = serializers.IntegerField(min_value=0, max_value=10_000_000, required=False, write_only=True)
+
     class Meta:
         model = Product
-        fields = PRODUCT_FIELDS
+        fields = [*PRODUCT_FIELDS, "opening_stock"]
 
     def validate_sku(self, sku):
         sku = sku.strip()
         if not sku:
-            raise serializers.ValidationError("A SKU is required.")
+            # Left empty: `create_product` numbers it. An existing product keeps its own.
+            return self.instance.sku if self.instance else ""
         business = self.context["request"].user.business
         clash = Product.objects.filter(business=business, sku__iexact=sku)
         if self.instance:
@@ -72,6 +84,9 @@ class ProductWriteSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"rentDaily": "Set at least one rental rate (per day, week or month)."}
             )
+        if self.instance:
+            # Stock on an existing product only ever changes through the stock ledger.
+            data.pop("opening_stock", None)
         return data
 
 
@@ -151,6 +166,30 @@ class CustomerWriteSerializer(serializers.ModelSerializer):
         return name
 
 
+class CustomerRateSerializer(serializers.ModelSerializer):
+    """One price agreed with a customer, beside the product's own so the two can be compared."""
+
+    id = IdField()
+    product_id = IdField(source="product.id")
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    product_sku = serializers.CharField(source="product.sku", read_only=True)
+    default_rate = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CustomerRate
+        fields = ["id", "product_id", "product_name", "product_sku", "plan", "rate", "default_rate", "updated_at"]
+
+    def get_default_rate(self, rate):
+        return rate.product.rate_for(rate.plan)
+
+
+class CustomerRateWriteSerializer(serializers.Serializer):
+    product = tenant_field(Product)
+    plan = serializers.ChoiceField(choices=CustomerRate.PLANS, default="daily")
+    # Null puts the customer back on the product's own rate.
+    rate = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0, allow_null=True)
+
+
 class LookupSerializer(serializers.Serializer):
     """What the scanner gets back for one scanned code.
 
@@ -165,13 +204,10 @@ class LookupSerializer(serializers.Serializer):
     unit = serializers.CharField()
     category = serializers.CharField()
     rentable = serializers.BooleanField()
-    sellable = serializers.BooleanField()
     rent_daily = serializers.DecimalField(max_digits=12, decimal_places=2, allow_null=True)
     rent_weekly = serializers.DecimalField(max_digits=12, decimal_places=2, allow_null=True)
     rent_monthly = serializers.DecimalField(max_digits=12, decimal_places=2, allow_null=True)
-    deposit = serializers.DecimalField(max_digits=12, decimal_places=2)
     replacement_cost = serializers.DecimalField(max_digits=12, decimal_places=2)
-    price = serializers.DecimalField(max_digits=12, decimal_places=2)
     stock = serializers.DictField(child=serializers.IntegerField())
     on_hand = serializers.IntegerField()
 
@@ -185,13 +221,10 @@ class LookupSerializer(serializers.Serializer):
             "unit": product.unit,
             "category": product.category,
             "rentable": product.rentable,
-            "sellable": product.sellable,
             "rent_daily": product.rent_daily,
             "rent_weekly": product.rent_weekly,
             "rent_monthly": product.rent_monthly,
-            "deposit": product.deposit,
             "replacement_cost": product.replacement_cost,
-            "price": product.price,
             "stock": stock,
             "on_hand": sum(stock.values()),
         }

@@ -252,8 +252,11 @@ class SupplierReturnApiTests(APITestCase):
         self.business, self.branch, self.owner = create_business(
             name="Dhaka Rentals", owner_name="Owner", owner_email="owner@example.com", owner_password=PASSWORD
         )
+        # Purchasing is opt-in for a new business; these tests are about a shop that uses it.
+        self.business.settings["modules"]["purchases"] = True
+        self.business.save(update_fields=["settings"])
         self.supplier = Supplier.objects.create(business=self.business, name="Singer Agent")
-        self.other = Supplier.objects.create(business=self.business, name="Brother Depot")
+        self.other =Supplier.objects.create(business=self.business, name="Brother Depot")
         self.machine = create_product(user=self.owner, sku="SM-100", name="Sewing machine", rentable=True)
         self.table = create_product(user=self.owner, sku="TB-1", name="Cutting table", rentable=True)
 
@@ -334,6 +337,8 @@ class SupplierReturnApiTests(APITestCase):
         theirs, their_branch, their_owner = create_business(
             name="Sylhet Tools", owner_name="Them", owner_email="them@example.com", owner_password=PASSWORD
         )
+        theirs.settings["modules"]["purchases"] = True
+        theirs.save(update_fields=["settings"])
         self.login(their_owner)
         self.assertEqual(self.codes(), [])
         self.assertEqual(self.client.get("/api/purchases/returns-summary/").json()["count"], 0)

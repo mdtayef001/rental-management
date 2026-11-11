@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useRouter } from "next/navigation"
+import { ImageUp, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { PageHeader, Spinner } from "@/components/common"
 import { request } from "@/lib/api/client"
 import { ApiError } from "@/lib/api/errors"
+import { logoUrl, prepareLogo } from "@/lib/logo"
 import type { Business, BusinessSettings, PermissionId } from "@/lib/types"
 
 const MANAGER_PERMISSIONS: { id: PermissionId; label: string; hint: string }[] = [
@@ -18,7 +20,6 @@ const MANAGER_PERMISSIONS: { id: PermissionId; label: string; hint: string }[] =
   { id: "managerProducts", label: "Change products", hint: "Add products and edit rates." },
   { id: "managerCustomers", label: "Edit customers", hint: "Change or remove customer records." },
   { id: "managerActivity", label: "See the activity log", hint: "Read what everyone has done." },
-  { id: "managerPurchases", label: "See purchasing", hint: "Suppliers, bills and what you owe." },
   { id: "managerProfit", label: "See profit and reports", hint: "What things cost and what they earn." },
 ]
 
@@ -74,7 +75,7 @@ export function SettingsView({ business }: { business: Business }) {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">The business</CardTitle>
-          <CardDescription>This is what appears at the top of every receipt.</CardDescription>
+          <CardDescription>This is what appears at the top of every receipt, bill and report.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
@@ -110,25 +111,7 @@ export function SettingsView({ business }: { business: Business }) {
         </CardContent>
       </Card>
 
-      {/* Modules come before the detail settings on purpose: what the business tracks
-          decides which of the screens below are even worth reading. */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">What this business tracks</CardTitle>
-          <CardDescription>
-            Switch off what you don&apos;t use and it leaves the app entirely — the nav items, the screens, and the
-            figures that come from them.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <Toggle
-            checked={settings.modules.purchases}
-            onChange={(v) => patch("modules", { ...settings.modules, purchases: v })}
-            label="Purchasing"
-            hint="Suppliers, bills, and stock sent back to them. Leave it off if you don't buy stock through the app."
-          />
-        </CardContent>
-      </Card>
+      <LogoCard version={business.logoVersion} name={business.name} />
 
       <Card>
         <CardHeader>
@@ -199,12 +182,6 @@ export function SettingsView({ business }: { business: Business }) {
 
           <div className="space-y-2">
             <Toggle
-              checked={settings.rentals.depositRequired}
-              onChange={(v) => patch("rentals", { ...settings.rentals, depositRequired: v })}
-              label="Prompt for a deposit"
-              hint="Suggests the product's deposit when renting out."
-            />
-            <Toggle
               checked={settings.rentals.allowOpenEnded}
               onChange={(v) => patch("rentals", { ...settings.rentals, allowOpenEnded: v })}
               label="Allow rentals with no return date"
@@ -254,15 +231,15 @@ export function SettingsView({ business }: { business: Business }) {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Receipts</CardTitle>
-          <CardDescription>Your own line at the bottom of every receipt.</CardDescription>
+          <CardTitle className="text-base">Receipts and bills</CardTitle>
+          <CardDescription>Your own line at the bottom of every receipt and bill.</CardDescription>
         </CardHeader>
         <CardContent>
           <Textarea
             value={settings.receiptNote}
             onChange={(e) => patch("receiptNote", e.target.value)}
             rows={3}
-            placeholder="Items must be returned in working order. Deposits are refunded on return."
+            placeholder="Items must be returned in working order. Late returns are charged per day."
           />
         </CardContent>
       </Card>
@@ -274,6 +251,84 @@ export function SettingsView({ business }: { business: Business }) {
         </Button>
       </div>
     </div>
+  )
+}
+
+/**
+ * The business's own logo.
+ *
+ * Saved the moment it is chosen rather than with the Save button: it is a file, not a
+ * setting, and "I picked it but it isn't on my bill" is the confusion that would follow.
+ * The picture is scaled down in the browser first, so a photo straight off a phone works.
+ */
+function LogoCard({ version, name }: { version: string; name: string }) {
+  const router = useRouter()
+  const input = useRef<HTMLInputElement>(null)
+  const [busy, setBusy] = useState(false)
+  const src = logoUrl(version)
+
+  async function run(work: () => Promise<unknown>, done: string) {
+    setBusy(true)
+    try {
+      await work()
+      toast.success(done)
+      router.refresh()
+    } catch (err) {
+      toast.error(err instanceof ApiError || err instanceof Error ? err.message : "Couldn't save the logo.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function choose(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    // Cleared so choosing the same file again still fires a change.
+    e.target.value = ""
+    if (!file) return
+    void run(
+      async () => request("business/logo/", { method: "PUT", body: { image: await prepareLogo(file) } }),
+      "Logo saved. It is on your receipts, bills and reports now.",
+    )
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Logo</CardTitle>
+        <CardDescription>
+          Printed at the top of every receipt, bill and report, on paper and in the PDF. A PNG with a clear
+          background looks best.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center">
+        {/* Shown on white, because paper is where it will be seen. */}
+        <div className="flex h-24 w-full shrink-0 items-center justify-center rounded-lg border bg-white p-3 sm:w-56">
+          {src ? (
+            // eslint-disable-next-line @next/next/no-img-element -- already small, served by the API
+            <img src={src} alt={`${name} logo`} className="max-h-full max-w-full object-contain" />
+          ) : (
+            <span className="text-sm text-neutral-500">No logo yet</span>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <input ref={input} type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={choose} tabIndex={-1} />
+          <Button variant="outline" disabled={busy} onClick={() => input.current?.click()}>
+            {busy ? <Spinner /> : <ImageUp className="size-4" />}
+            {src ? "Change logo" : "Upload logo"}
+          </Button>
+          {src && (
+            <Button
+              variant="ghost"
+              disabled={busy}
+              onClick={() => run(() => request("business/logo/", { method: "DELETE" }), "Logo removed")}
+            >
+              <Trash2 className="size-4" />
+              Remove
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 

@@ -22,7 +22,7 @@ from rest_framework.exceptions import ValidationError
 
 from apps.accounts.models import Business, log
 from apps.catalog.models import StockMovement
-from apps.catalog.services import change_stock
+from apps.catalog.services import change_stock, customer_rate, set_customer_rate
 
 from .models import Rental, RentalItem, RentalPayment, RentalReturn, RentalReturnLine
 
@@ -48,13 +48,24 @@ def next_number(model, business_id):
 
 
 @transaction.atomic
-def create_rental(*, user, customer, branch, lines, started_at=None, due_at=None, deposit=ZERO, notes="", paid_amount=ZERO, payment_method="", payment_reference=""):
+def create_rental(*, user, customer, branch, lines, started_at=None, due_at=None, notes="", paid_amount=ZERO, payment_method="", payment_reference="", remember_rates=False):
     """Rent several products to one customer in one transaction.
 
-    `lines` is a list of dicts: product, quantity, plan, rate, and optionally deposit,
+    `lines` is a list of dicts: product, quantity, plan, rate, and optionally
     replacement_cost, holidays and note. Stock leaves the branch for each line; if any line
     can't be filled, the whole rental is rolled back and nothing moves.
+
+    A line without a rate uses the price agreed with this customer, and failing that the
+    product's own. `remember_rates` writes today's rates down as the customer's prices, so
+    the next rental starts from them.
+
+    There is no deposit. `paid_amount` is money the customer pays in advance: it sits on the
+    rental as credit and the rent is charged against it when the items come back.
     """
+    if remember_rates and customer is None:
+        remember_rates = False
+    if remember_rates and user.role == "staff":
+        raise ValidationError("Only the owner or a manager can change a customer's prices.")
     if not lines:
         raise ValidationError("Add at least one product to the rental.")
     if customer is not None and customer.blocked:
@@ -76,7 +87,6 @@ def create_rental(*, user, customer, branch, lines, started_at=None, due_at=None
         branch=branch,
         started_at=started_at,
         due_at=due_at,
-        deposit=deposit or ZERO,
         notes=notes,
         created_by=user,
     )
@@ -93,6 +103,8 @@ def create_rental(*, user, customer, branch, lines, started_at=None, due_at=None
 
         plan = line["plan"]
         rate = line.get("rate")
+        if rate is None:
+            rate = customer_rate(customer, product, plan)
         if rate is None:
             rate = product.rate_for(plan)
         if rate is None:
@@ -116,26 +128,18 @@ def create_rental(*, user, customer, branch, lines, started_at=None, due_at=None
             quantity=quantity,
             plan=plan,
             rate=rate,
-            deposit=line.get("deposit", product.deposit) or ZERO,
             replacement_cost=line.get("replacement_cost", product.replacement_cost) or ZERO,
             holidays=line.get("holidays", 0) or 0,
             note=line.get("note", "") or "",
         )
+        if remember_rates:
+            set_customer_rate(user=user, customer=customer, product=product, plan=plan, rate=rate, quiet=True)
 
-    if rental.deposit:
-        if not user.may_handle_deposits:
-            raise ValidationError("You haven't been given permission to take deposits.")
-        RentalPayment.objects.create(
-            business=user.business,
-            rental=rental,
-            amount=rental.deposit,
-            kind=RentalPayment.Kind.DEPOSIT,
-            method=payment_method,
-            reference=payment_reference,
-            by=user,
-        )
     if paid_amount:
-        add_payment(user=user, rental=rental, amount=paid_amount, method=payment_method, reference=payment_reference, kind=RentalPayment.Kind.RENT)
+        add_payment(
+            user=user, rental=rental, amount=paid_amount, method=payment_method,
+            reference=payment_reference, kind=RentalPayment.Kind.ADVANCE,
+        )
         rental.refresh_from_db()
 
     items = list(rental.items.all())
@@ -264,8 +268,10 @@ def item_match(item, now=None):
         "quantityOut": item.quantity_out,
         "plan": item.plan,
         "rate": item.rate,
-        "deposit": item.deposit,
         "replacementCost": item.replacement_cost,
+        # Paid in advance on this rental and not yet used: the return screen takes it off
+        # what is owed before asking for any more money.
+        "rentalCredit": rental.credit,
         "startedAt": rental.started_at,
         "dueAt": rental.due_at,
         "daysOut": days_out,
@@ -285,7 +291,6 @@ def rental_brief(rental):
         "customerName": rental.customer.name if rental.customer else "Walk-in",
         "startedAt": rental.started_at,
         "dueAt": rental.due_at,
-        "deposit": rental.deposit,
         "balance": rental.balance,
     }
 
@@ -333,7 +338,7 @@ def late_fee_for(business, item, days_late, quantity):
 
 
 @transaction.atomic
-def take_return(*, user, rental, lines, at=None, discount=ZERO, paid_amount=ZERO, deposit_refunded=ZERO, payment_method="", payment_reference="", note=""):
+def take_return(*, user, rental, lines, at=None, discount=ZERO, paid_amount=ZERO, refunded=ZERO, payment_method="", payment_reference="", note=""):
     """Take some or all of a rental's items back.
 
     `lines` is a list of dicts: item, quantity, condition, and optionally holidays and note.
@@ -480,10 +485,11 @@ def take_return(*, user, rental, lines, at=None, discount=ZERO, paid_amount=ZERO
         rental_return.paid_amount = paid_amount
         rental_return.save(update_fields=["paid_amount"])
 
-    if deposit_refunded:
-        refund_deposit(user=user, rental=rental, amount=deposit_refunded, method=payment_method, rental_return=rental_return)
-        rental_return.deposit_refunded = deposit_refunded
-        rental_return.save(update_fields=["deposit_refunded"])
+    # Anything they paid in advance beyond what this came to can be handed straight back.
+    if refunded:
+        refund(user=user, rental=rental, amount=refunded, method=payment_method, rental_return=rental_return)
+        rental_return.refunded = refunded
+        rental_return.save(update_fields=["refunded"])
 
     close_if_done(rental, at)
     rental.refresh_from_db()
@@ -547,33 +553,37 @@ def add_payment(*, user, rental, amount, kind=RentalPayment.Kind.RENT, method=""
 
 
 @transaction.atomic
-def refund_deposit(*, user, rental, amount, method="", note="", rental_return=None):
-    """Hand part or all of the deposit back.
+def refund(*, user, rental, amount, method="", reference="", note="", rental_return=None):
+    """Give the customer back money they paid and didn't use.
 
-    Capped at what is still held, so a deposit can't be refunded twice — the commonest way
-    money quietly leaks out of a rental shop.
+    Capped at the credit on the rental — what they have paid beyond what they have been
+    charged — so the same money can't be handed back twice, which is the commonest way cash
+    quietly leaks out of a rental shop. The rental row is locked while the cap is checked.
     """
-    if not user.may_handle_deposits:
-        raise ValidationError("You haven't been given permission to return deposits.")
     amount = Decimal(str(amount))
-    rental = Rental.objects.select_for_update().get(pk=rental.pk)
-    held = rental.deposit - rental.deposit_refunded
+    rental = Rental.objects.select_for_update(of=("self",)).get(pk=rental.pk)
     if amount <= 0:
         raise ValidationError("A refund has to be more than zero.")
-    if amount > held:
-        raise ValidationError(f"Only {held} of the deposit is still held.")
+    if amount > rental.credit:
+        raise ValidationError(
+            f"Only {rental.credit} has been paid beyond what {rental.code} has been charged."
+            if rental.credit
+            else f"Nothing has been paid beyond what {rental.code} has been charged."
+        )
     RentalPayment.objects.create(
         business_id=rental.business_id,
         rental=rental,
         rental_return=rental_return,
         amount=-amount,
-        kind=RentalPayment.Kind.DEPOSIT_REFUND,
+        kind=RentalPayment.Kind.REFUND,
         method=method,
+        reference=reference,
         note=note,
         by=user,
     )
-    Rental.objects.filter(pk=rental.pk).update(deposit_refunded=F("deposit_refunded") + amount)
-    log(user, "Deposit returned", f"{rental.code} · {amount}")
+    Rental.objects.filter(pk=rental.pk).update(paid_amount=F("paid_amount") - amount)
+    log(user, "Money given back", f"{rental.code} · {amount}")
+    rental.refresh_from_db()
     return rental
 
 
@@ -590,7 +600,7 @@ def cancel_rental(*, user, rental, reason=""):
     if RentalReturn.objects.filter(rental=rental).exists():
         raise ValidationError("Part of this rental has already come back, so it can't be cancelled.")
     if rental.paid_amount:
-        raise ValidationError("Money has been taken against this rental. Refund it before cancelling.")
+        raise ValidationError("Money has been taken against this rental. Give it back first, then cancel.")
 
     for item in rental.items.select_related("product"):
         if item.product_id and rental.branch_id and item.quantity_out:

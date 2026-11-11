@@ -1,7 +1,7 @@
 "use client"
 
-import { useActionState, useRef } from "react"
-import { AlertCircle, Loader2 } from "lucide-react"
+import { useActionState, useRef, useState } from "react"
+import { AlertCircle, Eye, EyeOff, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -18,6 +18,7 @@ import { DemoLogins } from "./demo-logins"
 export function LoginForm({ next }: { next?: string }) {
   const [state, action, pending] = useActionState<LoginState, FormData>(login, {})
   const formRef = useRef<HTMLFormElement>(null)
+  const [shown, setShown] = useState(false)
 
   return (
     <>
@@ -41,7 +42,26 @@ export function LoginForm({ next }: { next?: string }) {
 
         <div className="space-y-2">
           <Label htmlFor="password">Password</Label>
-          <Input id="password" name="password" type="password" autoComplete="current-password" required className="h-10" />
+          <div className="relative">
+            <Input
+              id="password"
+              name="password"
+              type={shown ? "text" : "password"}
+              autoComplete="current-password"
+              required
+              className="h-10 pr-11"
+            />
+            {/* A button, not a checkbox, and never a submit: it only changes what is seen. */}
+            <button
+              type="button"
+              onClick={() => setShown((on) => !on)}
+              aria-label={shown ? "Hide password" : "Show password"}
+              aria-pressed={shown}
+              className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-lg text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+            >
+              {shown ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+            </button>
+          </div>
         </div>
 
         {state.error && (

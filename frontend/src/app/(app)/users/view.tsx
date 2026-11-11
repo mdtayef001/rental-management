@@ -26,10 +26,8 @@ import type { RightId, SessionUser, TenantRole } from "@/lib/types"
 /** The per-person rights, in the order they matter at a counter. */
 const RIGHTS: { id: RightId; label: string; hint: string }[] = [
   { id: "canRent", label: "Rent items out", hint: "Start a new rental." },
-  { id: "canTakeReturns", label: "Take returns", hint: "Accept items back and settle them." },
-  { id: "canHandleDeposits", label: "Handle deposits", hint: "Take a deposit and give it back." },
+  { id: "canTakeReturns", label: "Take returns", hint: "Accept items back, take the money and give change back." },
   { id: "canAddStock", label: "Change stock", hint: "Correct shelf counts and record damage." },
-  { id: "canSell", label: "Sell outright", hint: "Sell stock rather than rent it." },
 ]
 
 /**
@@ -167,7 +165,6 @@ function UserDialog({ roles, user, onClose }: { roles: TenantRole[]; user?: Sess
     branchIds: user?.branchIds ?? [],
     canRent: user?.canRent ?? true,
     canTakeReturns: user?.canTakeReturns ?? true,
-    canHandleDeposits: user?.canHandleDeposits ?? false,
     canAddStock: user?.canAddStock ?? false,
     canSell: user?.canSell ?? false,
   }))
@@ -184,7 +181,6 @@ function UserDialog({ roles, user, onClose }: { roles: TenantRole[]; user?: Sess
           branchIds: form.branchIds,
           canRent: form.canRent,
           canTakeReturns: form.canTakeReturns,
-          canHandleDeposits: form.canHandleDeposits,
           canAddStock: form.canAddStock,
           canSell: form.canSell,
         }

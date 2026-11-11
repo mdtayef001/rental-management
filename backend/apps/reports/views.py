@@ -62,6 +62,29 @@ class CustomersView(ProductsView):
         return Response({**rng.as_json(), "results": services.top_customers(self.business, rng, self._limit())})
 
 
+class DebtorsView(ProductsView):
+    def get(self, request):
+        return Response({"results": services.debtors(self.business, self._limit())})
+
+
+class PdfView(ReportView):
+    """The report as a PDF: the sheet the owner prints or sends to their accountant."""
+
+    def get(self, request):
+        from django.http import HttpResponse
+
+        from apps.rentals.bill_pdf import logo_of
+
+        from . import report_pdf
+
+        rng = self.range
+        report = services.overview(self.business, rng, services.group_by(request.query_params))
+        response = HttpResponse(report_pdf.render(report, logo=logo_of(self.business)), content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="report_{rng.slug()}.pdf"'
+        response["Cache-Control"] = "no-store"
+        return response
+
+
 class ExportView(ReportView):
     """One report as a CSV file.
 

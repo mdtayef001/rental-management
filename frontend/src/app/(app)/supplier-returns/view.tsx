@@ -151,6 +151,7 @@ export function SupplierReturnsView() {
           onChange={setText}
           placeholder="Product, supplier, reason or a code like SR-000012"
           label="Search returns to suppliers"
+          suggest="purchases"
         />
         <FilterTabs value={status} onChange={setStatus} options={STATUSES} label="Filter returns to suppliers" />
       </Toolbar>

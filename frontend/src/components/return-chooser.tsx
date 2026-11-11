@@ -36,14 +36,19 @@ export function ReturnChooser({
   // Oldest first: the thing that's been out longest is usually what's coming back, and it's
   // the one most likely to be overdue.
   const rows = [...matches].sort((a, b) => b.daysOut - a.daysOut)
+  // A product scan lists one product across rentals; a receipt or a customer lists several
+  // products, and then the product is what tells the rows apart, so it leads.
+  const sameProduct = new Set(matches.map((m) => m.productId ?? m.productName)).size === 1
 
   return (
     <div className="space-y-3">
       <div>
         <h2 className="text-base font-semibold">{heading ?? "Which one is coming back?"}</h2>
         <p className="text-sm text-muted-foreground">
-          {plural(matches.length, "rental")} {matches.length === 1 ? "has" : "have"} this item still out. Pick the one
-          in front of you.
+          {sameProduct
+            ? `${plural(matches.length, "rental")} ${matches.length === 1 ? "has" : "have"} this item still out.`
+            : `${plural(matches.length, "item")} still out.`}{" "}
+          Pick the one in front of you.
         </p>
       </div>
 
@@ -60,6 +65,7 @@ export function ReturnChooser({
               )}
             >
               <div className="min-w-0 flex-1 space-y-1.5">
+                <div className="truncate font-heading text-base font-semibold">{match.productName}</div>
                 {/* Who has it — the first thing staff check against the person at the counter. */}
                 <div className="flex flex-wrap items-center gap-2">
                   <User className="size-4 shrink-0 text-muted-foreground" />

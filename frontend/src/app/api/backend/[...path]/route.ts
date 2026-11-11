@@ -69,6 +69,19 @@ async function forward(req: NextRequest, path: string[]) {
     })
   }
 
+  // A picture (the business's logo) is bytes, not text, and unlike everything else here it
+  // may be cached: its address changes whenever the logo does.
+  if (res.ok && type.startsWith("image/")) {
+    return new Response(res.body, {
+      status: res.status,
+      headers: {
+        "Content-Type": type,
+        "Cache-Control": res.headers.get("Cache-Control") ?? "no-store",
+        "X-Content-Type-Options": "nosniff",
+      },
+    })
+  }
+
   // Everything else: pass the body through untouched, so DRF's error shapes survive for
   // errorMessage().
   const text = await res.text()

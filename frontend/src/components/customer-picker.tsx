@@ -36,7 +36,7 @@ export function CustomerPicker({
 
   const { data, isFetching } = useCustomers(
     { page: 1, search, stats: true },
-    { pageSize: 8, enabled: search.length > 1 },
+    { pageSize: 8, enabled: search.length > 0 },
   )
 
   if (value) {
@@ -80,7 +80,7 @@ export function CustomerPicker({
         </Button>
       </div>
 
-      {search.length > 1 && (
+      {search.length > 0 && (
         <>
           {isFetching && !data && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">

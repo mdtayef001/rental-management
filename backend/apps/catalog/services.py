@@ -12,7 +12,7 @@ from rest_framework.exceptions import ValidationError
 
 from apps.accounts.models import log
 
-from .models import Customer, Product, StockLevel, StockMovement
+from .models import Customer, CustomerRate, Product, StockLevel, StockMovement
 
 
 @transaction.atomic
@@ -126,9 +126,41 @@ def search_products(business, text, *, rentable_only=False, limit=20):
     return qs.order_by("name")[:limit]
 
 
+def next_sku(business):
+    """A SKU for a product added without one: P-0001, P-0002, … skipping any already taken."""
+    taken = set(
+        Product.objects.filter(business=business, sku__istartswith="P-").values_list("sku", flat=True)
+    )
+    taken = {sku.upper() for sku in taken}
+    number = len(taken) + 1
+    while f"P-{number:04d}" in taken:
+        number += 1
+    return f"P-{number:04d}"
+
+
 @transaction.atomic
-def create_product(*, user, **fields):
+def create_product(*, user, opening_stock=0, branch=None, **fields):
+    """Add a product, optionally with the count already on the shelf.
+
+    `opening_stock` goes onto `branch` (the business's first when none is given) through
+    the stock ledger like any other change, so the first line of the product's history says
+    where its stock came from.
+    """
+    from apps.accounts.models import Business
+
+    if not (fields.get("sku") or "").strip():
+        # Numbered under the business lock, so two people adding products at once can't be
+        # handed the same SKU.
+        Business.objects.select_for_update().filter(pk=user.business_id).first()
+        fields["sku"] = next_sku(user.business)
     product = Product.objects.create(business=user.business, created_by=user, **fields)
+    if opening_stock:
+        branch = branch or user.business.branches.first()
+        if branch is not None:
+            change_stock(
+                product=product, branch=branch, change=int(opening_stock),
+                reason=StockMovement.Reason.ADJUSTMENT, user=user, note="Opening stock",
+            )
     log(user, "Product added", f"{product.name} ({product.sku})")
     return product
 
@@ -197,3 +229,47 @@ def delete_customer(*, user, customer):
     name = customer.name
     customer.delete()
     log(user, "Customer deleted", name)
+
+
+# ---------- A customer's own prices ----------
+
+
+def customer_rate(customer, product, plan):
+    """The price agreed with this customer for this product and plan, or None."""
+    if customer is None:
+        return None
+    return (
+        CustomerRate.objects.filter(customer=customer, product=product, plan=plan)
+        .values_list("rate", flat=True)
+        .first()
+    )
+
+
+def set_customer_rate(*, user, customer, product, plan, rate, quiet=False):
+    """Agree a price with a customer, change it, or (with `rate=None`) go back to the
+    product's own.
+
+    A price equal to the product's own rate is not stored: it would only freeze today's
+    default onto the customer, so they'd miss the next price change for no reason.
+    """
+    existing = CustomerRate.objects.filter(customer=customer, product=product, plan=plan).first()
+    if rate is not None and rate == product.rate_for(plan):
+        rate = None
+
+    if rate is None:
+        if existing:
+            existing.delete()
+            if not quiet:
+                log(user, "Customer price removed", f"{customer.name} · {product.name}")
+        return None
+
+    if existing and existing.rate == rate:
+        return existing
+    saved, _ = CustomerRate.objects.update_or_create(
+        customer=customer,
+        product=product,
+        plan=plan,
+        defaults={"business": customer.business, "rate": rate, "updated_by": user},
+    )
+    log(user, "Customer price set", f"{customer.name} · {product.name} · {rate} ({plan})")
+    return saved

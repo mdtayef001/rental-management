@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { Package, Undo2 } from "lucide-react"
+import { Package, ReceiptText, Undo2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { ButtonLink } from "@/components/ui/button-link"
 import {
@@ -123,6 +123,7 @@ export function RentalsView() {
           onChange={setText}
           placeholder="Customer, phone number or product"
           label="Search rentals"
+          suggest="rentals"
         />
         <FilterTabs value={status} onChange={setStatus} options={FILTERS} label="Filter rentals" />
       </Toolbar>
@@ -151,6 +152,12 @@ export function RentalsView() {
             columns={columns}
             getKey={(rental) => rental.id}
             href={(rental) => `/rentals/${rental.id}`}
+            actions={(rental) => (
+              <ButtonLink href={`/rentals/${rental.id}/receipt`} variant="outline" size="sm">
+                <ReceiptText className="size-4" />
+                <span className="md:sr-only">Receipt</span>
+              </ButtonLink>
+            )}
           />
           <Pagination
             page={page}

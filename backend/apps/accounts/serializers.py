@@ -11,7 +11,7 @@ from .models import Activity, Branch, Business, User
 from .permissions import creatable_roles
 
 # The per-person rights an owner or manager can give a staff member.
-RIGHTS = ("can_rent", "can_take_returns", "can_sell", "can_add_stock", "can_handle_deposits")
+RIGHTS = ("can_rent", "can_take_returns", "can_sell", "can_add_stock")
 
 
 def check_password_strength(password, user=None):
@@ -86,7 +86,6 @@ class UserCreateSerializer(serializers.Serializer):
     can_take_returns = serializers.BooleanField(default=True)
     can_sell = serializers.BooleanField(default=False)
     can_add_stock = serializers.BooleanField(default=False)
-    can_handle_deposits = serializers.BooleanField(default=False)
 
     def validate_role(self, role):
         allowed = creatable_roles(self.context["request"].user)
@@ -139,8 +138,11 @@ class BusinessSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Business
-        fields = ["id", "name", "industry", "phone", "address", "status", "suspended", "suspended_reason", "settings", "branches", "created_at"]
-        read_only_fields = ["suspended", "suspended_reason", "created_at"]
+        fields = [
+            "id", "name", "industry", "phone", "address", "status", "suspended", "suspended_reason",
+            "settings", "logo_version", "branches", "created_at",
+        ]
+        read_only_fields = ["suspended", "suspended_reason", "logo_version", "created_at"]
 
 
 class BusinessSettingsSerializer(serializers.ModelSerializer):
@@ -162,6 +164,37 @@ class BusinessSettingsSerializer(serializers.ModelSerializer):
             else:
                 merged[key] = value
         return merged
+
+
+class LogoSerializer(serializers.Serializer):
+    """A logo, sent as the `data:` URL a browser's canvas produces.
+
+    The type is taken from the bytes themselves, not from what the upload claims to be, and
+    only PNG and JPEG are accepted: both are plain pictures, which is all a logo needs and
+    all the PDF writer can draw.
+    """
+
+    image = serializers.CharField()
+
+    def validate_image(self, value):
+        import base64
+        import binascii
+
+        from .models import BusinessLogo
+
+        head, _, encoded = value.partition(",")
+        if not head.startswith("data:image/") or ";base64" not in head:
+            raise serializers.ValidationError("Choose a PNG or JPEG picture.")
+        try:
+            data = base64.b64decode(encoded, validate=True)
+        except (binascii.Error, ValueError) as err:
+            raise serializers.ValidationError("That picture couldn't be read. Try another file.") from err
+        if len(data) > BusinessLogo.MAX_BYTES:
+            raise serializers.ValidationError("That picture is too large. Use one under 400 KB.")
+        for content_type, magic in BusinessLogo.TYPES.items():
+            if data.startswith(magic):
+                return {"content_type": content_type, "data": data}
+        raise serializers.ValidationError("Choose a PNG or JPEG picture.")
 
 
 class PlatformBusinessSerializer(serializers.ModelSerializer):

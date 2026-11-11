@@ -89,7 +89,7 @@ const FALLBACK: BusinessSettings = {
     staffWalkInRentals: false,
     staffCreateProducts: false,
   },
-  rentals: { defaultPlan: "daily", lateFeeMultiplier: 1, depositRequired: true, allowOpenEnded: true },
+  rentals: { defaultPlan: "daily", lateFeeMultiplier: 1, allowOpenEnded: true },
   receiptNote: "",
   lowStockAlert: 5,
 }

@@ -17,7 +17,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from apps.api import Pagination
 
 from . import services
-from .models import Activity, Branch, Business, User, log
+from .models import Activity, Branch, Business, BusinessLogo, User, log
 from .permissions import LEADS, TEAM, IsSuperAdmin, IsTenantMember, ManagerNeedsPermission, can_manage_user, creatable_roles
 from .serializers import (
     ActivitySerializer,
@@ -27,6 +27,7 @@ from .serializers import (
     BusinessSettingsSerializer,
     DeleteBusinessSerializer,
     LoginSerializer,
+    LogoSerializer,
     PasswordSerializer,
     PlatformBusinessSerializer,
     SuspendSerializer,
@@ -110,6 +111,61 @@ class BusinessSettingsView(TenantView):
         return Response(BusinessSerializer(request.user.business).data)
 
 
+def logo_response(business):
+    """A business's logo as an image, or a 404 when it has none.
+
+    The address carries the logo's version (`?v=`), so the picture itself can be cached for
+    a year: a new logo has a new address.
+    """
+    from django.http import HttpResponse
+
+    logo = BusinessLogo.objects.filter(business=business).first() if business.logo_version else None
+    if logo is None:
+        return Response({"detail": "This business has no logo."}, status=status.HTTP_404_NOT_FOUND)
+    response = HttpResponse(bytes(logo.data), content_type=logo.content_type)
+    response["Cache-Control"] = "private, max-age=31536000, immutable"
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+class BusinessLogoView(TenantView):
+    """The logo printed on receipts, bills and reports. Anyone on the team can see it; only
+    the owner can change it."""
+
+    allowed_roles = TEAM
+
+    def check_permissions(self, request):
+        super().check_permissions(request)
+        if request.method not in ("GET", "HEAD", "OPTIONS") and request.user.role != User.Role.OWNER:
+            raise PermissionDenied("Only the owner can change the logo.")
+
+    def get(self, request):
+        return logo_response(request.user.business)
+
+    @transaction.atomic
+    def put(self, request):
+        import hashlib
+
+        serializer = LogoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        image = serializer.validated_data["image"]
+        business = request.user.business
+        BusinessLogo.objects.update_or_create(business=business, defaults=image)
+        business.logo_version = hashlib.sha256(image["data"]).hexdigest()[:16]
+        business.save(update_fields=["logo_version"])
+        log(request.user, "Logo changed")
+        return Response(BusinessSerializer(business).data)
+
+    @transaction.atomic
+    def delete(self, request):
+        business = request.user.business
+        BusinessLogo.objects.filter(business=business).delete()
+        business.logo_version = ""
+        business.save(update_fields=["logo_version"])
+        log(request.user, "Logo removed")
+        return Response(BusinessSerializer(business).data)
+
+
 class BranchViewSet(viewsets.ModelViewSet):
     """Branches of the caller's own business. Small list, so it isn't paginated."""
 
@@ -188,7 +244,7 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer = UserCreateSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         data = dict(serializer.validated_data)
-        rights = {k: data.pop(k) for k in ("can_rent", "can_take_returns", "can_sell", "can_add_stock", "can_handle_deposits")}
+        rights = {k: data.pop(k) for k in ("can_rent", "can_take_returns", "can_sell", "can_add_stock")}
         user = services.create_user(
             actor=request.user,
             name=data["name"],

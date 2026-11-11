@@ -143,3 +143,32 @@ Phases 0-5 are complete, including the supplier-returns screen. See the README f
     concurrent returns, the disambiguation resolver); frontend (quote parity, role rules).
 37. Final pass: security review, query-count check on every list page, bundle check, README
     and deployment notes.
+
+### Phase 6 — Bills and company prices (2026-11-11)
+38. Monthly / yearly bill per customer, on screen, printed on A4 and as a PDF (ReportLab),
+    with one payment spread over the customer's rentals. ✅
+39. Bill rows by dates: quantity, out, back, days, days off, rate, amount; signature lines
+    for the customer and the owner. ✅
+40. A price per customer per product (`CustomerRate`), applied on Rent out, editable on the
+    customer's page, and optionally remembered from a rental. ✅
+41. Navigation: Rent out and Take back in the sidebar and in the phone's bottom bar, a
+    "More" tab for the rest, an instant loading state between screens. ✅
+
+### Phase 7 — Rental only: advances, logo, printable everything (2026-11-12)
+42. **No deposits.** A customer may pay in advance instead; it sits on the rental as credit,
+    the rent comes off it at return, and anything left over is given back (`services.refund`,
+    capped at the credit). Migration `rentals/0002` turns deposits still held into advances. ✅
+43. **Logo.** Uploaded in Settings (`BusinessLogo`), shown on receipts, bills, reports, both
+    PDFs and the sidebar. ✅
+44. **One sheet for every document** (`components/paper.tsx`): the receipt is now drawn like
+    a bill, with a QR code; the 80mm till slip stays as a second print option. ✅
+45. **A receipt per rental**, linked from the customer's page, the rentals list and each
+    block of a bill. ✅
+46. **Reports as a sheet**: print it or download it as a PDF (`reports/report_pdf.py`), with
+    "who owes you" added; CSV files kept underneath. ✅
+47. **Bills list** prints a bill straight from its row, beside the PDF button. ✅
+48. **Add product** asks for a name, a rate and a count; SKU is numbered when left empty.
+    Sale price, "sellable" and deposit are gone from products. ✅
+49. **Search boxes suggest** matches from the first letter. ✅
+50. **Purchasing is hidden** (module switched off, its switch removed from Settings). The
+    code and data are still there — delete or restore once the client confirms. ⏳

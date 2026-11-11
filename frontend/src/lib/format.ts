@@ -38,9 +38,14 @@ export function compactMoney(amount: number | string | null | undefined, currenc
   return `${sign}${symbol}${rounded.toLocaleString()}${unit}`
 }
 
-/** A whole number with thousands separators. */
+/** A whole number with thousands separators. Counts are never shown with a fraction. */
 export function count(value: number | null | undefined) {
-  return Number(value ?? 0).toLocaleString()
+  return Math.round(Number(value ?? 0)).toLocaleString()
+}
+
+/** An amount rounded to the two decimal places money is kept in. */
+export function round2(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100
 }
 
 export function date(value: string | Date | null | undefined) {

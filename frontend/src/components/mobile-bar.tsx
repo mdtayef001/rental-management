@@ -2,39 +2,41 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Boxes, ScanLine, Undo2 } from "lucide-react"
-import { useCanAccess } from "@/components/session"
+import { Boxes, Menu, PackagePlus, ScanLine, Undo2 } from "lucide-react"
+import { useSession } from "@/components/session"
+import { useSidebar } from "@/components/ui/sidebar"
+import { canAccess } from "@/lib/auth/roles"
 import { cn } from "@/lib/utils"
 
 const TABS = [
   { href: "/scan", label: "Scan", icon: ScanLine },
+  { href: "/rent-out", label: "Rent out", icon: PackagePlus },
+  { href: "/take-back", label: "Take back", icon: Undo2 },
   { href: "/rentals", label: "Rentals", icon: Boxes },
-  { href: "/returns", label: "Returns", icon: Undo2 },
 ]
+
+const TAB = "relative flex min-h-14 flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors"
 
 /**
  * Bottom tab bar on phones.
  *
- * Staff spend the day on two screens — scan out, scan in — and on a phone those need to be
- * one thumb-tap away, not behind a menu.
+ * Staff spend the day renting out and taking back, one-handed, with stock in the other
+ * hand — so those two sit under the thumb on every screen, with the scanner beside them.
+ * Everything else is one tap further, behind "More", which opens the full menu.
  */
 export function MobileBar() {
   const path = usePathname()
-  const can = {
-    "/scan": useCanAccess("/scan"),
-    "/rentals": useCanAccess("/rentals"),
-    "/returns": useCanAccess("/returns"),
-  } as Record<string, boolean>
+  const { user, business } = useSession()
+  const { toggleSidebar } = useSidebar()
 
-  const tabs = TABS.filter((tab) => can[tab.href])
-  if (tabs.length === 0) return null
+  const tabs = TABS.filter((tab) => canAccess(user, tab.href, business?.settings))
 
   return (
     <nav
       // Sticky to the bottom of the screen and padded for the phone's home indicator, so
       // the last row of a list is never hidden under it.
-      className="sticky bottom-0 z-20 flex border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
-      aria-label="Quick actions"
+      className="sticky bottom-0 z-20 flex border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden print:hidden"
+      aria-label="Main"
     >
       {tabs.map((tab) => {
         const active = path === tab.href || path.startsWith(tab.href + "/")
@@ -45,9 +47,9 @@ export function MobileBar() {
             href={tab.href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "relative flex flex-1 flex-col items-center gap-1 py-2.5 text-xs font-medium transition-colors",
+              TAB,
               active
-                ? "text-primary before:absolute before:inset-x-5 before:top-0 before:h-0.5 before:rounded-full before:bg-primary"
+                ? "text-primary before:absolute before:inset-x-4 before:top-0 before:h-0.5 before:rounded-full before:bg-primary"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
@@ -56,6 +58,10 @@ export function MobileBar() {
           </Link>
         )
       })}
+      <button type="button" onClick={toggleSidebar} className={cn(TAB, "text-muted-foreground hover:text-foreground")}>
+        <Menu className="size-5" />
+        More
+      </button>
     </nav>
   )
 }

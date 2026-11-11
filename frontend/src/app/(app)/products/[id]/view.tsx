@@ -2,13 +2,12 @@
 
 import { useState } from "react"
 import { QRCodeSVG } from "qrcode.react"
-import { Archive, Pencil, Printer, SlidersHorizontal } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
+import { AlertTriangle, Archive, Boxes, Package, Pencil, Printer, ShieldAlert, SlidersHorizontal, Truck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ButtonLink } from "@/components/ui/button-link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { ErrorState, PageHeader, TableSkeleton } from "@/components/common"
+import { CopyValue, ErrorState, PageHeader, Pill, StatCard, StatGrid, TableSkeleton } from "@/components/common"
 import { DataView, Primary } from "@/components/data-view"
 import { ProductDialog } from "@/components/product-form"
 import { StockAdjustDialog } from "@/components/stock-adjust"
@@ -50,11 +49,31 @@ export function ProductDetailView({
   if (isLoading || !product) return <TableSkeleton rows={5} columns={4} />
 
   const threshold = product.lowStockThreshold || settings.lowStockAlert
+  const low = !product.archivedAt && product.onHand <= threshold
+  const rates = [
+    { label: "Per day", value: product.rentDaily },
+    { label: "Per week", value: product.rentWeekly },
+    { label: "Per month", value: product.rentMonthly },
+  ].filter((rate) => rate.value != null)
 
   return (
     <div className="space-y-6">
       <PageHeader
         title={product.name}
+        badge={
+          product.archivedAt ? (
+            <Pill>
+              <Archive className="size-3" />
+              Archived
+            </Pill>
+          ) : low ? (
+            // Red, and beside the name: the first thing to know about this product today.
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-destructive px-2.5 py-1 text-xs font-semibold whitespace-nowrap text-white">
+              <AlertTriangle className="size-3.5" />
+              {product.onHand > 0 ? `Low stock · ${count(product.onHand)} available` : "Out of stock · 0 available"}
+            </span>
+          ) : undefined
+        }
         description={product.description || undefined}
         back={{ href: "/products", label: "Products" }}
       >
@@ -73,42 +92,82 @@ export function ProductDetailView({
         {product.rentable && product.onHand > 0 && <ButtonLink href={`/rent-out?code=${encodeURIComponent(product.barcode || product.sku)}`}>Rent out</ButtonLink>}
       </PageHeader>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_18rem]">
+      {/* How many there are, at a glance. Only "Available" ever takes a colour, and only
+          when it is low, so red on this row always means the same thing. */}
+      <StatGrid>
+        <StatCard
+          label="Available"
+          value={count(product.onHand)}
+          hint={low ? `Low: warns at ${count(threshold)}` : `Warns at ${count(threshold)}`}
+          icon={Package}
+          tone={low ? "danger" : "good"}
+        />
+        <StatCard label="Out on rent" value={count(product.outOnRent)} icon={Truck} />
+        <StatCard label="Total owned" value={count(product.onHand + product.outOnRent)} icon={Boxes} />
+        <StatCard
+          label="Replacement cost"
+          value={product.replacementCost > 0 ? money(product.replacementCost, currency) : "—"}
+          hint="Each, if damaged or lost"
+          icon={ShieldAlert}
+        />
+      </StatGrid>
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_19rem]">
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Where it is</CardTitle>
+              <CardTitle className="text-base">Rent prices</CardTitle>
             </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Branch</TableHead>
-                    <TableHead className="text-right">On the shelf</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {branches.map((branch) => {
-                    const quantity = product.stock[branch.id] ?? 0
-                    return (
-                      <TableRow key={branch.id}>
-                        <TableCell>{branch.name}</TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          <span className={quantity <= threshold ? "text-warning-soft-foreground dark:text-warning" : undefined}>
-                            {count(quantity)}
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
-                  <TableRow>
-                    <TableCell className="font-medium">Out on rent</TableCell>
-                    <TableCell className="text-right font-medium tabular-nums">{count(product.outOnRent)}</TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
+            <CardContent>
+              {product.rentable && rates.length > 0 ? (
+                <dl className="grid gap-3 sm:grid-cols-3">
+                  {rates.map((rate) => (
+                    <div key={rate.label} className="rounded-lg border bg-muted/40 px-4 py-3">
+                      <dt className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{rate.label}</dt>
+                      <dd className="mt-1 font-heading text-2xl font-semibold tracking-tight tabular-nums">
+                        {money(rate.value, currency)}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : (
+                <p className="text-sm text-muted-foreground">No rent price set.</p>
+              )}
             </CardContent>
           </Card>
+
+          {branches.length > 1 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Where it is</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Branch</TableHead>
+                      <TableHead className="text-right">Available</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {branches.map((branch) => {
+                      const quantity = product.stock[branch.id] ?? 0
+                      return (
+                        <TableRow key={branch.id}>
+                          <TableCell>{branch.name}</TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            <span className={quantity <= threshold ? "font-semibold text-destructive" : undefined}>
+                              {count(quantity)}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>
@@ -180,24 +239,27 @@ export function ProductDetailView({
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Rates</CardTitle>
+              <CardTitle className="text-base">Details</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              {product.rentable ? (
-                <>
-                  {product.rentDaily != null && <Row label="Per day" value={money(product.rentDaily, currency)} />}
-                  {product.rentWeekly != null && <Row label="Per week" value={money(product.rentWeekly, currency)} />}
-                  {product.rentMonthly != null && <Row label="Per month" value={money(product.rentMonthly, currency)} />}
-                  {product.deposit > 0 && <Row label="Deposit each" value={money(product.deposit, currency)} />}
-                  {product.replacementCost > 0 && (
-                    <Row label="Replacement" value={money(product.replacementCost, currency)} />
-                  )}
-                </>
-              ) : (
-                <p className="text-muted-foreground">Not set up for renting.</p>
-              )}
-              {product.sellable && <Row label="Sale price" value={money(product.price, currency)} />}
-              <Row label="Cost each" value={money(product.cost, currency)} />
+            <CardContent>
+              <dl className="divide-y text-sm [&>div]:flex [&>div]:min-h-10 [&>div]:items-center [&>div]:justify-between [&>div]:gap-3 [&>div]:py-1.5">
+                <div>
+                  <dt className="shrink-0 text-muted-foreground">SKU</dt>
+                  <dd className="flex min-w-0 justify-end">
+                    <CopyValue value={product.sku} label="SKU" />
+                  </dd>
+                </div>
+                <div>
+                  <dt className="shrink-0 text-muted-foreground">Barcode</dt>
+                  <dd className="flex min-w-0 justify-end">
+                    {product.barcode ? <CopyValue value={product.barcode} label="Barcode" /> : "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="shrink-0 text-muted-foreground">Category</dt>
+                  <dd className="truncate">{product.category || "—"}</dd>
+                </div>
+              </dl>
             </CardContent>
           </Card>
 
@@ -209,7 +271,7 @@ export function ProductDetailView({
               {/* The printable shelf label. Scanning this QR on the rent-out or take-back
                   screen finds the product, so items with no manufacturer barcode can still
                   be scanned rather than typed. */}
-              <div className="receipt flex flex-col items-center gap-2 rounded-md bg-white p-4 text-black">
+              <div className="receipt-paper flex flex-col items-center gap-2 rounded-md bg-white p-4 text-black">
                 <QRCodeSVG value={`sku:${product.sku}`} size={120} level="M" />
                 <div className="text-center">
                   <div className="text-sm font-semibold">{product.name}</div>
@@ -222,39 +284,11 @@ export function ProductDetailView({
               </Button>
             </CardContent>
           </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <Row label="SKU" value={product.sku} mono />
-              {product.barcode && <Row label="Barcode" value={product.barcode} mono />}
-              <Row label="Unit" value={product.unit} />
-              {product.category && <Row label="Category" value={product.category} />}
-              <Row label="Low stock at" value={count(threshold)} />
-              {product.archivedAt && (
-                <Badge variant="secondary" className="gap-1">
-                  <Archive className="size-3" />
-                  Archived
-                </Badge>
-              )}
-            </CardContent>
-          </Card>
         </div>
       </div>
 
       <ProductDialog open={editing} onOpenChange={setEditing} product={product} onSaved={() => setEditing(false)} />
       <StockAdjustDialog open={adjusting} onOpenChange={setAdjusting} product={product} />
-    </div>
-  )
-}
-
-function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3">
-      <span className="text-muted-foreground">{label}</span>
-      <span className={`shrink-0 ${mono ? "font-mono text-xs" : ""}`}>{value}</span>
     </div>
   )
 }

@@ -12,7 +12,7 @@ from apps.accounts.models import Branch, TenantModel
 
 
 class Product(TenantModel):
-    """One kind of item. Rentable, sellable, or both."""
+    """One kind of item the business rents out."""
 
     sku = models.CharField(max_length=64)
     # What a scanner reads. Blank is allowed: not every item carries a printed code, and
@@ -28,17 +28,11 @@ class Product(TenantModel):
     rent_daily = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0)])
     rent_weekly = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0)])
     rent_monthly = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0)])
-    # Suggested deposit per unit, which staff can change on the rental.
-    deposit = models.DecimalField(max_digits=12, decimal_places=2, default=0, validators=[MinValueValidator(0)])
     # What replacing one costs, charged when an item comes back broken or doesn't come back.
     replacement_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0, validators=[MinValueValidator(0)])
 
-    # Selling. Off for a pure rental business, on when the client also sells stock.
-    sellable = models.BooleanField(default=False)
-    price = models.DecimalField(max_digits=12, decimal_places=2, default=0, validators=[MinValueValidator(0)])
-
     # What a unit cost to buy. Kept as a weighted average by the purchasing app, so changing
-    # it never rewrites the profit on past rentals or sales.
+    # it never rewrites the profit on past rentals.
     cost = models.DecimalField(max_digits=12, decimal_places=2, default=0, validators=[MinValueValidator(0)])
 
     low_stock_threshold = models.PositiveIntegerField(default=0)
@@ -152,3 +146,31 @@ class Customer(TenantModel):
 
     def __str__(self):
         return self.name
+
+
+class CustomerRate(TenantModel):
+    """A price agreed with one customer for one product.
+
+    Every product has its own rate, which is what anyone pays by default. A company that
+    rents all year usually has a price of its own, and staff shouldn't have to remember it:
+    once it is written here, renting that product to that customer starts from this rate
+    instead of the product's. It can still be changed on the day.
+    """
+
+    PLANS = [("daily", "Per day"), ("weekly", "Per week"), ("monthly", "Per month"), ("fixed", "Fixed price")]
+
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name="rates")
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="customer_rates")
+    plan = models.CharField(max_length=10, choices=PLANS, default="daily")
+    rate = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(0)])
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+
+    class Meta:
+        ordering = ["product__name", "plan"]
+        constraints = [
+            models.UniqueConstraint(fields=["customer", "product", "plan"], name="unique_customer_rate"),
+        ]
+
+    def __str__(self):
+        return f"{self.customer_id} · {self.product_id} · {self.plan}: {self.rate}"

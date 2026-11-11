@@ -42,8 +42,6 @@ def default_settings():
             # Charged per day for every day an item is late, as a share of the daily rate.
             # 1.0 means a late day costs the same as a rented day; 1.5 adds a 50% penalty.
             "lateFeeMultiplier": 1.0,
-            # Ask for a deposit when renting out.
-            "depositRequired": True,
             # Rentals with no agreed return date are allowed.
             "allowOpenEnded": True,
         },
@@ -65,6 +63,9 @@ class Business(models.Model):
     suspended = models.BooleanField(default=False)
     suspended_reason = models.CharField(max_length=300, blank=True)
     settings = models.JSONField(default=default_settings)
+    # Changes whenever the logo does, so browsers can cache the image for good and still
+    # pick a new one up at once. Blank means there is no logo.
+    logo_version = models.CharField(max_length=16, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -104,6 +105,27 @@ class Business(models.Model):
     @property
     def receipt_note(self):
         return self.settings.get("receiptNote", "")
+
+
+class BusinessLogo(models.Model):
+    """The business's own logo, printed at the top of receipts, bills and reports.
+
+    Kept in its own table rather than on Business: the business row is read on every
+    request, and an image has no place riding along with it. This row is only read when a
+    page or a PDF actually draws the logo.
+    """
+
+    #: Bytes, after the browser has already scaled the picture down.
+    MAX_BYTES = 400 * 1024
+    TYPES = {"image/png": b"\x89PNG\r\n\x1a\n", "image/jpeg": b"\xff\xd8\xff"}
+
+    business = models.OneToOneField(Business, on_delete=models.CASCADE, related_name="logo")
+    content_type = models.CharField(max_length=20)
+    data = models.BinaryField()
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Logo of {self.business_id}"
 
 
 class Branch(models.Model):
@@ -176,8 +198,6 @@ class User(AbstractUser):
     can_take_returns = models.BooleanField(default=True)
     can_sell = models.BooleanField(default=False)
     can_add_stock = models.BooleanField(default=False)
-    # Taking a deposit and giving it back is money handling, so it is off until granted.
-    can_handle_deposits = models.BooleanField(default=False)
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["name"]
@@ -223,10 +243,6 @@ class User(AbstractUser):
     @property
     def may_add_stock(self):
         return self._right("can_add_stock")
-
-    @property
-    def may_handle_deposits(self):
-        return self._right("can_handle_deposits")
 
     def branch_ids(self):
         """The branches this user may act in. None means every branch (owners and managers)."""

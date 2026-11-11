@@ -210,7 +210,7 @@ export function DashboardView({ businessName }: { businessName: string }) {
         <StatCard
           label="Owed by customers"
           value={money(summary?.owed ?? 0, currency)}
-          hint={`${money(summary?.depositsHeld ?? 0, currency)} held as deposits`}
+          hint={summary?.advances ? `${money(summary.advances, currency)} paid in advance by others` : "Nothing paid in advance"}
           icon={Banknote}
           tone={summary?.owed ? "warning" : "good"}
           loading={isLoading}
