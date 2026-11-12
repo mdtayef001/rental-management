@@ -25,7 +25,6 @@ from django.utils import timezone
 
 from apps.accounts.models import Business
 from apps.catalog.models import Customer
-from apps.purchasing.models import Purchase
 from apps.rentals.models import Rental, RentalItem, RentalPayment, RentalReturn, RentalReturnLine
 
 MONEY = DecimalField(max_digits=14, decimal_places=2)
@@ -171,10 +170,6 @@ def summary(business: Business, rng: Range):
         units=units(F("quantity") - F("quantity_returned") - F("quantity_lost"))
     )
 
-    bought = Purchase.objects.filter(
-        business=business, purchased_at__gte=rng.start, purchased_at__lt=rng.end
-    ).aggregate(bills=Count("id"), spent=total("total"))
-
     return {
         **rng.as_json(),
         "days": rng.days,
@@ -201,8 +196,6 @@ def summary(business: Business, rng: Range):
         "unitsOut": out_now["units"],
         "outstanding": standing["outstanding"],
         "advancesHeld": standing["advances_held"],
-        "purchaseBills": bought["bills"],
-        "purchaseSpend": bought["spent"],
     }
 
 

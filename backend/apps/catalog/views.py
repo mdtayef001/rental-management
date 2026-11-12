@@ -1,7 +1,7 @@
 """Products, stock and customers.
 
 `TenantViewSet` is where tenant isolation actually happens: every queryset in this file and
-in rentals/purchasing starts from `business=request.user.business`, so no view can forget.
+in rentals starts from `business=request.user.business`, so no view can forget.
 """
 
 from django.db.models import Count, DecimalField, F, IntegerField, OuterRef, Prefetch, Q, Subquery, Sum, Value
@@ -132,10 +132,10 @@ class ProductViewSet(TenantViewSet, viewsets.ModelViewSet):
     def filter_queryset(self, qs):
         qs = self.search(qs)
         params = self.request.query_params
-        if params.get("archived") == "1":
-            qs = qs.filter(archived_at__isnull=False)
-        else:
-            qs = qs.filter(archived_at__isnull=True)
+        # Archived products leave the lists, not the system: one opened by its id — from an
+        # old receipt, a bill, a report — is still there to read.
+        if self.action == "list":
+            qs = qs.filter(archived_at__isnull=params.get("archived") != "1")
         if params.get("rentable") == "1":
             qs = qs.filter(rentable=True)
         category = params.get("category", "").strip()
@@ -172,8 +172,8 @@ class ProductViewSet(TenantViewSet, viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         """Deletes an unused product, archives one with history. See `delete_product`."""
-        services.delete_product(user=request.user, product=self.get_object())
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        archived = services.delete_product(user=request.user, product=self.get_object())
+        return Response({"archived": archived})
 
     @action(detail=False)
     def categories(self, request):
@@ -363,6 +363,9 @@ class CustomerViewSet(TenantViewSet, viewsets.ModelViewSet):
     def filter_queryset(self, qs):
         qs = self.search(qs)
         params = self.request.query_params
+        # Archived customers leave the list and the pickers, but still open by id.
+        if self.action == "list":
+            qs = qs.filter(archived_at__isnull=params.get("archived") != "1")
         if params.get("blocked") == "1":
             qs = qs.filter(blocked=True)
         if params.get("hasOpenRentals") == "1":
@@ -390,8 +393,9 @@ class CustomerViewSet(TenantViewSet, viewsets.ModelViewSet):
         log(self.request.user, "Customer changed", customer.name)
 
     def destroy(self, request, *args, **kwargs):
-        services.delete_customer(user=request.user, customer=self.get_object())
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        """Deletes a customer who never rented, archives one who has. See `delete_customer`."""
+        archived = services.delete_customer(user=request.user, customer=self.get_object())
+        return Response({"archived": archived})
 
     @action(detail=True, methods=["get", "put"])
     def rates(self, request, pk=None):

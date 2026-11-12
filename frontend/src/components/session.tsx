@@ -46,7 +46,7 @@ export function useCurrency() {
  *
  * There is no Branches screen: a business is created with exactly one, so `showPicker` is
  * false everywhere and every form quietly uses `defaultBranchId`. The model and these
- * pickers stay as the seam for a second location later — stock, rentals and purchases all
+ * pickers stay as the seam for a second location later — stock and rentals both
  * already record which branch they happened at, so opening one needs no migration.
  */
 export function useBranchScope() {
@@ -77,16 +77,14 @@ export function useHasPermission(permission: PermissionId) {
 
 const FALLBACK: BusinessSettings = {
   currency: "BDT",
-  modules: { rentals: true, sales: false, purchases: false },
+  modules: { rentals: true },
   permissions: {
     managerUsers: false,
     managerProducts: false,
     managerCustomers: false,
     managerBranches: false,
     managerActivity: false,
-    managerPurchases: false,
     managerProfit: false,
-    staffWalkInRentals: false,
     staffCreateProducts: false,
   },
   rentals: { defaultPlan: "daily", lateFeeMultiplier: 1, allowOpenEnded: true },

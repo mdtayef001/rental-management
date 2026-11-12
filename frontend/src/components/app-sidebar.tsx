@@ -13,13 +13,10 @@ import {
   LogOut,
   Moon,
   Package,
-  PackageX,
   Palette,
   ReceiptText,
   ScanLine,
   Settings,
-  ShoppingCart,
-  Truck,
   Undo2,
   Users,
 } from "lucide-react"
@@ -95,9 +92,6 @@ const GROUPS: { label: string; items: Item[] }[] = [
     label: "Stock",
     items: [
       { href: "/products", label: "Products", icon: Package },
-      { href: "/purchases", label: "Purchases", icon: ShoppingCart },
-      { href: "/suppliers", label: "Suppliers", icon: Truck },
-      { href: "/supplier-returns", label: "Sent back", icon: PackageX },
     ],
   },
   {

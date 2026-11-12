@@ -19,7 +19,7 @@ from apps.catalog.views import TenantViewSet
 from apps.catalog.models import Customer
 
 from . import services, statements
-from .models import Rental, RentalItem, RentalPayment, RentalReturn
+from .models import Rental, RentalItem, RentalPayment, RentalReturn, RentalReturnLine
 from .services import ZERO
 from .serializers import (
     CancelSerializer,
@@ -104,7 +104,13 @@ class RentalViewSet(TenantViewSet, mixins.ListModelMixin, mixins.RetrieveModelMi
         if self.request.user.role == User.Role.STAFF and params.get("mine") == "1":
             qs = qs.filter(created_by=self.request.user)
 
-        return qs.order_by({"due": "due_at", "oldest": "started_at"}.get(params.get("sort", ""), "-started_at"))
+        sort = params.get("sort", "")
+        if sort == "due":
+            # Soonest due first, and the ones with no return date after everything that has
+            # one. Said outright, because databases disagree on where an empty date sorts,
+            # and a list read a page at a time has to come in the same order every time.
+            return qs.order_by(F("due_at").asc(nulls_last=True), "id")
+        return qs.order_by("started_at" if sort == "oldest" else "-started_at")
 
     def check_permissions(self, request):
         super().check_permissions(request)
@@ -262,7 +268,20 @@ class RentalViewSet(TenantViewSet, mixins.ListModelMixin, mixins.RetrieveModelMi
             RentalItem.objects.filter(rental__business=request.user.business, rental__status__in=Rental.OPEN)
             .aggregate(n=Coalesce(Sum(F("quantity") - F("quantity_returned") - F("quantity_lost")), Value(0), output_field=IntegerField()))
         )["n"]
-        return Response({**counts, "unitsOut": units_out})
+        # What has come back today, counted from the take-backs themselves. A rental only
+        # reads as "returned" once its last unit is in, so counting rentals would show
+        # nothing on the day 60 of 100 machines came back.
+        back = RentalReturn.objects.filter(business=request.user.business, at__gte=start).aggregate(
+            returns=Count("id", distinct=True),
+            units=Coalesce(
+                Sum("lines__quantity", filter=~Q(lines__condition=RentalReturnLine.Condition.LOST)),
+                Value(0),
+                output_field=IntegerField(),
+            ),
+        )
+        return Response(
+            {**counts, "unitsOut": units_out, "returnsToday": back["returns"], "unitsReturnedToday": back["units"]}
+        )
 
     @action(detail=False, methods=["post"])
     def quote(self, request):

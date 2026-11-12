@@ -40,7 +40,9 @@ class Rental(TenantModel):
 
     # Numbered 1, 2, 3… per business, shown as RN-000001.
     number = models.PositiveIntegerField()
-    customer = models.ForeignKey(Customer, null=True, on_delete=models.SET_NULL, related_name="rentals")
+    # RESTRICT: a customer with rentals is archived, never deleted, so a bill can't lose
+    # its name. Empty only on walk-in rentals from before a customer was required.
+    customer = models.ForeignKey(Customer, null=True, on_delete=models.RESTRICT, related_name="rentals")
     branch = models.ForeignKey(Branch, null=True, on_delete=models.SET_NULL, related_name="+")
 
     started_at = models.DateTimeField(default=timezone.now)
@@ -139,7 +141,8 @@ class RentalItem(models.Model):
     PLAN_DAYS = {Plan.DAILY: 1, Plan.WEEKLY: 7, Plan.MONTHLY: 30}
 
     rental = models.ForeignKey(Rental, on_delete=models.CASCADE, related_name="items")
-    product = models.ForeignKey(Product, null=True, on_delete=models.SET_NULL, related_name="rental_items")
+    # RESTRICT for the same reason: a product that has been rented is archived, not deleted.
+    product = models.ForeignKey(Product, null=True, on_delete=models.RESTRICT, related_name="rental_items")
     # Frozen at rent-out time, so the line still reads correctly after the product is
     # renamed or deleted.
     product_name = models.CharField(max_length=200)

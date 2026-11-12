@@ -10,7 +10,7 @@ import type { Customer, CustomerRate, Product, Rental, RentalReturn, ResolveRetu
 //
 // Every mutation names the collections it affects and nothing else. Renting something out
 // changes rentals *and* stock *and* the dashboard totals, so all three are refreshed; it
-// doesn't touch suppliers, so those stay cached. Invalidating by collection keeps screens
+// doesn't touch the team, so that stays cached. Invalidating by collection keeps screens
 // honest without throwing away a cache the user is about to need.
 
 /** Collections, as the first element of every query key in queries.ts. */
@@ -21,8 +21,6 @@ type Collection =
   | "rentals"
   | "returns"
   | "branches"
-  | "suppliers"
-  | "purchases"
   | "users"
   | "activity"
   | "platform"
@@ -242,10 +240,13 @@ export function useSaveProduct(id?: string) {
 export function useDeleteProduct() {
   const refresh = useRefresh()
   return useMutation({
-    mutationFn: (id: string) => request<void>(`products/${id}/`, { method: "DELETE" }),
-    onSuccess: () => {
+    mutationFn: (id: string) => request<{ archived: boolean }>(`products/${id}/`, { method: "DELETE" }),
+    onSuccess: (result) => {
       refresh("products", "stock", "activity")
-      toast.success("Product deleted")
+      // A product that has been rented is kept for its receipts, bills and reports.
+      toast.success(
+        result?.archived ? "Product removed from the list. Its past rentals and reports are kept." : "Product deleted",
+      )
     },
     onError: (err) => showError(err, "Couldn't delete the product."),
   })
@@ -280,10 +281,12 @@ export function useSaveCustomer(id?: string) {
 export function useDeleteCustomer() {
   const refresh = useRefresh()
   return useMutation({
-    mutationFn: (id: string) => request<void>(`customers/${id}/`, { method: "DELETE" }),
-    onSuccess: () => {
+    mutationFn: (id: string) => request<{ archived: boolean }>(`customers/${id}/`, { method: "DELETE" }),
+    onSuccess: (result) => {
       refresh("customers", "activity")
-      toast.success("Customer removed")
+      toast.success(
+        result?.archived ? "Customer removed from the list. Their rentals and bills are kept." : "Customer removed",
+      )
     },
     onError: (err) => showError(err, "Couldn't remove the customer."),
   })
@@ -322,77 +325,6 @@ export function useSetUserPassword() {
       request<void>(`users/${id}/password/`, { method: "POST", body: { password } }),
     onSuccess: () => toast.success("Password changed"),
     onError: (err) => showError(err, "Couldn't change the password."),
-  })
-}
-
-// ---------- Purchasing ----------
-
-export function useCreatePurchase() {
-  const refresh = useRefresh()
-  return useMutation({
-    mutationFn: (body: Record<string, unknown>) => request("purchases/", { method: "POST", body }),
-    onSuccess: () => {
-      // A purchase raises stock and re-averages the product's cost.
-      refresh("purchases", "products", "stock", "suppliers", "activity")
-      toast.success("Purchase recorded")
-    },
-    onError: (err) => showError(err, "Couldn't record the purchase."),
-  })
-}
-
-export function useSaveSupplier(id?: string) {
-  const refresh = useRefresh()
-  return useMutation({
-    mutationFn: (body: Record<string, unknown>) =>
-      request(id ? `suppliers/${id}/` : "suppliers/", { method: id ? "PATCH" : "POST", body }),
-    onSuccess: () => {
-      refresh("suppliers", "activity")
-      toast.success(id ? "Supplier saved" : "Supplier added")
-    },
-    onError: (err) => showError(err, "Couldn't save the supplier."),
-  })
-}
-
-export function usePaySupplier() {
-  const refresh = useRefresh()
-  return useMutation({
-    mutationFn: (body: { supplier: string; amount: number; method?: string; purchase?: string | null; note?: string }) =>
-      request("purchases/payments/", { method: "POST", body }),
-    onSuccess: () => {
-      refresh("purchases", "suppliers", "activity")
-      toast.success("Payment recorded")
-    },
-    onError: (err) => showError(err, "Couldn't record the payment."),
-  })
-}
-
-export function useCreateSupplierReturn() {
-  const refresh = useRefresh()
-  return useMutation({
-    mutationFn: (body: { item: string; quantity: number; reason: string }) =>
-      request("purchases/returns/", { method: "POST", body }),
-    onSuccess: () => {
-      refresh("purchases", "products", "stock", "suppliers", "activity")
-      toast.success("Return to supplier recorded")
-    },
-    onError: (err) => {
-      // Refused, most often because another till took the same items back first.
-      refresh("rentals", "returns", "products", "stock")
-      showError(err, "Couldn't record the return.")
-    },
-  })
-}
-
-export function useSettleSupplierReturn() {
-  const refresh = useRefresh()
-  return useMutation({
-    mutationFn: ({ id, ...body }: { id: string; replacedQuantity?: number; refundedAmount?: number; creditedAmount?: number; closeNote?: string }) =>
-      request(`purchases/returns/${id}/settle/`, { method: "POST", body }),
-    onSuccess: () => {
-      refresh("purchases", "products", "stock", "suppliers", "activity")
-      toast.success("Return settled")
-    },
-    onError: (err) => showError(err, "Couldn't settle the return."),
   })
 }
 

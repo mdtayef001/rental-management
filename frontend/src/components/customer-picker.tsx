@@ -24,11 +24,9 @@ import type { Customer } from "@/lib/types"
 export function CustomerPicker({
   value,
   onChange,
-  allowWalkIn,
 }: {
   value: Customer | null
   onChange: (customer: Customer | null) => void
-  allowWalkIn?: boolean
 }) {
   const [text, setText] = useState("")
   const search = useDebounced(text.trim(), 250)
@@ -129,12 +127,6 @@ export function CustomerPicker({
             </ul>
           )}
         </>
-      )}
-
-      {allowWalkIn && (
-        <p className="text-xs text-muted-foreground">
-          Leave this empty for a walk-in customer, if your settings allow it.
-        </p>
       )}
 
       <CustomerDialog

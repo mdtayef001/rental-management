@@ -7,7 +7,7 @@
 export type Role = "superadmin" | "owner" | "manager" | "staff"
 export type TenantRole = Exclude<Role, "superadmin">
 
-export type ModuleId = "rentals" | "sales" | "purchases"
+export type ModuleId = "rentals"
 
 export type PermissionId =
   | "managerUsers"
@@ -15,13 +15,11 @@ export type PermissionId =
   | "managerCustomers"
   | "managerBranches"
   | "managerActivity"
-  | "managerPurchases"
   | "managerProfit"
-  | "staffWalkInRentals"
   | "staffCreateProducts"
 
 /** Per-person rights, which only limit staff: owners and managers always have them. */
-export type RightId = "canRent" | "canTakeReturns" | "canSell" | "canAddStock"
+export type RightId = "canRent" | "canTakeReturns" | "canAddStock"
 
 export type RentalPlan = "daily" | "weekly" | "monthly" | "fixed"
 export type RentalStatus = "active" | "partly_returned" | "returned" | "cancelled"
@@ -31,8 +29,6 @@ export type StockReason =
   | "purchase"
   | "rent_out"
   | "rent_return"
-  | "sale"
-  | "sale_return"
   | "supplier_return"
   | "adjustment"
   | "damage"
@@ -94,7 +90,6 @@ export interface SessionUser {
   lastLogin: string | null
   canRent: boolean
   canTakeReturns: boolean
-  canSell: boolean
   canAddStock: boolean
   /** Which roles this user may hand out. Only present on `auth/me`. */
   creatableRoles?: TenantRole[]
@@ -113,7 +108,6 @@ export interface Product {
   rentWeekly: number | null
   rentMonthly: number | null
   replacementCost: number
-  cost: number
   lowStockThreshold: number
   /** Quantity on the shelf, keyed by branch id. */
   stock: Record<string, number>
@@ -178,6 +172,8 @@ export interface Customer {
   openRentalCount?: number
   rentalCount?: number
   balanceDue?: number
+  /** Set once they are removed: off the list, but their rentals and bills keep their name. */
+  archivedAt: string | null
   createdAt: string
 }
 
@@ -342,90 +338,16 @@ export interface RentalSummary {
   open: number
   overdue: number
   dueToday: number
+  /** Rentals whose last unit came back today. */
   returnedToday: number
+  /** Take-backs recorded today, and the units in them: counts part returns too. */
+  returnsToday: number
+  unitsReturnedToday: number
   /** Still to collect, and money held that customers paid ahead. Never netted together. */
   owed: number
   advances: number
   revenueMonth: number
   unitsOut: number
-}
-
-export interface Supplier {
-  id: string
-  name: string
-  company: string
-  phone: string
-  email: string
-  address: string
-  notes: string
-  purchaseCount?: number
-  totalBought?: number
-  balance?: number
-  createdAt: string
-}
-
-export interface PurchaseItem {
-  id: string
-  productId: string | null
-  productName: string
-  quantity: number
-  unitCost: number
-  amount: number
-  quantityReturned: number
-  quantityReturnable: number
-}
-
-export interface Purchase {
-  id: string
-  code: string
-  supplierId: string | null
-  supplierName: string
-  branchName: string
-  reference: string
-  note: string
-  purchasedAt: string
-  total: number
-  paidAmount: number
-  due: number
-  paymentStatus: "paid" | "partly_paid" | "unpaid"
-  dueDate: string | null
-  isOverdue: boolean
-  items: PurchaseItem[]
-  createdByName: string
-  createdAt: string
-}
-
-export interface SupplierReturn {
-  id: string
-  code: string
-  purchaseCode: string
-  supplierName: string
-  productName: string
-  quantity: number
-  unitCost: number
-  reason: string
-  status: "open" | "settled" | "closed"
-  replacedQuantity: number
-  refundedAmount: number
-  creditedAmount: number
-  value: number
-  outstanding: number
-  unitsToReplace: number
-  closedNote: string
-  createdAt: string
-  finishedAt: string | null
-}
-
-export interface SupplierPayment {
-  id: string
-  code: string
-  supplierName: string
-  amount: number
-  method: "cash" | "mobile" | "bank" | "credit" | ""
-  paidAt: string
-  note: string
-  allocations: { purchaseCode: string; amount: number }[]
-  createdByName: string
 }
 
 export interface Activity {
@@ -490,8 +412,6 @@ export interface ReportSummary extends ReportRange {
   unitsLost: number
   unitsDamaged: number
   newCustomers: number
-  purchaseBills: number
-  purchaseSpend: number
 
   // Through the till in the range, which is not the same as earned.
   collected: number

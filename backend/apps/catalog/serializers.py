@@ -25,11 +25,10 @@ class ProductSerializer(serializers.ModelSerializer):
     stock = serializers.SerializerMethodField()
     on_hand = serializers.IntegerField(read_only=True, default=0)
     out_on_rent = serializers.IntegerField(read_only=True, default=0)
-    cost = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
 
     class Meta:
         model = Product
-        fields = ["id", *PRODUCT_FIELDS, "cost", "stock", "on_hand", "out_on_rent", "archived_at", "created_at"]
+        fields = ["id", *PRODUCT_FIELDS, "stock", "on_hand", "out_on_rent", "archived_at", "created_at"]
 
     def get_stock(self, product):
         # Prefetched by the viewset.
@@ -58,7 +57,8 @@ class ProductWriteSerializer(serializers.ModelSerializer):
             # Left empty: `create_product` numbers it. An existing product keeps its own.
             return self.instance.sku if self.instance else ""
         business = self.context["request"].user.business
-        clash = Product.objects.filter(business=business, sku__iexact=sku)
+        # Only among products still in the catalogue: an archived one's code is free again.
+        clash = Product.objects.filter(business=business, sku__iexact=sku, archived_at__isnull=True)
         if self.instance:
             clash = clash.exclude(pk=self.instance.pk)
         if clash.exists():
@@ -70,7 +70,7 @@ class ProductWriteSerializer(serializers.ModelSerializer):
         if not barcode:
             return ""
         business = self.context["request"].user.business
-        clash = Product.objects.filter(business=business, barcode__iexact=barcode)
+        clash = Product.objects.filter(business=business, barcode__iexact=barcode, archived_at__isnull=True)
         if self.instance:
             clash = clash.exclude(pk=self.instance.pk)
         if clash.exists():
@@ -150,7 +150,7 @@ class CustomerSerializer(serializers.ModelSerializer):
         fields = [
             "id", "name", "company", "phone", "email", "address",
             "id_type", "id_number", "notes", "blocked", "blocked_reason",
-            "open_rental_count", "rental_count", "balance_due", "created_at",
+            "open_rental_count", "rental_count", "balance_due", "archived_at", "created_at",
         ]
 
 

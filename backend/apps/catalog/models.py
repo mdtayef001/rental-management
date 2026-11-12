@@ -31,10 +31,6 @@ class Product(TenantModel):
     # What replacing one costs, charged when an item comes back broken or doesn't come back.
     replacement_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0, validators=[MinValueValidator(0)])
 
-    # What a unit cost to buy. Kept as a weighted average by the purchasing app, so changing
-    # it never rewrites the profit on past rentals.
-    cost = models.DecimalField(max_digits=12, decimal_places=2, default=0, validators=[MinValueValidator(0)])
-
     low_stock_threshold = models.PositiveIntegerField(default=0)
     archived_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -43,11 +39,17 @@ class Product(TenantModel):
     class Meta:
         ordering = ["-created_at"]
         constraints = [
-            models.UniqueConstraint(fields=["business", "sku"], name="unique_sku_per_business"),
+            # Among the products still in the catalogue. An archived one keeps its code for
+            # its old receipts, and the machine bought to replace it can carry the same one.
+            models.UniqueConstraint(
+                fields=["business", "sku"],
+                condition=models.Q(archived_at__isnull=True),
+                name="unique_sku_per_business",
+            ),
             # Blank barcodes are exempt, so many products can have none.
             models.UniqueConstraint(
                 fields=["business", "barcode"],
-                condition=~models.Q(barcode=""),
+                condition=~models.Q(barcode="") & models.Q(archived_at__isnull=True),
                 name="unique_barcode_per_business",
             ),
         ]
@@ -93,11 +95,11 @@ class StockMovement(TenantModel):
     """
 
     class Reason(models.TextChoices):
+        # `purchase` and `supplier_return` are no longer written (purchasing was removed);
+        # they stay so movements recorded back then still read correctly.
         PURCHASE = "purchase", "Bought in"
         RENT_OUT = "rent_out", "Rented out"
         RENT_RETURN = "rent_return", "Returned from rent"
-        SALE = "sale", "Sold"
-        SALE_RETURN = "sale_return", "Sale returned"
         SUPPLIER_RETURN = "supplier_return", "Sent back to supplier"
         ADJUSTMENT = "adjustment", "Manual adjustment"
         DAMAGE = "damage", "Damaged or written off"
@@ -134,6 +136,10 @@ class Customer(TenantModel):
     # Set by the owner to stop new rentals going to someone (unpaid bills, lost items).
     blocked = models.BooleanField(default=False)
     blocked_reason = models.CharField(max_length=300, blank=True)
+
+    # Set when a customer with rentals behind them is removed. They leave the customer
+    # list and can't be rented to, but every rental, bill and report still names them.
+    archived_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
 

@@ -255,7 +255,8 @@ class ProductTests(CatalogTestCase):
         self.login(self.owner)
         typo = create_product(user=self.owner, sku="TYPO-2", name="Spare", rentable=True, rent_daily=Decimal("10.00"))
         res = self.client.delete(f"/api/products/{typo.id}/")
-        self.assertEqual(res.status_code, 204)
+        self.assertEqual(res.status_code, 200)
+        self.assertFalse(res.data["archived"])
         self.assertFalse(Product.objects.filter(pk=typo.pk).exists())
 
     def test_the_product_list_reports_on_hand_and_out_on_rent(self):

@@ -13,6 +13,7 @@ import { EmptyState, PageHeader, Spinner } from "@/components/common"
 import { CustomerPicker } from "@/components/customer-picker"
 import { ProductFinder } from "@/components/product-finder"
 import { useBranchScope, useCurrency, useCurrentUser, useSettings } from "@/components/session"
+import { cn } from "@/lib/utils"
 import { request } from "@/lib/api/client"
 import { ApiError } from "@/lib/api/errors"
 import { type RentalLineInput, useRentOut } from "@/lib/data/mutations"
@@ -40,6 +41,19 @@ function agreedRate(rates: CustomerRate[] | undefined, productId: string, plan: 
 /** Where a line starts: the customer's own price, else the product's. */
 function startingRate(rates: CustomerRate[] | undefined, product: ProductLookup, plan: RentalPlan, fallback = 0) {
   return Number(agreedRate(rates, product.id, plan) ?? rateFor(product, plan) ?? fallback)
+}
+
+/** A quantity or a number of days that can be rented: a whole number, one or more. */
+function wholeAndPositive(value: number) {
+  return Number.isInteger(value) && value >= 1
+}
+
+/** What is wrong with a line's quantity or rate, in words for the person typing. */
+function lineProblems(line: Line) {
+  return {
+    quantity: wholeAndPositive(line.quantity) ? null : "Enter a whole number, 1 or more.",
+    rate: line.rate > 0 ? null : "Enter a rate above 0.",
+  }
 }
 
 /**
@@ -164,16 +178,34 @@ export function RentOutView() {
     setLines((current) => current.map((line, i) => (i === index ? { ...line, ...patch } : line)))
   }
 
-  const billedDays = openEnded ? 1 : Math.max(1, days)
-  const estimate = lines.reduce((sum, l) => sum + quoteRental(l.plan, l.rate, billedDays, l.quantity).total, 0)
+  const daysOk = openEnded || wholeAndPositive(days)
+  const billedDays = openEnded || !daysOk ? 1 : days
+  // Lines that can't be rented as typed: nothing to send out, or nothing to charge.
+  const badLines = lines.filter((l) => {
+    const problems = lineProblems(l)
+    return problems.quantity || problems.rate
+  })
+  const estimate =
+    badLines.length > 0
+      ? 0
+      : lines.reduce((sum, l) => sum + quoteRental(l.plan, l.rate, billedDays, l.quantity).total, 0)
 
   const tooMany = lines.filter((l) => l.quantity > onHand(l.product))
-  const needsCustomer = !customer && !(settings.permissions.staffWalkInRentals || user.role !== "staff")
+  // Every rental is in somebody's name.
+  const needsCustomer = !customer
+  const paidOk = paid === "" || paid >= 0
   // Rates on this rental that differ from what the customer normally pays: worth offering
   // to remember, so the next rental starts from them.
   const mayRemember = !!customer && user.role !== "staff"
   const newPrices = lines.filter((l) => l.plan !== "fixed" && l.rate !== startingRate(rates, l.product, l.plan, l.rate))
-  const canSubmit = lines.length > 0 && tooMany.length === 0 && !needsCustomer && !rentOut.isPending
+  const canSubmit =
+    lines.length > 0 &&
+    badLines.length === 0 &&
+    tooMany.length === 0 &&
+    daysOk &&
+    paidOk &&
+    !needsCustomer &&
+    !rentOut.isPending
 
   function submit() {
     // The clock is read here, in the handler, not during render.
@@ -184,9 +216,10 @@ export function RentOutView() {
       plan: l.plan,
       rate: l.rate,
     }))
+    if (!canSubmit || !customer) return
     rentOut.mutate(
       {
-        customer: customer?.id ?? null,
+        customer: customer.id,
         branch: branchId,
         lines: payload,
         dueAt,
@@ -269,11 +302,7 @@ export function RentOutView() {
               <CardTitle className="text-base">Customer</CardTitle>
             </CardHeader>
             <CardContent>
-              <CustomerPicker
-                value={customer}
-                onChange={setCustomer}
-                allowWalkIn={settings.permissions.staffWalkInRentals || user.role !== "staff"}
-              />
+              <CustomerPicker value={customer} onChange={setCustomer} />
               {mayRemember && newPrices.length > 0 && (
                 <label className="mt-3 flex items-start gap-2 text-sm">
                   <input
@@ -292,7 +321,7 @@ export function RentOutView() {
               )}
               {needsCustomer && (
                 <p className="mt-2 text-sm text-warning-soft-foreground dark:text-warning">
-                  A customer is required for every rental, per your settings.
+                  Every rental needs a customer. Search for them, or press New to add them.
                 </p>
               )}
             </CardContent>
@@ -307,15 +336,19 @@ export function RentOutView() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  min={1}
-                  value={openEnded ? "" : days}
-                  onChange={(e) => setDays(Math.max(1, Number(e.target.value)))}
-                  disabled={openEnded}
-                  className="h-10 w-24 tabular-nums"
-                  aria-label="Days"
-                />
+                {openEnded ? (
+                  <Input disabled value="" className="h-10 w-24" aria-label="Days" readOnly />
+                ) : (
+                  <NumberField
+                    value={days}
+                    onValue={setDays}
+                    min={1}
+                    step={1}
+                    invalid={!daysOk}
+                    className="h-10 w-24"
+                    aria-label="Days"
+                  />
+                )}
                 <span className="text-sm text-muted-foreground">days from now</span>
               </div>
               {settings.rentals.allowOpenEnded && (
@@ -324,6 +357,7 @@ export function RentOutView() {
                   No agreed return date
                 </label>
               )}
+              {!daysOk && <p className="text-xs text-destructive">Enter a whole number of days, 1 or more.</p>}
               <p className="text-xs text-muted-foreground">
                 {openEnded
                   ? "Charged for however long it is actually out, with no overdue date."
@@ -352,11 +386,13 @@ export function RentOutView() {
                   <Input
                     id="paid"
                     type="number"
+                    inputMode="decimal"
                     min={0}
                     value={paid}
-                    onChange={(e) => setPaid(e.target.value === "" ? "" : Math.max(0, Number(e.target.value)))}
+                    onChange={(e) => setPaid(e.target.value === "" ? "" : Number(e.target.value))}
                     placeholder="0.00"
-                    className="h-9 tabular-nums"
+                    className={cn("h-9 tabular-nums", !paidOk && "border-destructive")}
+                    aria-invalid={!paidOk}
                   />
                   {estimate > 0 && (
                     <Button type="button" variant="outline" size="sm" onClick={() => setPaid(estimate)}>
@@ -364,6 +400,7 @@ export function RentOutView() {
                     </Button>
                   )}
                 </div>
+                {!paidOk && <p className="text-xs text-destructive">An advance can&apos;t be less than 0.</p>}
                 <p className="text-xs text-muted-foreground">
                   Optional. It is kept on the rental and the rent comes off it when the items come back; anything left
                   over is given back.
@@ -429,13 +466,32 @@ export function RentOutView() {
             </div>
           )}
 
+          {badLines.length > 0 && (
+            <div
+              role="alert"
+              className="flex items-start gap-2 rounded-md border border-warning/50 bg-warning-soft p-3 text-sm text-warning-soft-foreground"
+            >
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+              <span>
+                Check the quantity and rate for {badLines.map((l) => l.product.name).join(", ")}. Both have to be more
+                than 0 before this can be rented out.
+              </span>
+            </div>
+          )}
+
           <Button className="h-12 w-full text-base" disabled={!canSubmit} onClick={submit}>
             {rentOut.isPending && <Spinner />}
             {rentOut.isPending
               ? "Saving…"
               : lines.length === 0
                 ? "Add something first"
-                : `Rent out ${plural(lines.reduce((n, l) => n + l.quantity, 0), "unit")}`}
+                : badLines.length > 0
+                  ? "Fix the quantity or rate"
+                  : !daysOk
+                    ? "Set the days"
+                    : needsCustomer
+                      ? "Pick the customer"
+                      : `Rent out ${plural(lines.reduce((n, l) => n + l.quantity, 0), "unit")}`}
           </Button>
         </div>
       </div>
@@ -464,7 +520,9 @@ function LineRow({
   onRemove: () => void
 }) {
   const plans = availablePlans(line.product)
-  const quote = quoteRental(line.plan, line.rate, days, line.quantity)
+  const problems = lineProblems(line)
+  const valid = !problems.quantity && !problems.rate
+  const quote = valid ? quoteRental(line.plan, line.rate, days, line.quantity) : null
   const over = line.quantity > onHand
   const usual = rateFor(line.product, line.plan)
   const agreed = agreedRate(rates, line.product.id, line.plan)
@@ -501,15 +559,17 @@ function LineRow({
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="space-y-1.5">
           <Label className="text-xs">Quantity</Label>
-          <Input
-            type="number"
+          <NumberField
+            value={line.quantity}
+            onValue={(quantity) => onChange({ quantity })}
             min={1}
             max={onHand}
-            value={line.quantity}
-            onChange={(e) => onChange({ quantity: Math.max(1, Number(e.target.value)) })}
-            className={`h-9 tabular-nums ${over ? "border-destructive" : ""}`}
-            aria-invalid={over}
+            step={1}
+            invalid={over || !!problems.quantity}
+            className="h-9"
+            aria-label={`Quantity of ${line.product.name}`}
           />
+          {problems.quantity && <p className="text-xs text-destructive">{problems.quantity}</p>}
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">Plan</Label>
@@ -531,20 +591,24 @@ function LineRow({
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">Rate</Label>
-          <Input
-            type="number"
-            min={0}
+          <NumberField
             value={line.rate}
-            onChange={(e) => onChange({ rate: Math.max(0, Number(e.target.value)), rateTyped: true })}
-            className="h-9 tabular-nums"
+            onValue={(rate) => onChange({ rate, rateTyped: true })}
+            min={0}
+            step="any"
+            decimal
+            invalid={!!problems.rate}
+            className="h-9"
+            aria-label={`Rate for ${line.product.name}`}
           />
+          {problems.rate && <p className="text-xs text-destructive">{problems.rate}</p>}
         </div>
       </div>
       {source && <p className="text-xs text-muted-foreground">{source}</p>}
 
       <div className="flex items-baseline justify-between border-t pt-2 text-sm">
-        <span className="text-muted-foreground">{quote.breakdown}</span>
-        <span className="font-medium tabular-nums">{money(quote.total, currency)}</span>
+        <span className="text-muted-foreground">{quote ? quote.breakdown : "Fill in the quantity and rate"}</span>
+        <span className="font-medium tabular-nums">{quote ? money(quote.total, currency) : "—"}</span>
       </div>
 
       {over && (
@@ -553,5 +617,55 @@ function LineRow({
         </p>
       )}
     </div>
+  )
+}
+
+/**
+ * A box for typing a number.
+ *
+ * It keeps what was typed as text, and reports the number beside it. A box that holds only
+ * the number can't be cleared: emptying it to type a new figure reads as 0, which the form
+ * then "corrects" to 1, so typing 25 gives 125. Here the box may be empty or hold 0 for as
+ * long as the person is typing — an empty box reports 0, and the form says why that can't
+ * be rented out rather than changing it under their fingers.
+ *
+ * When the number is changed from outside (scanning the same item again, a customer's own
+ * price arriving) the box shows the new number.
+ */
+function NumberField({
+  value,
+  onValue,
+  invalid,
+  decimal,
+  className,
+  ...props
+}: {
+  value: number
+  onValue: (value: number) => void
+  invalid?: boolean
+  decimal?: boolean
+} & Omit<React.ComponentProps<typeof Input>, "value" | "onChange" | "type">) {
+  const [draft, setDraft] = useState({ text: String(value), value })
+  // Only trust the typed text while it still stands for the number the form holds.
+  const text = draft.value === value ? draft.text : String(value)
+
+  return (
+    <Input
+      {...props}
+      type="number"
+      inputMode={decimal ? "decimal" : "numeric"}
+      value={text}
+      onChange={(e) => {
+        const typed = e.target.value
+        const next = typed === "" ? 0 : Number(typed)
+        const number = Number.isFinite(next) ? next : 0
+        setDraft({ text: typed, value: number })
+        onValue(number)
+      }}
+      // A wheel over a focused number box changes it silently; nobody means that.
+      onWheel={(e) => e.currentTarget.blur()}
+      className={cn("tabular-nums", invalid && "border-destructive", className)}
+      aria-invalid={invalid || undefined}
+    />
   )
 }

@@ -73,7 +73,7 @@ class PdfView(ReportView):
     def get(self, request):
         from django.http import HttpResponse
 
-        from apps.rentals.bill_pdf import logo_of
+        from apps.sheet_pdf import logo_of
 
         from . import report_pdf
 

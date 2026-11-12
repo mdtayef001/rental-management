@@ -28,7 +28,6 @@ import {
   useDebounced,
   usePlatformBusinesses,
   useProductSearch,
-  useSuppliers,
 } from "@/lib/data/queries"
 import { count } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -104,10 +103,6 @@ type Suggest =
   | "customer-names"
   /** Customers and products together, for lists that can be searched by either. */
   | "rentals"
-  /** Suppliers by name, company or phone. */
-  | "suppliers"
-  /** Suppliers and products together. */
-  | "purchases"
   /** Things that have happened, from the activity log. */
   | "activity"
   /** Businesses on the platform, by name or owner. */
@@ -126,9 +121,8 @@ function useSuggestions(kind: Suggest | undefined, text: string): Suggestion[] {
   const settled = useDebounced(typed, 200)
   const on = (...kinds: Suggest[]) => !!kind && kinds.includes(kind) && settled.length > 0
   const page = { page: 1, search: settled }
-  const products = useProductSearch(typed, { enabled: !!kind && ["products", "rentals", "purchases"].includes(kind) })
+  const products = useProductSearch(typed, { enabled: !!kind && ["products", "rentals"].includes(kind) })
   const customers = useCustomers(page, { pageSize: 6, enabled: on("customers", "customer-names", "rentals") })
-  const suppliers = useSuppliers(page, { pageSize: 6, enabled: on("suppliers", "purchases") })
   const activity = useActivity(page, { pageSize: 10, enabled: on("activity") })
   const businesses = usePlatformBusinesses(page, { pageSize: 6, enabled: on("businesses") })
   if (!kind || !typed) return []
@@ -147,20 +141,12 @@ function useSuggestions(kind: Suggest | undefined, text: string): Suggestion[] {
       sub: [c.company, c.phone].filter(Boolean).join(" · ") || undefined,
       href: open ? `/customers/${c.id}` : undefined,
     }))
-  const supplierRows = (): Suggestion[] =>
-    (suppliers.data?.results ?? []).map((v) => ({
-      id: `s-${v.id}`,
-      label: v.name,
-      sub: [v.company, v.phone].filter(Boolean).join(" · ") || "Supplier",
-    }))
 
   let rows: Suggestion[]
   if (kind === "products") rows = productRows(true)
   else if (kind === "customers") rows = customerRows(true)
   else if (kind === "customer-names") rows = customerRows(false)
   else if (kind === "rentals") rows = [...customerRows(false).slice(0, 4), ...productRows(false).slice(0, 3)]
-  else if (kind === "suppliers") rows = supplierRows()
-  else if (kind === "purchases") rows = [...supplierRows().slice(0, 4), ...productRows(false).slice(0, 3)]
   else if (kind === "businesses")
     rows = (businesses.data?.results ?? []).map((b) => ({ id: b.id, label: b.name, sub: b.ownerEmail || undefined }))
   else rows = (activity.data?.results ?? []).map((entry) => ({ id: entry.id, label: entry.action, sub: entry.detail || undefined }))

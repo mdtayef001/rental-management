@@ -47,7 +47,6 @@ INSTALLED_APPS = [
     "apps.accounts",
     "apps.catalog",
     "apps.rentals",
-    "apps.purchasing",
     "apps.reports",
 ]
 
@@ -171,6 +170,8 @@ REST_FRAMEWORK = {
     "COERCE_DECIMAL_TO_STRING": False,
     "DEFAULT_THROTTLE_RATES": {
         "login": "5/min",
+        # Per email, across every address: see LoginAccountThrottle.
+        "login_account": "20/hour",
     },
     "EXCEPTION_HANDLER": "apps.api.exception_handler",
 }

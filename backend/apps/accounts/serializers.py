@@ -11,7 +11,7 @@ from .models import Activity, Branch, Business, User
 from .permissions import creatable_roles
 
 # The per-person rights an owner or manager can give a staff member.
-RIGHTS = ("can_rent", "can_take_returns", "can_sell", "can_add_stock")
+RIGHTS = ("can_rent", "can_take_returns", "can_add_stock")
 
 
 def check_password_strength(password, user=None):
@@ -84,7 +84,6 @@ class UserCreateSerializer(serializers.Serializer):
     branch_ids = serializers.ListField(child=serializers.CharField(), required=False, default=list)
     can_rent = serializers.BooleanField(default=True)
     can_take_returns = serializers.BooleanField(default=True)
-    can_sell = serializers.BooleanField(default=False)
     can_add_stock = serializers.BooleanField(default=False)
 
     def validate_role(self, role):

@@ -16,11 +16,10 @@ import { useProduct, useStockMovements } from "@/lib/data/queries"
 import { count, friendlyDateTime, money } from "@/lib/format"
 
 const REASON_LABEL: Record<string, string> = {
+  // Old entries only: nothing is bought in or sent back through the app any more.
   purchase: "Bought in",
   rent_out: "Rented out",
   rent_return: "Back from rent",
-  sale: "Sold",
-  sale_return: "Sale returned",
   supplier_return: "Sent to supplier",
   adjustment: "Corrected",
   damage: "Damaged",

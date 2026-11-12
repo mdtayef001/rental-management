@@ -1,11 +1,11 @@
 "use client"
 
 import { useState } from "react"
-import { FileText, MessageCircle, Pencil, Phone, ReceiptText, UserX } from "lucide-react"
+import { Archive, FileText, MessageCircle, Pencil, Phone, ReceiptText, UserX } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ButtonLink } from "@/components/ui/button-link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { EmptyState, ErrorState, PageHeader, Pagination, TableSkeleton } from "@/components/common"
+import { EmptyState, ErrorState, PageHeader, Pagination, Pill, TableSkeleton } from "@/components/common"
 import { Code, DataView, Primary } from "@/components/data-view"
 import { CustomerDialog } from "@/components/customer-picker"
 import { CustomerPrices } from "@/components/customer-prices"
@@ -39,6 +39,14 @@ export function CustomerDetailView({ id }: { id: string }) {
     <div className="space-y-6">
       <PageHeader
         title={customer.name}
+        badge={
+          customer.archivedAt ? (
+            <Pill>
+              <Archive className="size-3" />
+              Removed
+            </Pill>
+          ) : undefined
+        }
         description={customer.company || undefined}
         back={{ href: "/customers", label: "Customers" }}
       >
@@ -66,8 +74,18 @@ export function CustomerDetailView({ id }: { id: string }) {
             Monthly bill
           </ButtonLink>
         )}
-        <ButtonLink href="/rent-out">Rent to them</ButtonLink>
+        {!customer.archivedAt && <ButtonLink href="/rent-out">Rent to them</ButtonLink>}
       </PageHeader>
+
+      {customer.archivedAt && (
+        <div className="flex items-start gap-2 rounded-lg border p-3 text-sm text-muted-foreground">
+          <Archive className="mt-0.5 size-4 shrink-0" />
+          <span>
+            This customer was removed from your list on {date(customer.archivedAt)}. Their rentals, receipts and bills
+            are kept here for your records.
+          </span>
+        </div>
+      )}
 
       {customer.blocked && (
         <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive-soft/50 p-3 text-sm">

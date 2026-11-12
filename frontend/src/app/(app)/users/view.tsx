@@ -166,7 +166,6 @@ function UserDialog({ roles, user, onClose }: { roles: TenantRole[]; user?: Sess
     canRent: user?.canRent ?? true,
     canTakeReturns: user?.canTakeReturns ?? true,
     canAddStock: user?.canAddStock ?? false,
-    canSell: user?.canSell ?? false,
   }))
 
   function submit(e: React.FormEvent) {
@@ -182,7 +181,6 @@ function UserDialog({ roles, user, onClose }: { roles: TenantRole[]; user?: Sess
           canRent: form.canRent,
           canTakeReturns: form.canTakeReturns,
           canAddStock: form.canAddStock,
-          canSell: form.canSell,
         }
       : form
     save.mutate(body, { onSuccess: onClose })

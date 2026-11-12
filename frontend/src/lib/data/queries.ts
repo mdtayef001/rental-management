@@ -14,16 +14,12 @@ import type {
   PlatformBusiness,
   Product,
   ProductLookup,
-  Purchase,
   Rental,
   RentalReturn,
   RentalSummary,
   SessionUser,
   StockLevel,
   StockMovement,
-  Supplier,
-  SupplierPayment,
-  SupplierReturn,
   CustomerReportRow,
   DebtorRow,
   Page,
@@ -223,10 +219,6 @@ export function useCustomerRates(id: string | null | undefined) {
   return useQuery({ ...apiQuery<CustomerRate[]>(`customers/${id}/rates/`), enabled: !!id })
 }
 
-export function useSupplier(id: string | null | undefined) {
-  return useQuery({ ...apiQuery<Supplier>(`suppliers/${id}/`), enabled: !!id })
-}
-
 /** Stock of a product at a branch, from a product loaded with its stock map. */
 export function qtyAt(product: Pick<Product, "stock"> | Pick<ProductLookup, "stock"> | null | undefined, branchId: string | null | undefined) {
   return (branchId && product?.stock?.[branchId]) || 0
@@ -252,33 +244,6 @@ export function useStockSummary(params: Params = {}, enabled = true) {
   })
 }
 
-export function usePurchaseSummary(params: Params = {}, enabled = true) {
-  return useQuery({
-    ...apiQuery<{ count: number; total: number; due: number }>("purchases/summary/", params),
-    enabled,
-    placeholderData: keepPreviousData,
-  })
-}
-
-/** The figures above the supplier-returns list. Takes the same filters as the list itself. */
-export function useSupplierReturnSummary(params: Params = {}, enabled = true) {
-  return useQuery({
-    ...apiQuery<{ count: number; open: number; units: number; value: number; outstanding: number }>(
-      "purchases/returns-summary/",
-      params,
-    ),
-    enabled,
-    placeholderData: keepPreviousData,
-  })
-}
-
-export function useSupplierDebtSummary(enabled = true) {
-  return useQuery({
-    ...apiQuery<{ owed: number; overdue: number; supplierCount: number }>("purchases/payments-summary/"),
-    enabled,
-  })
-}
-
 // ---------- Lists ----------
 // Typed shortcuts, so a page reads as `useRentals({ page, status: "overdue" })`.
 
@@ -291,12 +256,6 @@ export const useReturns = (params: Params & { page: number }, o?: ListOptions) =
 export const useStock = (params: Params & { page: number }, o?: ListOptions) => usePage<StockLevel>("stock/", params, o)
 export const useStockMovements = (params: Params & { page: number }, o?: ListOptions) =>
   usePage<StockMovement>("stock/movements/", params, o)
-export const useSuppliers = (params: Params & { page: number }, o?: ListOptions) => usePage<Supplier>("suppliers/", params, o)
-export const usePurchases = (params: Params & { page: number }, o?: ListOptions) => usePage<Purchase>("purchases/", params, o)
-export const useSupplierReturns = (params: Params & { page: number }, o?: ListOptions) =>
-  usePage<SupplierReturn>("purchases/returns-list/", params, o)
-export const useSupplierPayments = (params: Params & { page: number }, o?: ListOptions) =>
-  usePage<SupplierPayment>("purchases/payments/", params, o)
 export const useActivity = (params: Params & { page: number }, o?: ListOptions) => usePage<Activity>("activity/", params, o)
 export const useUsers = (params: Params & { page: number }, o?: ListOptions) => usePage<SessionUser>("users/", params, o)
 export const usePlatformBusinesses = (params: Params & { page: number }, o?: ListOptions) =>

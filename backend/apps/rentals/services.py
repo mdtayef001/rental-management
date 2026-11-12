@@ -62,16 +62,18 @@ def create_rental(*, user, customer, branch, lines, started_at=None, due_at=None
     There is no deposit. `paid_amount` is money the customer pays in advance: it sits on the
     rental as credit and the rent is charged against it when the items come back.
     """
-    if remember_rates and customer is None:
-        remember_rates = False
     if remember_rates and user.role == "staff":
         raise ValidationError("Only the owner or a manager can change a customer's prices.")
     if not lines:
         raise ValidationError("Add at least one product to the rental.")
-    if customer is not None and customer.blocked:
+    # Every rental has a named customer: a bill has to be sent to someone, and items that
+    # don't come back have to be chased from someone.
+    if customer is None:
+        raise ValidationError({"customer": "Pick or add a customer for this rental."})
+    if customer.archived_at:
+        raise ValidationError({"customer": f"{customer.name} has been removed from your customers. Add them again to rent to them."})
+    if customer.blocked:
         raise ValidationError(f"{customer.name} is blocked from renting: {customer.blocked_reason or 'no reason given'}.")
-    if customer is None and not user.business.permission_on("staffWalkInRentals") and user.role == "staff":
-        raise ValidationError("Pick or add a customer for this rental.")
 
     started_at = started_at or timezone.now()
     if due_at and due_at <= started_at:
@@ -98,6 +100,8 @@ def create_rental(*, user, customer, branch, lines, started_at=None, due_at=None
         if product.id in seen:
             raise ValidationError(f"{product.name} is on this rental twice. Put it on one line with the full quantity.")
         seen.add(product.id)
+        if product.archived_at:
+            raise ValidationError(f"{product.name} has been removed from your products.")
         if not product.rentable:
             raise ValidationError(f"{product.name} isn't marked as rentable.")
 

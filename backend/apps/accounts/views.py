@@ -1,5 +1,7 @@
 """Auth, team management, business settings and the super admin's platform API."""
 
+import hashlib
+
 from django.contrib.auth import update_session_auth_hash  # noqa: F401  (kept for admin flows)
 from django.db import transaction
 from django.db.models import Count, Prefetch, Q
@@ -8,7 +10,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
+from rest_framework.throttling import ScopedRateThrottle, SimpleRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -37,16 +39,38 @@ from .serializers import (
 )
 
 
+class LoginAccountThrottle(SimpleRateThrottle):
+    """Limits tries against one email, wherever they come from.
+
+    Counted for unknown emails too, so being throttled says nothing about whether an
+    account exists.
+    """
+
+    scope = "login_account"
+
+    def get_cache_key(self, request, view):
+        email = request.data.get("email") if hasattr(request.data, "get") else None
+        if not isinstance(email, str) or not email.strip():
+            return None
+        # Hashed: an email can be any length and hold characters a cache key may not.
+        ident = hashlib.sha256(email.strip().lower().encode()).hexdigest()
+        return self.cache_format % {"scope": self.scope, "ident": ident}
+
+
 class LoginView(TokenObtainPairView):
     """Email and password for an access + refresh token pair.
 
-    Throttled by IP: five tries a minute, so a stolen email list can't be run against the
-    login form. The error never says whether the email exists.
+    Throttled twice. By IP, five tries a minute, so a stolen email list can't be run
+    against the login form. And by the email being tried, because the web app logs in from
+    its own server: every shop's attempts arrive from the same few addresses, and a caller
+    who changes address between tries is never slowed by the first limit at all.
+
+    The error never says whether the email exists.
     """
 
     serializer_class = LoginSerializer
     permission_classes = [AllowAny]
-    throttle_classes = [ScopedRateThrottle]
+    throttle_classes = [ScopedRateThrottle, LoginAccountThrottle]
     throttle_scope = "login"
 
 
@@ -244,7 +268,7 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer = UserCreateSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         data = dict(serializer.validated_data)
-        rights = {k: data.pop(k) for k in ("can_rent", "can_take_returns", "can_sell", "can_add_stock")}
+        rights = {k: data.pop(k) for k in ("can_rent", "can_take_returns", "can_add_stock")}
         user = services.create_user(
             actor=request.user,
             name=data["name"],

@@ -173,7 +173,7 @@ def delete_product(*, user, product):
     outright, because leaving it archived would mean a mistake can never be tidied away.
 
     One with any history is archived instead. Deleting it would be deleting the past: a
-    rental from last year, a supplier's bill, the stock ledger. The lines themselves keep
+    rental from last year, the stock ledger. The lines themselves keep
     their own copy of the name and SKU, so a receipt still reads correctly either way; what
     archiving protects is everything that still points at the row — the stock history, and
     the product page a receipt's figures can be traced back to.
@@ -181,7 +181,6 @@ def delete_product(*, user, product):
     Either way it is refused while units are out on rent, so an item cannot vanish from the
     catalogue while a customer still has it.
     """
-    from apps.purchasing.models import PurchaseItem, SupplierReturn
     from apps.rentals.models import Rental, RentalItem
 
     out = (
@@ -195,8 +194,6 @@ def delete_product(*, user, product):
     name = f"{product.name} ({product.sku})"
     used = (
         RentalItem.objects.filter(product=product).exists()
-        or PurchaseItem.objects.filter(product=product).exists()
-        or SupplierReturn.objects.filter(product=product).exists()
         or StockMovement.objects.filter(product=product).exists()
     )
     if not used:
@@ -221,14 +218,29 @@ def create_customer(*, user, **fields):
 
 @transaction.atomic
 def delete_customer(*, user, customer):
-    """Refused while they still have something out, so nobody loses track of who has what."""
+    """Remove a customer from the list. Returns True if they were archived, not deleted.
+
+    Refused while they still have something out, so nobody loses track of who has what.
+
+    Someone who never rented — a typo, a duplicate — is deleted outright. Anyone with a
+    rental behind them is archived instead: they leave the customer list and can't be
+    rented to, but their rentals, bills, receipts and the reports still carry their name.
+    Deleting them would turn every one of those into an anonymous rental.
+    """
     from apps.rentals.models import Rental
 
     if customer.rentals.filter(status__in=Rental.OPEN).exists():
         raise ValidationError("This customer still has items out on rent.")
     name = customer.name
-    customer.delete()
-    log(user, "Customer deleted", name)
+    if not customer.rentals.exists():
+        customer.delete()
+        log(user, "Customer deleted", name)
+        return False
+
+    customer.archived_at = timezone.now()
+    customer.save(update_fields=["archived_at"])
+    log(user, "Customer archived", name)
+    return True
 
 
 # ---------- A customer's own prices ----------

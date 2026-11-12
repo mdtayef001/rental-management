@@ -181,7 +181,6 @@ backend/apps/
   accounts/    Business, Branch, User, roles, the super admin's platform API, audit log
   catalog/     Products, stock levels, the stock ledger, customers, the scanner lookup
   rentals/     Rentals, items, returns, payments, receipts  ← the core
-  purchasing/  Suppliers, purchases, supplier returns, payments out
 frontend/src/
   app/(app)/   The signed-in screens
   components/  Scanner, return chooser, navigation, shared UI
@@ -244,14 +243,14 @@ action after reading it is a phone call.
 
 All built: login, dashboard, scan, rent out, take back, rentals (list + detail), returns,
 customers (list + detail), bills (month-end list + one customer's bill), products (list + detail with printable QR labels), stock,
-purchases, suppliers, sent back to supplier, reports, team, activity, settings, the super
+reports, team, activity, settings, the super
 admin's platform page, and the public receipt a customer opens from their QR code.
 
 There is no separate Stock screen either: the products list already carries what is on
 the shelf, what is out on rent and the total, and corrections are made from the row.
 
 There is no Branches screen. A business is created with exactly one branch and the branch
-pickers never render; the model and the `branch` column on stock, rentals and purchases
+pickers never render; the model and the `branch` column on stock and rentals
 stay as the seam for a second location later.
 
 ## Reports
@@ -346,24 +345,6 @@ but the row stays so the stock ledger and every figure traced back to it still r
 Either way the rental lines, bills and receipts keep their own copy of the name and SKU,
 so **nothing already printed changes**. Deleting is refused while units are still out on
 rent.
-
-## Sent back to supplier
-
-Faulty stock goes back on the bill it arrived on, because that bill says who to chase and
-what was paid per unit. Sending it back takes the units off the shelf straight away, so the
-screen reads as an action with consequences rather than a note someone files, and the
-quantity is capped at what is still left on the purchase line.
-
-A supplier makes it good in three ways and often in more than one: replacements come back
-as stock, a refund is money in, and a credit comes off what the business already owes them
-— so it is recorded as a supplier payment with the method `credit` and pays down their
-oldest bills exactly as cash would. Each can be recorded on its own, and a return that is
-half replaced stays open for the rest. Closing one unsettled writes off what is left and
-is kept deliberately quiet at the bottom of the dialog.
-
-The figures above the list follow the same filters as the list. `outstanding` is summed in
-Python rather than SQL, because it nets replacements, refunds and credits off the value;
-only the open returns are totalled, which are the few rows a shop actually chases.
 
 ## Still to build
 

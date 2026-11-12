@@ -59,9 +59,6 @@ const ROUTE_RULES: Rule[] = [
   { test: prefix("/activity"), roles: LEADS, permission: "managerActivity" },
   { test: prefix("/settings"), roles: ["owner"] },
   { test: prefix("/reports"), roles: LEADS, permission: "managerProfit" },
-  { test: prefix("/suppliers"), roles: LEADS, module: "purchases", permission: "managerPurchases" },
-  { test: prefix("/purchases"), roles: LEADS, module: "purchases", permission: "managerPurchases" },
-  { test: prefix("/supplier-returns"), roles: LEADS, module: "purchases", permission: "managerPurchases" },
   { test: prefix("/dashboard"), roles: LEADS },
 ]
 
@@ -77,9 +74,6 @@ export const APP_ROUTES = [
   "/customers",
   "/bills",
   "/products",
-  "/suppliers",
-  "/purchases",
-  "/supplier-returns",
   "/users",
   "/activity",
   "/reports",
@@ -98,7 +92,7 @@ export function isAppRoute(path: string) {
  * full check including modules and manager permissions.
  */
 export function canAccess(
-  user: { role: Role; canRent?: boolean; canTakeReturns?: boolean; canSell?: boolean; canAddStock?: boolean; canHandleDeposits?: boolean },
+  user: { role: Role; canRent?: boolean; canTakeReturns?: boolean; canAddStock?: boolean },
   path: string,
   settings?: BusinessSettings,
 ) {

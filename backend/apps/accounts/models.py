@@ -18,10 +18,7 @@ def default_settings():
     return {
         "currency": "BDT",
         # Features the owner can switch off for their business.
-        # Purchasing is opt-in: a shop that does not buy stock through the app should not
-        # carry suppliers, bills and supplier returns it will never open. `sales` has no
-        # screens yet, so it stays off until it does.
-        "modules": {"rentals": True, "sales": False, "purchases": False},
+        "modules": {"rentals": True},
         # What managers may do. Owners can always do everything.
         "permissions": {
             "managerUsers": True,
@@ -29,10 +26,7 @@ def default_settings():
             "managerCustomers": True,
             "managerBranches": False,
             "managerActivity": False,
-            "managerPurchases": False,
             "managerProfit": False,
-            # Off: staff must pick or add the customer for every rental.
-            "staffWalkInRentals": False,
             "staffCreateProducts": False,
         },
         # Rental defaults, so staff don't retype them on every rental.
@@ -196,7 +190,6 @@ class User(AbstractUser):
     # always do all of them.
     can_rent = models.BooleanField(default=True)
     can_take_returns = models.BooleanField(default=True)
-    can_sell = models.BooleanField(default=False)
     can_add_stock = models.BooleanField(default=False)
 
     USERNAME_FIELD = "email"
@@ -235,10 +228,6 @@ class User(AbstractUser):
     @property
     def may_take_returns(self):
         return self._right("can_take_returns")
-
-    @property
-    def may_sell(self):
-        return self._right("can_sell")
 
     @property
     def may_add_stock(self):

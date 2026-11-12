@@ -123,7 +123,8 @@ class RentalLineSerializer(serializers.Serializer):
 
 
 class RentalCreateSerializer(serializers.Serializer):
-    customer = tenant_field(Customer, required=False, allow_null=True)
+    # Required: there are no walk-in rentals.
+    customer = tenant_field(Customer)
     branch = tenant_field(Branch)
     lines = RentalLineSerializer(many=True)
     started_at = serializers.DateTimeField(required=False, allow_null=True)

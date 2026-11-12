@@ -11,9 +11,7 @@ import {
   ChevronRight,
   type LucideIcon,
   Package,
-  PackageX,
   Undo2,
-  Wallet,
 } from "lucide-react"
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts"
 import { Button } from "@/components/ui/button"
@@ -28,14 +26,12 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { ErrorState, PageHeader, StatCard } from "@/components/common"
-import { useCanAccess, useCurrency, useCurrentUser, useHasPermission, useSettings } from "@/components/session"
+import { useCanAccess, useCurrency, useCurrentUser, useHasPermission } from "@/components/session"
 import {
   useActivity,
   useRentalSummary,
   useRevenueReport,
   useStockSummary,
-  useSupplierDebtSummary,
-  useSupplierReturnSummary,
 } from "@/lib/data/queries"
 import { compactMoney, count, friendlyDateTime, money, plural } from "@/lib/format"
 import { iso } from "@/lib/reports"
@@ -63,16 +59,12 @@ const chartConfig = { revenue: { label: "Earned", color: "var(--chart-1)" } } sa
 export function DashboardView({ businessName }: { businessName: string }) {
   const user = useCurrentUser()
   const currency = useCurrency()
-  const settings = useSettings()
 
   const canSeeMoney = useHasPermission("managerProfit")
-  const canSeePurchases = useCanAccess("/purchases") && settings.modules.purchases
   const canSeeActivity = useCanAccess("/activity")
 
   const { data: summary, isLoading } = useRentalSummary({ live: true })
   const { data: stock } = useStockSummary()
-  const { data: debt } = useSupplierDebtSummary(canSeePurchases)
-  const { data: sentBack } = useSupplierReturnSummary({ status: "open" }, canSeePurchases)
   const activity = useActivity({ page: 1 }, { pageSize: 6, enabled: canSeeActivity })
 
   // Fixed when the page opens, so the query key doesn't change under the chart.
@@ -137,22 +129,6 @@ export function DashboardView({ businessName }: { businessName: string }) {
       detail: count(stock.lowStock),
       tone: "warning",
     })
-  if (debt?.overdue)
-    attention.push({
-      href: "/suppliers",
-      icon: Wallet,
-      label: "Supplier bills past due",
-      detail: money(debt.overdue, currency),
-      tone: "danger",
-    })
-  if (sentBack?.open)
-    attention.push({
-      href: "/supplier-returns",
-      icon: PackageX,
-      label: "Waiting on suppliers",
-      detail: `${count(sentBack.open)} · ${money(sentBack.outstanding, currency)} back`,
-      tone: "info",
-    })
 
   return (
     <div>
@@ -176,7 +152,7 @@ export function DashboardView({ businessName }: { businessName: string }) {
         </ButtonLink>
       </PageHeader>
 
-      <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <StatCard
           label="Out on rent"
           value={count(summary?.unitsOut ?? 0)}
@@ -192,11 +168,25 @@ export function DashboardView({ businessName }: { businessName: string }) {
         <StatCard
           label="Due back today"
           value={count(summary?.dueToday ?? 0)}
-          hint={summary?.returnedToday ? `${count(summary.returnedToday)} already came back` : "Nothing back yet today"}
+          hint={summary?.dueToday ? `${plural(summary.dueToday, "rental")} to collect today` : "Nothing is due today"}
           icon={CalendarClock}
           tone={summary?.dueToday ? "warning" : "default"}
           loading={isLoading}
           href="/rentals?status=due_today"
+        />
+        {/* Units, counted from the take-backs: 60 of 100 back still counts as 60 here. */}
+        <StatCard
+          label="Returned today"
+          value={count(summary?.unitsReturnedToday ?? 0)}
+          hint={
+            summary?.returnsToday
+              ? `${plural(summary.returnsToday, "take-back")} · ${plural(summary.returnedToday, "rental")} closed`
+              : "Nothing has come back yet"
+          }
+          icon={Undo2}
+          tone={summary?.unitsReturnedToday ? "good" : "default"}
+          loading={isLoading}
+          href="/returns"
         />
         <StatCard
           label="Overdue"

@@ -24,7 +24,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { EmptyState, ErrorState, PageHeader, Pill, Spinner } from "@/components/common"
+import { EmptyState, ErrorState, PageHeader, Pagination, Pill, Spinner } from "@/components/common"
 import { NotRecognised, NothingOut, ReturnChooser } from "@/components/return-chooser"
 import { CameraScanner, CodeInput } from "@/components/scanner"
 import { useCurrency, useSettings } from "@/components/session"
@@ -34,6 +34,9 @@ import { count, dateTime, dueLabel, money, plural, round2 } from "@/lib/format"
 import { quoteRental } from "@/lib/rental"
 import { cn } from "@/lib/utils"
 import type { ResolveReturnResult, ReturnCondition, ReturnMatch } from "@/lib/types"
+
+/** Rentals shown at once under "Out on rent now". */
+const OUT_PAGE_SIZE = 10
 
 type Lookup = { code?: string; customer?: string; rental?: string }
 type Step = "find" | "choose" | "settle" | "done"
@@ -359,14 +362,20 @@ function Suggestion({
 /** Everything out on rent, most overdue first: the return is usually one tap from here. */
 function OutNow({ onPick, busy }: { onPick: (rentalId: string) => void; busy: boolean }) {
   const [onlyLate, setOnlyLate] = useState(false)
-  const { data, isLoading } = useRentals(
-    { page: 1, status: onlyLate ? "overdue" : "open", sort: "due" },
-    { pageSize: 50 },
+  const [page, setPage] = useState(1)
+  // A page at a time: a busy shop has hundreds of rentals out, and nobody scrolls that far
+  // when the search box above finds one in three letters. The server sends them soonest
+  // due first, with the ones that have no return date last.
+  const { data, isLoading, isFetching } = useRentals(
+    { page, status: onlyLate ? "overdue" : "open", sort: "due" },
+    { pageSize: OUT_PAGE_SIZE },
   )
-  // Soonest due first, and the ones with no return date after everything that has one.
-  const rentals = [...(data?.results ?? [])].sort(
-    (a, b) => (a.dueAt ? Date.parse(a.dueAt) : Infinity) - (b.dueAt ? Date.parse(b.dueAt) : Infinity),
-  )
+  const rentals = data?.results ?? []
+
+  function show(late: boolean) {
+    setOnlyLate(late)
+    setPage(1)
+  }
 
   return (
     <section className="space-y-2">
@@ -376,10 +385,10 @@ function OutNow({ onPick, busy }: { onPick: (rentalId: string) => void; busy: bo
           {data && <span className="ml-2 font-normal text-muted-foreground tabular-nums">{count(data.count)}</span>}
         </h2>
         <div className="flex gap-1">
-          <Button size="sm" variant={onlyLate ? "outline" : "default"} onClick={() => setOnlyLate(false)}>
+          <Button size="sm" variant={onlyLate ? "outline" : "default"} onClick={() => show(false)}>
             All
           </Button>
-          <Button size="sm" variant={onlyLate ? "default" : "outline"} onClick={() => setOnlyLate(true)}>
+          <Button size="sm" variant={onlyLate ? "default" : "outline"} onClick={() => show(true)}>
             Overdue
           </Button>
         </div>
@@ -394,8 +403,7 @@ function OutNow({ onPick, busy }: { onPick: (rentalId: string) => void; busy: bo
           {onlyLate ? "Nothing is overdue." : "Nothing is out on rent."}
         </p>
       ) : (
-        // Ten rows tall, then it scrolls, so the search box above never leaves the screen.
-        <ul className="max-h-[35rem] divide-y overflow-y-auto rounded-lg border bg-card">
+        <ul className={cn("divide-y rounded-lg border bg-card", isFetching && "opacity-70")}>
           {rentals.map((rental) => (
             <li key={rental.id}>
               <button
@@ -423,6 +431,16 @@ function OutNow({ onPick, busy }: { onPick: (rentalId: string) => void; busy: bo
             </li>
           ))}
         </ul>
+      )}
+      {data && (
+        <Pagination
+          // The server answers a page past the end with the last one, so follow what it sent.
+          page={data.page}
+          pageSize={OUT_PAGE_SIZE}
+          total={data.count}
+          onPage={setPage}
+          busy={isFetching}
+        />
       )}
     </section>
   )

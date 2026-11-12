@@ -24,7 +24,6 @@ const MANAGER_PERMISSIONS: { id: PermissionId; label: string; hint: string }[] =
 ]
 
 const STAFF_PERMISSIONS: { id: PermissionId; label: string; hint: string }[] = [
-  { id: "staffWalkInRentals", label: "Rent to walk-ins", hint: "Off: staff must pick or add a customer every time." },
   { id: "staffCreateProducts", label: "Add products", hint: "Off: only the owner and managers add products." },
 ]
 

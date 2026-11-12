@@ -83,6 +83,24 @@ class LoginTests(ApiTestCase):
         res = self.client.post("/api/auth/login/", {"email": "owner@example.com", "password": "nope"}, format="json")
         self.assertEqual(res.status_code, 429)
 
+    def test_login_is_throttled_per_email_across_addresses(self):
+        def attempt(n):
+            return self.client.post(
+                "/api/auth/login/",
+                {"email": "Owner@Example.com ", "password": "nope"},
+                format="json",
+                REMOTE_ADDR=f"10.0.{n // 250}.{n % 250 + 1}",
+            )
+
+        for n in range(20):
+            self.assertEqual(attempt(n).status_code, 401)
+        self.assertEqual(attempt(20).status_code, 429)
+        # Someone else's login from that same new address is untouched.
+        other = self.client.post(
+            "/api/auth/login/", {"email": "root@example.com", "password": PASSWORD}, format="json", REMOTE_ADDR="10.9.9.9"
+        )
+        self.assertEqual(other.status_code, 200)
+
     def test_a_suspended_business_cannot_log_in(self):
         self.business.suspended = True
         self.business.save()

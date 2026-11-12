@@ -85,6 +85,73 @@ class RentOutTests(RentalTestCase):
         self.assertEqual(rental.status, Rental.Status.ACTIVE)
         self.assertEqual(rental.items.get().quantity_out, 100)
 
+    def test_a_rental_without_a_customer_is_refused_and_moves_nothing(self):
+        with self.assertRaises(ValidationError):
+            self.rent(None, [{"product": self.machine, "quantity": 5, "plan": "daily"}])
+        self.assertEqual(self.on_hand(self.machine), 1000)
+        self.assertEqual(Rental.objects.count(), 0)
+
+    def test_the_summary_counts_what_came_back_today_even_from_a_part_return(self):
+        from rest_framework.test import APIClient
+
+        rental = self.rent(self.mr_x, [{"product": self.machine, "quantity": 100, "plan": "daily"}])
+        services.take_return(user=self.owner, rental=rental, lines=[{"item": rental.items.get(), "quantity": 60}])
+        client = APIClient()
+        client.force_authenticate(self.owner)
+        data = client.get("/api/rentals/summary/").data
+        # Still open, so no rental has "returned" — but 60 units did come back.
+        self.assertEqual(data["returned_today"], 0)
+        self.assertEqual(data["returnsToday"], 1)
+        self.assertEqual(data["unitsReturnedToday"], 60)
+        self.assertEqual(data["unitsOut"], 40)
+
+    def test_a_removed_customer_keeps_their_rentals_and_leaves_the_list(self):
+        from rest_framework.test import APIClient
+
+        from apps.catalog.services import delete_customer
+
+        rental = self.rent(self.mr_x, [{"product": self.machine, "quantity": 5, "plan": "daily"}])
+        # Still holding items: can't be removed at all.
+        with self.assertRaises(ValidationError):
+            delete_customer(user=self.owner, customer=self.mr_x)
+        services.take_return(user=self.owner, rental=rental, lines=[{"item": rental.items.get(), "quantity": 5}])
+
+        self.assertTrue(delete_customer(user=self.owner, customer=self.mr_x))
+        rental.refresh_from_db()
+        self.assertEqual(rental.customer.name, "Mr. X")
+
+        client = APIClient()
+        client.force_authenticate(self.owner)
+        names = [row["name"] for row in client.get("/api/customers/").data]
+        self.assertNotIn("Mr. X", names)
+        self.assertIn("Mr. Y", names)
+        # Still opens by id, so the links on old bills and receipts work.
+        self.assertEqual(client.get(f"/api/customers/{self.mr_x.id}/").status_code, 200)
+        # And can't be rented to.
+        with self.assertRaises(ValidationError):
+            self.rent(self.mr_x, [{"product": self.machine, "quantity": 1, "plan": "daily"}])
+
+    def test_a_customer_who_never_rented_is_deleted_outright(self):
+        from apps.catalog.models import Customer
+        from apps.catalog.services import delete_customer
+
+        self.assertFalse(delete_customer(user=self.owner, customer=self.mr_y))
+        self.assertFalse(Customer.objects.filter(name="Mr. Y").exists())
+
+    def test_an_archived_products_code_can_be_used_by_its_replacement(self):
+        from apps.catalog.services import create_product, delete_product
+
+        rental = self.rent(self.mr_x, [{"product": self.machine, "quantity": 5, "plan": "daily"}])
+        services.take_return(user=self.owner, rental=rental, lines=[{"item": rental.items.get(), "quantity": 5}])
+        sku = self.machine.sku
+        self.assertTrue(delete_product(user=self.owner, product=self.machine))
+        new = create_product(user=self.owner, name="New machine", sku=sku, rentable=True, rent_daily=Decimal("60.00"))
+        self.assertEqual(new.sku, sku)
+        # The old rental still points at the old product, by name and by row.
+        item = rental.items.get()
+        self.assertEqual(item.product_id, self.machine.id)
+        self.assertEqual(item.product_name, self.machine.name)
+
     def test_one_rental_holds_several_products(self):
         rental = self.rent(
             self.mr_x,
