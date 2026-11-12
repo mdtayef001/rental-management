@@ -81,7 +81,7 @@ customer), so the chooser has to ask which one.
 | API | <https://rental-management-api-navy.vercel.app> |
 
 Two Vercel projects off this one repository — `rental-management` (root `frontend/`) and
-`rental-management-api` (root `backend/`) — both deploying on a push to `master`. The
+`rental-management-api` (root `backend/`) — both deploying on a push to `main`. The
 database is a free Neon Postgres provisioned through the Vercel marketplace and connected
 to the API project, so `DATABASE_URL` arrives as a pooled connection and
 `DATABASE_TRANSACTION_POOLER=true` is set to match.
