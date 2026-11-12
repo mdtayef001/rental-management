@@ -28,3 +28,6 @@ PRODUCT.md
 
 # Vercel
 .vercel
+
+# Claude Code local settings
+.claude/

@@ -345,7 +345,3 @@ but the row stays so the stock ledger and every figure traced back to it still r
 Either way the rental lines, bills and receipts keep their own copy of the name and SKU,
 so **nothing already printed changes**. Deleting is refused while units are still out on
 rent.
-
-## Still to build
-
-See `PLAN.md`. Everything in the plan is done.
