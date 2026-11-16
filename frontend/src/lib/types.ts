@@ -7,8 +7,6 @@
 export type Role = "superadmin" | "owner" | "manager" | "staff"
 export type TenantRole = Exclude<Role, "superadmin">
 
-export type ModuleId = "rentals"
-
 export type PermissionId =
   | "managerUsers"
   | "managerProducts"
@@ -42,7 +40,6 @@ export interface Page<T> {
 
 export interface BusinessSettings {
   currency: string
-  modules: Record<ModuleId, boolean>
   permissions: Record<PermissionId, boolean>
   rentals: {
     defaultPlan: RentalPlan

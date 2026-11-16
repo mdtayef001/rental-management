@@ -17,8 +17,6 @@ def default_settings():
     """
     return {
         "currency": "BDT",
-        # Features the owner can switch off for their business.
-        "modules": {"rentals": True},
         # What managers may do. Owners can always do everything.
         "permissions": {
             "managerUsers": True,
@@ -81,9 +79,6 @@ class Business(models.Model):
     @property
     def is_open(self):
         return not self.suspended
-
-    def module_on(self, module):
-        return bool(self.settings.get("modules", {}).get(module))
 
     def permission_on(self, permission):
         return bool(self.settings.get("permissions", {}).get(permission))

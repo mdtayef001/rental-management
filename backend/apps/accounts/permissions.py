@@ -22,7 +22,7 @@ class IsSuperAdmin(BasePermission):
 class IsTenantMember(BasePermission):
     """A logged-in member of a business that isn't suspended.
 
-    Views narrow this further with `allowed_roles`, `module` and `manager_permission`
+    Views narrow this further with `allowed_roles` and `manager_permission`
     attributes, and with `required_right` for the per-person staff rights.
     """
 
@@ -39,11 +39,6 @@ class IsTenantMember(BasePermission):
 
         if user.role not in getattr(view, "allowed_roles", LEADS):
             self.message = "You don't have access to this. Ask the owner if you need it."
-            return False
-
-        module = getattr(view, "module", None)
-        if module and not user.business.module_on(module):
-            self.message = "This feature is switched off in Business settings."
             return False
 
         right = getattr(view, "required_right", None)

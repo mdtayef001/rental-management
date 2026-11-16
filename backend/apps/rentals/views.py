@@ -70,7 +70,6 @@ class RentalViewSet(TenantViewSet, mixins.ListModelMixin, mixins.RetrieveModelMi
     serializer_class = RentalListSerializer
     search_fields = ("customer__name", "customer__phone", "customer__company", "items__product_name", "items__product_sku")
     allowed_roles = TEAM
-    module = "rentals"
 
     def get_queryset(self):
         qs = with_counts(Rental.objects.filter(business=self.request.user.business).select_related("customer"))
@@ -296,7 +295,6 @@ class RentalReturnViewSet(TenantViewSet, mixins.ListModelMixin, mixins.RetrieveM
     serializer_class = RentalReturnSerializer
     search_fields = ("rental__customer__name", "lines__item__product_name")
     allowed_roles = TEAM
-    module = "rentals"
 
     def get_queryset(self):
         return (
@@ -440,7 +438,6 @@ class BillView(APIView):
 
     permission_classes = [IsAuthenticated, IsTenantMember]
     allowed_roles = LEADS
-    module = "rentals"
 
     @property
     def business(self):

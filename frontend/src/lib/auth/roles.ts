@@ -4,7 +4,7 @@
 // set of rules. The same rules exist in backend/apps/accounts/permissions.py: a route
 // hidden here is also refused there, because hiding a link is not a security control.
 
-import type { BusinessSettings, ModuleId, PermissionId, RightId, Role, SessionUser, TenantRole } from "@/lib/types"
+import type { BusinessSettings, PermissionId, RightId, Role, SessionUser, TenantRole } from "@/lib/types"
 
 export const ROLE_LABEL: Record<Role, string> = {
   superadmin: "Super admin",
@@ -32,8 +32,6 @@ const LEADS: Role[] = ["owner", "manager"]
 interface Rule {
   test: (path: string) => boolean
   roles: Role[]
-  /** Hidden when the owner switches this feature off. */
-  module?: ModuleId
   /** Managers need this permission from the owner. */
   permission?: PermissionId
   /** Staff need this per-person right; owners and managers always have it. */
@@ -45,15 +43,15 @@ const prefix = (p: string) => (path: string) => path === p || path.startsWith(p 
 /** First match wins. Anything not listed is owner/manager only, so a new page is private by default. */
 const ROUTE_RULES: Rule[] = [
   { test: prefix("/platform"), roles: ["superadmin"] },
-  { test: prefix("/scan"), roles: TEAM, module: "rentals" },
-  { test: prefix("/rent-out"), roles: TEAM, module: "rentals", right: "canRent" },
-  { test: prefix("/take-back"), roles: TEAM, module: "rentals", right: "canTakeReturns" },
-  { test: prefix("/rentals"), roles: TEAM, module: "rentals" },
-  { test: prefix("/returns"), roles: TEAM, module: "rentals" },
+  { test: prefix("/scan"), roles: TEAM },
+  { test: prefix("/rent-out"), roles: TEAM, right: "canRent" },
+  { test: prefix("/take-back"), roles: TEAM, right: "canTakeReturns" },
+  { test: prefix("/rentals"), roles: TEAM },
+  { test: prefix("/returns"), roles: TEAM },
   { test: prefix("/customers"), roles: TEAM },
   // A bill is everything one customer owes, so it is kept to the
   // people who already see the whole shop's money.
-  { test: prefix("/bills"), roles: LEADS, module: "rentals" },
+  { test: prefix("/bills"), roles: LEADS },
   { test: prefix("/products"), roles: TEAM },
   { test: prefix("/users"), roles: LEADS, permission: "managerUsers" },
   { test: prefix("/activity"), roles: LEADS, permission: "managerActivity" },
@@ -89,7 +87,7 @@ export function isAppRoute(path: string) {
  *
  * Without `settings` — which is the case in proxy.ts, where only the token is available —
  * the role and the per-person right are checked. Pages pass the business settings for the
- * full check including modules and manager permissions.
+ * full check including manager permissions.
  */
 export function canAccess(
   user: { role: Role; canRent?: boolean; canTakeReturns?: boolean; canAddStock?: boolean },
@@ -102,7 +100,6 @@ export function canAccess(
   // Only staff are limited by the per-person rights.
   if (rule?.right && user.role === "staff" && user[rule.right] === false) return false
   if (!settings || !rule) return true
-  if (rule.module && !settings.modules[rule.module]) return false
   if (rule.permission && user.role === "manager" && !settings.permissions[rule.permission]) return false
   return true
 }

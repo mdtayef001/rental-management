@@ -127,7 +127,7 @@ class BusinessSettingsSerializer(serializers.ModelSerializer):
 
     def validate_settings(self, incoming):
         """Merge one level deep, so sending only `{"receiptNote": "..."}` doesn't wipe the
-        modules and permissions the owner never mentioned."""
+        permissions and rental defaults the owner never mentioned."""
         if not isinstance(incoming, dict):
             raise serializers.ValidationError("Settings must be an object.")
         merged = dict(self.instance.settings)
