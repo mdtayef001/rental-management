@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { EmptyState, ErrorState, PageHeader, Pagination, Spinner, TableSkeleton } from "@/components/common"
 import { DataView, Primary, type Column } from "@/components/data-view"
-import { useBranchScope, useCurrentUser } from "@/components/session"
+import { useCurrentUser } from "@/components/session"
 import { canManageUser, creatableRoles, roleLabel } from "@/lib/auth/roles"
 import { useDisableUser, useSaveUser, useSetUserPassword } from "@/lib/data/mutations"
 import { usePaging, useUsers } from "@/lib/data/queries"
@@ -153,7 +153,6 @@ export function UsersView() {
 }
 
 function UserDialog({ roles, user, onClose }: { roles: TenantRole[]; user?: SessionUser; onClose: () => void }) {
-  const { branches, showPicker } = useBranchScope()
   const save = useSaveUser(user?.id)
   const disable = useDisableUser()
   const [form, setForm] = useState(() => ({
@@ -162,7 +161,6 @@ function UserDialog({ roles, user, onClose }: { roles: TenantRole[]; user?: Sess
     phone: user?.phone ?? "",
     password: "",
     role: (user?.role ?? roles[roles.length - 1] ?? "staff") as TenantRole,
-    branchIds: user?.branchIds ?? [],
     canRent: user?.canRent ?? true,
     canTakeReturns: user?.canTakeReturns ?? true,
     canAddStock: user?.canAddStock ?? false,
@@ -177,7 +175,6 @@ function UserDialog({ roles, user, onClose }: { roles: TenantRole[]; user?: Sess
           name: form.name,
           phone: form.phone,
           role: form.role,
-          branchIds: form.branchIds,
           canRent: form.canRent,
           canTakeReturns: form.canTakeReturns,
           canAddStock: form.canAddStock,
@@ -261,29 +258,6 @@ function UserDialog({ roles, user, onClose }: { roles: TenantRole[]; user?: Sess
               </select>
             </div>
           </div>
-
-          {showPicker && form.role === "staff" && (
-            <fieldset className="space-y-2 rounded-lg border p-3">
-              <legend className="px-1 text-sm font-medium">Branches they work at</legend>
-              {branches.map((branch) => (
-                <label key={branch.id} className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={form.branchIds.includes(branch.id)}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        branchIds: e.target.checked
-                          ? [...f.branchIds, branch.id]
-                          : f.branchIds.filter((id) => id !== branch.id),
-                      }))
-                    }
-                  />
-                  {branch.name}
-                </label>
-              ))}
-            </fieldset>
-          )}
 
           {form.role === "staff" && (
             <fieldset className="space-y-2 rounded-lg border p-3">

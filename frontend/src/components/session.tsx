@@ -41,29 +41,6 @@ export function useCurrency() {
   return useSession().business?.settings.currency ?? "BDT"
 }
 
-/**
- * The branches this user may act in, and whether to show a branch picker at all.
- *
- * There is no Branches screen: a business is created with exactly one, so `showPicker` is
- * false everywhere and every form quietly uses `defaultBranchId`. The model and these
- * pickers stay as the seam for a second location later — stock and rentals both
- * already record which branch they happened at, so opening one needs no migration.
- */
-export function useBranchScope() {
-  const { user, business } = useSession()
-  const all = business?.branches ?? []
-  const mine = user.role === "owner" || user.role === "manager" || user.branchIds.length === 0
-    ? all
-    : all.filter((b) => user.branchIds.includes(b.id))
-  return {
-    branches: mine,
-    /** The default for a form: their only branch, or the business's first. */
-    defaultBranchId: mine[0]?.id ?? "",
-    /** One branch means no picker: the common case should feel like a single shop. */
-    showPicker: mine.length > 1,
-  }
-}
-
 /** Whether to render a link or button for a route. Mirrors the server's own check. */
 export function useCanAccess(path: string) {
   const { user, business } = useSession()
@@ -82,7 +59,6 @@ const FALLBACK: BusinessSettings = {
     managerUsers: false,
     managerProducts: false,
     managerCustomers: false,
-    managerBranches: false,
     managerActivity: false,
     managerProfit: false,
     staffCreateProducts: false,

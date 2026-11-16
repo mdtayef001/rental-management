@@ -1,8 +1,8 @@
 """Stock arithmetic and product lookup.
 
-Every change to a stock level goes through `change_stock`, which locks the row, refuses to
-go negative and writes a ledger entry. Nothing else is allowed to touch
-`StockLevel.quantity`, so "where did those 40 machines go" always has an answer.
+Every change to a product's stock goes through `change_stock`, which locks the row, refuses
+to go negative and writes a ledger entry. Nothing else is allowed to touch
+`Product.quantity`, so "where did those 40 machines go" always has an answer.
 """
 
 from django.db import transaction
@@ -12,78 +12,57 @@ from rest_framework.exceptions import ValidationError
 
 from apps.accounts.models import log
 
-from .models import Customer, CustomerRate, Product, StockLevel, StockMovement
+from .models import Customer, CustomerRate, Product, StockMovement
 
 
 @transaction.atomic
-def change_stock(*, product, branch, change, reason, user=None, note=""):
-    """Add to or take from the stock of `product` at `branch`. Returns the new level.
+def change_stock(*, product, change, reason, user=None, note=""):
+    """Add to or take from the stock of `product`. Returns the new quantity.
 
     `select_for_update` is what makes two staff members returning items at the same moment
     safe: the second waits for the first, so both changes land instead of one overwriting
-    the other.
+    the other. The caller's `product` is brought up to date too.
     """
     if change == 0:
-        return StockLevel.objects.filter(product=product, branch=branch).first()
-
-    level, _ = StockLevel.objects.select_for_update().get_or_create(
-        product=product, branch=branch, defaults={"business_id": product.business_id, "quantity": 0}
-    )
-    new_quantity = level.quantity + change
+        return product.quantity
+    on_shelf = Product.objects.select_for_update().values_list("quantity", flat=True).get(pk=product.pk)
+    new_quantity = on_shelf + change
     if new_quantity < 0:
         raise ValidationError(
-            f"Only {level.quantity} {product.unit} of {product.name} are at {branch.name}; "
-            f"you asked for {abs(change)}."
+            f"Only {on_shelf} {product.unit} of {product.name} are on the shelf; you asked for {abs(change)}."
         )
-    level.quantity = new_quantity
-    level.save(update_fields=["quantity"])
+    Product.objects.filter(pk=product.pk).update(quantity=new_quantity)
+    product.quantity = new_quantity
 
     StockMovement.objects.create(
         business_id=product.business_id,
         product=product,
-        branch=branch,
         change=change,
         balance=new_quantity,
         reason=reason,
         note=note[:300],
         by=user if user and user.pk else None,
     )
-    return level
+    return new_quantity
 
 
 @transaction.atomic
-def adjust_stock(*, user, product, branch, quantity, reason, note=""):
+def adjust_stock(*, user, product, quantity, reason, note=""):
     """A manual correction: set the shelf count to `quantity`, whatever it was before.
 
     Staff count the shelf and type what they see; the ledger records the difference and who
     said so. A reason is required, because an unexplained correction is how stock quietly
-    goes missing.
+    goes missing. Returns the new quantity.
     """
     if reason not in (StockMovement.Reason.ADJUSTMENT, StockMovement.Reason.DAMAGE, StockMovement.Reason.LOST):
         raise ValidationError("Pick a reason: a correction, damage, or lost stock.")
-    level, _ = StockLevel.objects.select_for_update().get_or_create(
-        product=product, branch=branch, defaults={"business_id": product.business_id, "quantity": 0}
-    )
-    change = quantity - level.quantity
+    on_shelf = Product.objects.select_for_update().values_list("quantity", flat=True).get(pk=product.pk)
+    change = quantity - on_shelf
     if change == 0:
-        return level
-    level = change_stock(product=product, branch=branch, change=change, reason=reason, user=user, note=note)
-    log(user, "Stock adjusted", f"{product.name} at {branch.name}: {change:+d} → {quantity} ({note or reason})")
-    return level
-
-
-def availability(product, branch=None):
-    """How many are free to rent out right now, per branch or at one branch.
-
-    This is just the stock on hand: renting takes items off the shelf and returning puts
-    them back, so what's on the shelf is exactly what can go out. Nothing has to be
-    subtracted for rentals already running.
-    """
-    rows = StockLevel.objects.filter(product=product)
-    if branch is not None:
-        rows = rows.filter(branch=branch)
-        return rows.values_list("quantity", flat=True).first() or 0
-    return {str(branch_id): qty for branch_id, qty in rows.values_list("branch_id", "quantity")}
+        return on_shelf
+    change_stock(product=product, change=change, reason=reason, user=user, note=note)
+    log(user, "Stock adjusted", f"{product.name}: {change:+d} → {quantity} ({note or reason})")
+    return quantity
 
 
 def find_by_code(business, code, *, rentable_only=False):
@@ -135,12 +114,11 @@ def next_sku(business):
 
 
 @transaction.atomic
-def create_product(*, user, opening_stock=0, branch=None, **fields):
+def create_product(*, user, opening_stock=0, **fields):
     """Add a product, optionally with the count already on the shelf.
 
-    `opening_stock` goes onto `branch` (the business's first when none is given) through
-    the stock ledger like any other change, so the first line of the product's history says
-    where its stock came from.
+    `opening_stock` goes through the stock ledger like any other change, so the first line
+    of the product's history says where its stock came from.
     """
     from apps.accounts.models import Business
 
@@ -151,12 +129,10 @@ def create_product(*, user, opening_stock=0, branch=None, **fields):
         fields["sku"] = next_sku(user.business)
     product = Product.objects.create(business=user.business, created_by=user, **fields)
     if opening_stock:
-        branch = branch or user.business.branches.first()
-        if branch is not None:
-            change_stock(
-                product=product, branch=branch, change=int(opening_stock),
-                reason=StockMovement.Reason.ADJUSTMENT, user=user, note="Opening stock",
-            )
+        change_stock(
+            product=product, change=int(opening_stock),
+            reason=StockMovement.Reason.ADJUSTMENT, user=user, note="Opening stock",
+        )
     log(user, "Product added", f"{product.name} ({product.sku})")
     return product
 
@@ -193,8 +169,6 @@ def delete_product(*, user, product):
         or StockMovement.objects.filter(product=product).exists()
     )
     if not used:
-        # Stock rows are the product's own counters, not history, so they go with it.
-        StockLevel.objects.filter(product=product).delete()
         product.delete()
         log(user, "Product deleted", name)
         return False

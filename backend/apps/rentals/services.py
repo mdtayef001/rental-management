@@ -48,11 +48,11 @@ def next_number(model, business_id):
 
 
 @transaction.atomic
-def create_rental(*, user, customer, branch, lines, started_at=None, due_at=None, notes="", paid_amount=ZERO, payment_method="", payment_reference="", remember_rates=False):
+def create_rental(*, user, customer, lines, started_at=None, due_at=None, notes="", paid_amount=ZERO, payment_method="", payment_reference="", remember_rates=False):
     """Rent several products to one customer in one transaction.
 
     `lines` is a list of dicts: product, quantity, plan, rate, and optionally
-    replacement_cost, holidays and note. Stock leaves the branch for each line; if any line
+    replacement_cost, holidays and note. Stock leaves the shelf for each line; if any line
     can't be filled, the whole rental is rolled back and nothing moves.
 
     A line without a rate uses the price agreed with this customer, and failing that the
@@ -86,7 +86,6 @@ def create_rental(*, user, customer, branch, lines, started_at=None, due_at=None
         business=user.business,
         number=next_number(Rental, user.business_id),
         customer=customer,
-        branch=branch,
         started_at=started_at,
         due_at=due_at,
         notes=notes,
@@ -118,7 +117,6 @@ def create_rental(*, user, customer, branch, lines, started_at=None, due_at=None
         # there isn't enough.
         change_stock(
             product=product,
-            branch=branch,
             change=-quantity,
             reason=StockMovement.Reason.RENT_OUT,
             user=user,
@@ -159,7 +157,7 @@ def create_rental(*, user, customer, branch, lines, started_at=None, due_at=None
 # ---------- Finding what to take back ----------
 
 
-def open_items(business, *, product=None, customer=None, rental=None, branch_ids=None):
+def open_items(business, *, product=None, customer=None, rental=None):
     """Rental items that still have units with a customer.
 
     This one query answers every way of starting a return: by scanning a product, by naming
@@ -170,7 +168,7 @@ def open_items(business, *, product=None, customer=None, rental=None, branch_ids
         RentalItem.objects.filter(rental__business=business, rental__status__in=Rental.OPEN)
         .annotate(out=F("quantity") - F("quantity_returned") - F("quantity_lost"))
         .filter(out__gt=0)
-        .select_related("rental", "rental__customer", "rental__branch", "product")
+        .select_related("rental", "rental__customer", "product")
         .order_by("rental__started_at", "id")
     )
     if product is not None:
@@ -179,12 +177,10 @@ def open_items(business, *, product=None, customer=None, rental=None, branch_ids
         qs = qs.filter(rental__customer=customer)
     if rental is not None:
         qs = qs.filter(rental=rental)
-    if branch_ids is not None:
-        qs = qs.filter(rental__branch_id__in=branch_ids)
     return qs
 
 
-def resolve_return(business, *, code="", customer=None, rental=None, branch_ids=None):
+def resolve_return(business, *, code="", customer=None, rental=None):
     """The scan-in flow: work out what the person in front of you is bringing back.
 
     This is the feature the client asked for by name. A scan can mean three different
@@ -219,7 +215,7 @@ def resolve_return(business, *, code="", customer=None, rental=None, branch_ids=
                 return {"matchedBy": None, "product": None, "matches": [], "exact": None}
             matched_by = "product"
 
-    items = list(open_items(business, product=product, customer=customer, rental=rental, branch_ids=branch_ids))
+    items = list(open_items(business, product=product, customer=customer, rental=rental))
     now = timezone.now()
     matches = [item_match(item, now) for item in items]
     # One candidate: the screen can go straight to it instead of asking.
@@ -262,7 +258,6 @@ def item_match(item, now=None):
         "customerId": str(rental.customer_id) if rental.customer_id else None,
         "customerName": rental.customer.name if rental.customer else "Walk-in",
         "customerPhone": rental.customer.phone if rental.customer else "",
-        "branchName": rental.branch.name if rental.branch else "",
         "productId": str(item.product_id) if item.product_id else None,
         "productName": item.product_name,
         "productSku": item.product_sku,
@@ -364,7 +359,7 @@ def take_return(*, user, rental, lines, at=None, discount=ZERO, paid_amount=ZERO
     # returns on different rentals can never deadlock each other.
     rental = (
         Rental.objects.select_for_update(of=("self",))
-        .select_related("business", "branch", "customer")
+        .select_related("business", "customer")
         .get(pk=rental.pk)
     )
     if not rental.is_open:
@@ -433,19 +428,19 @@ def take_return(*, user, rental, lines, at=None, discount=ZERO, paid_amount=ZERO
         # Good and damaged units physically come back; lost ones don't. Damaged stock comes
         # back onto the shelf and is then written off, so the ledger shows both halves
         # instead of a unit silently disappearing.
-        if item.product_id and rental.branch_id:
+        if item.product_id:
             if condition == RentalReturnLine.Condition.GOOD:
                 change_stock(
-                    product=item.product, branch=rental.branch, change=quantity,
+                    product=item.product, change=quantity,
                     reason=StockMovement.Reason.RENT_RETURN, user=user, note=rental.code,
                 )
             elif condition == RentalReturnLine.Condition.DAMAGED:
                 change_stock(
-                    product=item.product, branch=rental.branch, change=quantity,
+                    product=item.product, change=quantity,
                     reason=StockMovement.Reason.RENT_RETURN, user=user, note=rental.code,
                 )
                 change_stock(
-                    product=item.product, branch=rental.branch, change=-quantity,
+                    product=item.product, change=-quantity,
                     reason=StockMovement.Reason.DAMAGE, user=user,
                     note=f"{rental.code} · returned damaged",
                 )
@@ -598,7 +593,7 @@ def cancel_rental(*, user, rental, reason=""):
     Only while nothing has been returned yet — once a return exists, the rental has a
     history and must be finished properly rather than erased.
     """
-    rental = Rental.objects.select_for_update(of=("self",)).select_related("branch").get(pk=rental.pk)
+    rental = Rental.objects.select_for_update().get(pk=rental.pk)
     if rental.status == Rental.Status.CANCELLED:
         return rental
     if RentalReturn.objects.filter(rental=rental).exists():
@@ -607,9 +602,9 @@ def cancel_rental(*, user, rental, reason=""):
         raise ValidationError("Money has been taken against this rental. Give it back first, then cancel.")
 
     for item in rental.items.select_related("product"):
-        if item.product_id and rental.branch_id and item.quantity_out:
+        if item.product_id and item.quantity_out:
             change_stock(
-                product=item.product, branch=rental.branch, change=item.quantity_out,
+                product=item.product, change=item.quantity_out,
                 reason=StockMovement.Reason.RENT_RETURN, user=user,
                 note=f"{rental.code} cancelled",
             )

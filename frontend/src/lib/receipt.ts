@@ -12,7 +12,6 @@ import type { Business, Rental, RentalPlan } from "@/lib/types"
  */
 export interface ReceiptView {
   businessName: string
-  branchName?: string
   address?: string
   phone?: string
   /** The business's logo, when it has uploaded one. */
@@ -143,13 +142,11 @@ export function returnedLateDays(r: ReceiptView) {
 export function fromRental(
   rental: Rental,
   business: Business | null,
-  branchName?: string,
   origin = "",
 ): ReceiptView {
   const payments = rental.payments ?? []
   return {
     businessName: business?.name ?? "Rental",
-    branchName,
     address: business?.address,
     phone: business?.phone,
     logo: logoUrl(business?.logoVersion),

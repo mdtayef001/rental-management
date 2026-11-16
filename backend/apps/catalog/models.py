@@ -1,14 +1,14 @@
 """What the business rents out, how much of it is on hand, and who it rents to.
 
 Stock is counted, not serialised: 1,000 sewing machines are one Product with a quantity of
-1,000 at a branch. A rental takes 100 of them out and brings some or all of them back.
+1,000. A rental takes 100 of them out and brings some or all of them back.
 """
 
 from django.conf import settings
 from django.core.validators import MinValueValidator
 from django.db import models
 
-from apps.accounts.models import Branch, TenantModel
+from apps.accounts.models import TenantModel
 
 
 class Product(TenantModel):
@@ -31,6 +31,11 @@ class Product(TenantModel):
     # What replacing one costs, charged when an item comes back broken or doesn't come back.
     replacement_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0, validators=[MinValueValidator(0)])
 
+    # What is physically on the shelf, ready to go out. Items out on rent are *not* counted
+    # here: renting takes them off, returning puts them back. How many are out is always
+    # derived from the open rental items, so the two numbers can never drift apart. Only
+    # `change_stock` writes it, and every change leaves a line in the stock ledger.
+    quantity = models.PositiveIntegerField(default=0)
     low_stock_threshold = models.PositiveIntegerField(default=0)
     archived_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -67,28 +72,8 @@ class Product(TenantModel):
         return {"daily": self.rent_daily, "weekly": self.rent_weekly, "monthly": self.rent_monthly}.get(plan)
 
 
-class StockLevel(TenantModel):
-    """How many of a product sit at a branch, ready to go out.
-
-    `quantity` is what is physically on the shelf. Items out on rent are *not* counted here:
-    renting takes them off, returning puts them back. How many are out is always derived from
-    the open rental items, so the two numbers can never drift apart.
-    """
-
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="stock")
-    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name="stock")
-    quantity = models.PositiveIntegerField(default=0)
-
-    class Meta:
-        constraints = [models.UniqueConstraint(fields=["product", "branch"], name="unique_stock_row")]
-        indexes = [models.Index(fields=["business", "branch"])]
-
-    def __str__(self):
-        return f"{self.product_id} @ {self.branch_id}: {self.quantity}"
-
-
 class StockMovement(TenantModel):
-    """Every change to a stock level, with its reason. The stock ledger.
+    """Every change to a product's stock, with its reason. The stock ledger.
 
     Stock is never edited silently: a count that doesn't match the shelf can be traced back
     to the person and the reason.
@@ -106,7 +91,6 @@ class StockMovement(TenantModel):
         LOST = "lost", "Lost"
 
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="movements")
-    branch = models.ForeignKey(Branch, null=True, on_delete=models.SET_NULL, related_name="+")
     # Signed: positive adds to stock, negative takes away.
     change = models.IntegerField()
     # The level after this movement, so a ledger reads without re-adding everything.

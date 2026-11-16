@@ -281,7 +281,6 @@ export function RentalDetailView({ id }: { id: string }) {
             <CardContent className="space-y-2 text-sm">
               <Line label="Customer" value={rental.customerName} />
               {rental.customerPhone && <Line label="Phone" value={rental.customerPhone} />}
-              {rental.branchName && <Line label="Branch" value={rental.branchName} />}
               <Line label="Out" value={dateTime(rental.startedAt)} />
               <Line label="Due" value={rental.dueAt ? dateTime(rental.dueAt) : "Open-ended"} />
               {rental.returnedAt && <Line label="All back" value={dateTime(rental.returnedAt)} />}

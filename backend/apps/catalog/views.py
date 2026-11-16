@@ -4,9 +4,9 @@
 in rentals starts from `business=request.user.business`, so no view can forget.
 """
 
-from django.db.models import Count, DecimalField, F, IntegerField, OuterRef, Prefetch, Q, Subquery, Sum, Value
+from django.db.models import Count, DecimalField, F, IntegerField, OuterRef, Q, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
-from rest_framework import mixins, status, viewsets
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.permissions import IsAuthenticated
@@ -17,7 +17,7 @@ from apps.accounts.permissions import LEADS, TEAM, IsTenantMember, ManagerNeedsP
 from apps.api import Pagination
 
 from . import services
-from .models import Customer, CustomerRate, Product, StockLevel, StockMovement
+from .models import Customer, CustomerRate, Product, StockMovement
 from .serializers import (
     CustomerRateSerializer,
     CustomerRateWriteSerializer,
@@ -27,7 +27,6 @@ from .serializers import (
     ProductSerializer,
     ProductWriteSerializer,
     StockAdjustSerializer,
-    StockLevelSerializer,
     StockMovementSerializer,
 )
 
@@ -68,24 +67,6 @@ class TenantViewSet(viewsets.GenericViewSet):
         value = self.request.query_params.get(name, "")
         return int(value) if value.isdigit() else None
 
-    def branches_allowed(self):
-        """Branch ids this user may see, or None for all of them."""
-        return self.request.user.branch_ids()
-
-    def scope_to_branches(self, qs, field="branch_id"):
-        allowed = self.branches_allowed()
-        if allowed is None:
-            return qs
-        # Rows with no branch (history whose branch was deleted) stay visible to leads only.
-        return qs.filter(**{f"{field}__in": allowed})
-
-    def check_branch(self, *branches):
-        allowed = self.branches_allowed()
-        if allowed is None:
-            return
-        for branch in branches:
-            if branch is not None and branch.id not in allowed:
-                raise PermissionDenied("You don't work at that branch.")
 
 
 class ProductViewSet(TenantViewSet, viewsets.ModelViewSet):
@@ -101,19 +82,13 @@ class ProductViewSet(TenantViewSet, viewsets.ModelViewSet):
         return ProductWriteSerializer if self.action in ("create", "update", "partial_update") else ProductSerializer
 
     def get_queryset(self):
-        """One page of products with their stock and how many are out on rent.
+        """One page of products with how many are out on rent.
 
-        The two aggregates are subqueries rather than joins, because joining stock and rental
-        items in one query multiplies the rows and inflates both totals.
+        A subquery rather than a join, so a product's several rental lines can't multiply
+        its row.
         """
         from apps.rentals.models import Rental, RentalItem
 
-        on_hand = (
-            StockLevel.objects.filter(product=OuterRef("pk"))
-            .values("product")
-            .annotate(n=Sum("quantity"))
-            .values("n")
-        )
         out_on_rent = (
             RentalItem.objects.filter(product=OuterRef("pk"), rental__status__in=Rental.OPEN)
             .values("product")
@@ -122,11 +97,7 @@ class ProductViewSet(TenantViewSet, viewsets.ModelViewSet):
         )
         return (
             Product.objects.filter(business=self.request.user.business)
-            .prefetch_related(Prefetch("stock", queryset=StockLevel.objects.only("product_id", "branch_id", "quantity")))
-            .annotate(
-                on_hand=Coalesce(Subquery(on_hand, output_field=IntegerField()), Value(0)),
-                out_on_rent=Coalesce(Subquery(out_on_rent, output_field=IntegerField()), Value(0)),
-            )
+            .annotate(out_on_rent=Coalesce(Subquery(out_on_rent, output_field=IntegerField()), Value(0)))
         )
 
     def filter_queryset(self, qs):
@@ -142,15 +113,15 @@ class ProductViewSet(TenantViewSet, viewsets.ModelViewSet):
         if category:
             qs = qs.filter(category__iexact=category)
         if params.get("in_stock") == "1":
-            qs = qs.filter(on_hand__gt=0)
+            qs = qs.filter(quantity__gt=0)
         if params.get("low_stock") == "1":
             default = self.request.user.business.low_stock_alert
             qs = qs.filter(
-                Q(low_stock_threshold__gt=0, on_hand__lte=F("low_stock_threshold"))
-                | Q(low_stock_threshold=0, on_hand__lte=default)
+                Q(low_stock_threshold__gt=0, quantity__lte=F("low_stock_threshold"))
+                | Q(low_stock_threshold=0, quantity__lte=default)
             )
         order = params.get("sort", "")
-        return qs.order_by({"name": "name", "stock": "on_hand", "newest": "-created_at"}.get(order, "-created_at"))
+        return qs.order_by({"name": "name", "stock": "quantity", "newest": "-created_at"}.get(order, "-created_at"))
 
     def check_permissions(self, request):
         super().check_permissions(request)
@@ -216,62 +187,37 @@ class ProductViewSet(TenantViewSet, viewsets.ModelViewSet):
             if not product:
                 # 404 with a usable message: the scan screen shows it and offers a search.
                 raise NotFound(f"No product has the code “{code}”.")
-            return Response(LookupSerializer.of(product, services.availability(product)))
+            return Response(LookupSerializer.of(product))
 
         text = request.query_params.get("search", "").strip()
         products = services.search_products(business, text, rentable_only=rentable_only)
-        stock = {}
-        for level in StockLevel.objects.filter(product__in=products).values_list("product_id", "branch_id", "quantity"):
-            stock.setdefault(level[0], {})[str(level[1])] = level[2]
-        return Response([LookupSerializer.of(p, stock.get(p.id, {})) for p in products])
+        return Response([LookupSerializer.of(p) for p in products])
 
 
-class StockViewSet(TenantViewSet, mixins.ListModelMixin):
-    """Stock levels, and the corrections staff make to them."""
+class StockViewSet(TenantViewSet):
+    """The stock page's totals, the corrections staff make, and the ledger behind them.
 
-    model = StockLevel
-    serializer_class = StockLevelSerializer
+    Stock itself is `Product.quantity`, listed through the products endpoint.
+    """
+
+    model = Product
     allowed_roles = TEAM
 
     def get_queryset(self):
-        qs = (
-            StockLevel.objects.filter(business=self.request.user.business, product__archived_at__isnull=True)
-            .select_related("product", "branch")
-            .order_by("product__name", "branch__id")
-        )
-        return self.scope_to_branches(qs)
-
-    def filter_queryset(self, qs):
-        params = self.request.query_params
-        text = params.get("search", "").strip()
-        if text:
-            qs = qs.filter(Q(product__name__icontains=text) | Q(product__sku__icontains=text))
-        branch = self.id_param("branch")
-        if branch:
-            qs = qs.filter(branch_id=branch)
-        product = self.id_param("product")
-        if product:
-            qs = qs.filter(product_id=product)
-        if params.get("low_stock") == "1":
-            default = self.request.user.business.low_stock_alert
-            qs = qs.filter(
-                Q(product__low_stock_threshold__gt=0, quantity__lte=F("product__low_stock_threshold"))
-                | Q(product__low_stock_threshold=0, quantity__lte=default)
-            )
-        return qs
+        return Product.objects.filter(business=self.request.user.business, archived_at__isnull=True)
 
     @action(detail=False)
     def summary(self, request):
         """Totals for the stock page header, all in one query."""
-        qs = self.filter_queryset(self.get_queryset())
+        qs = self.get_queryset()
         default = request.user.business.low_stock_alert
         totals = qs.aggregate(
             units=Coalesce(Sum("quantity"), Value(0)),
             lines=Count("id"),
         )
         low = qs.filter(
-            Q(product__low_stock_threshold__gt=0, quantity__lte=F("product__low_stock_threshold"))
-            | Q(product__low_stock_threshold=0, quantity__lte=default)
+            Q(low_stock_threshold__gt=0, quantity__lte=F("low_stock_threshold"))
+            | Q(low_stock_threshold=0, quantity__lte=default)
         ).count()
         return Response({"units": totals["units"], "lines": totals["lines"], "lowStock": low})
 
@@ -283,27 +229,22 @@ class StockViewSet(TenantViewSet, mixins.ListModelMixin):
         serializer = StockAdjustSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        level = services.adjust_stock(
+        services.adjust_stock(
             user=request.user,
             product=data["product"],
-            branch=data["branch"],
             quantity=data["quantity"],
             reason=data["reason"],
             note=data["note"],
         )
-        return Response(StockLevelSerializer(StockLevel.objects.select_related("product", "branch").get(pk=level.pk)).data)
+        return Response(ProductSerializer(ProductViewSet(request=request).get_queryset().get(pk=data["product"].pk)).data)
 
     @action(detail=False)
     def movements(self, request):
         """The stock ledger: every change, with its reason and who made it."""
-        qs = StockMovement.objects.filter(business=request.user.business).select_related("product", "branch", "by")
-        qs = self.scope_to_branches(qs)
+        qs = StockMovement.objects.filter(business=request.user.business).select_related("product", "by")
         product = self.id_param("product")
         if product:
             qs = qs.filter(product_id=product)
-        branch = self.id_param("branch")
-        if branch:
-            qs = qs.filter(branch_id=branch)
         reason = request.query_params.get("reason", "")
         if reason in StockMovement.Reason.values:
             qs = qs.filter(reason=reason)

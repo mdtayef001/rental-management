@@ -7,7 +7,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from apps.api import IdField
 
-from .models import Activity, Branch, Business, User
+from .models import Activity, Business, User
 from .permissions import creatable_roles
 
 # The per-person rights an owner or manager can give a staff member.
@@ -45,32 +45,19 @@ class LoginSerializer(TokenObtainPairSerializer):
         return data
 
 
-class BranchSerializer(serializers.ModelSerializer):
-    id = IdField()
-
-    class Meta:
-        model = Branch
-        fields = ["id", "name", "address", "phone"]
-
-
 class UserSerializer(serializers.ModelSerializer):
     """A team member as the frontend's Users screen shows them."""
 
     id = IdField()
-    branch_ids = serializers.SerializerMethodField()
     is_main_owner = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = User
         fields = [
             "id", "name", "email", "phone", "role", "is_active", "is_main_owner",
-            "branch_ids", "date_joined", "last_login", *RIGHTS,
+            "date_joined", "last_login", *RIGHTS,
         ]
         read_only_fields = ["date_joined", "last_login"]
-
-    def get_branch_ids(self, user):
-        # Prefetched by the viewset, so this costs no extra query per row.
-        return [str(b.id) for b in user.branches.all()]
 
 
 class UserCreateSerializer(serializers.Serializer):
@@ -81,7 +68,6 @@ class UserCreateSerializer(serializers.Serializer):
     phone = serializers.CharField(max_length=40, required=False, allow_blank=True, default="")
     password = serializers.CharField(write_only=True)
     role = serializers.ChoiceField(choices=User.Role.choices)
-    branch_ids = serializers.ListField(child=serializers.CharField(), required=False, default=list)
     can_rent = serializers.BooleanField(default=True)
     can_take_returns = serializers.BooleanField(default=True)
     can_add_stock = serializers.BooleanField(default=False)
@@ -95,32 +81,20 @@ class UserCreateSerializer(serializers.Serializer):
     def validate_password(self, password):
         return check_password_strength(password)
 
-    def validate_branch_ids(self, ids):
-        return [i for i in ids if str(i).isdigit()]
-
 
 class UserUpdateSerializer(serializers.ModelSerializer):
     """Editing a team member. Email and role changes are handled here too, but the viewset
     decides whether this actor may touch this user at all."""
 
-    branch_ids = serializers.ListField(child=serializers.CharField(), required=False)
-
     class Meta:
         model = User
-        fields = ["name", "phone", "role", "is_active", "branch_ids", *RIGHTS]
+        fields = ["name", "phone", "role", "is_active", *RIGHTS]
 
     def validate_role(self, role):
         allowed = creatable_roles(self.context["request"].user)
         if role not in allowed:
             raise serializers.ValidationError("You can't give someone that role.")
         return role
-
-    def update(self, user, data):
-        branch_ids = data.pop("branch_ids", None)
-        user = super().update(user, data)
-        if branch_ids is not None:
-            user.branches.set(Branch.objects.filter(business=user.business, id__in=[i for i in branch_ids if str(i).isdigit()]))
-        return user
 
 
 class PasswordSerializer(serializers.Serializer):
@@ -133,13 +107,12 @@ class PasswordSerializer(serializers.Serializer):
 class BusinessSerializer(serializers.ModelSerializer):
     id = IdField()
     status = serializers.CharField(read_only=True)
-    branches = BranchSerializer(many=True, read_only=True)
 
     class Meta:
         model = Business
         fields = [
             "id", "name", "industry", "phone", "address", "status", "suspended", "suspended_reason",
-            "settings", "logo_version", "branches", "created_at",
+            "settings", "logo_version", "created_at",
         ]
         read_only_fields = ["suspended", "suspended_reason", "logo_version", "created_at"]
 
@@ -233,7 +206,6 @@ class BusinessCreateSerializer(serializers.Serializer):
     industry = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
     phone = serializers.CharField(max_length=40, required=False, allow_blank=True, default="")
     address = serializers.CharField(max_length=300, required=False, allow_blank=True, default="")
-    branch_name = serializers.CharField(max_length=150, required=False, allow_blank=True, default="Main branch")
     owner_name = serializers.CharField(max_length=150)
     owner_email = serializers.EmailField()
     owner_password = serializers.CharField(write_only=True)

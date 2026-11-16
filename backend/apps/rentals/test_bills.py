@@ -242,7 +242,7 @@ class BillApiTests(BillTestCase):
         self.assertEqual(self.client.get("/api/bills/").status_code, 403)
 
     def test_another_businesss_customer_is_not_found(self):
-        _, _, their_owner = create_business(
+        _, their_owner = create_business(
             name="Sylhet Tools", owner_name="Them", owner_email="them@example.com", owner_password=PASSWORD
         )
         self.login(their_owner)

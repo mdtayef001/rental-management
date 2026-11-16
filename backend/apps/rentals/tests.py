@@ -14,7 +14,7 @@ from rest_framework.exceptions import ValidationError
 
 from apps.accounts.models import User
 from apps.accounts.services import create_business, create_user
-from apps.catalog.models import StockLevel, StockMovement
+from apps.catalog.models import Product, StockMovement
 from apps.catalog.services import adjust_stock, find_by_code
 from apps.rentals import services
 from apps.rentals.models import Rental, RentalItem, RentalPayment, RentalReturnLine
@@ -31,10 +31,10 @@ def days_ago(n):
 
 
 class RentalTestCase(TestCase):
-    """A business with one branch, one owner, and 1,000 sewing machines on the shelf."""
+    """A business with one owner and 1,000 sewing machines on the shelf."""
 
     def setUp(self):
-        self.business, self.branch, self.owner = create_business(
+        self.business, self.owner = create_business(
             name="Dhaka Rentals",
             owner_name="Owner",
             owner_email="owner@example.com",
@@ -60,21 +60,21 @@ class RentalTestCase(TestCase):
             rent_daily=Decimal("20.00"),
         )
         adjust_stock(
-            user=self.owner, product=self.machine, branch=self.branch, quantity=1000,
+            user=self.owner, product=self.machine, quantity=1000,
             reason=StockMovement.Reason.ADJUSTMENT, note="Opening count",
         )
         adjust_stock(
-            user=self.owner, product=self.table, branch=self.branch, quantity=50,
+            user=self.owner, product=self.table, quantity=50,
             reason=StockMovement.Reason.ADJUSTMENT, note="Opening count",
         )
         self.mr_x = create_customer(user=self.owner, name="Mr. X", phone="01700000001")
         self.mr_y = create_customer(user=self.owner, name="Mr. Y", phone="01700000002")
 
     def on_hand(self, product):
-        return StockLevel.objects.get(product=product, branch=self.branch).quantity
+        return Product.objects.get(pk=product.pk).quantity
 
     def rent(self, customer, lines, **kwargs):
-        return services.create_rental(user=self.owner, customer=customer, branch=self.branch, lines=lines, **kwargs)
+        return services.create_rental(user=self.owner, customer=customer, lines=lines, **kwargs)
 
 
 class RentOutTests(RentalTestCase):
@@ -537,7 +537,7 @@ class TenantIsolationTests(RentalTestCase):
 
     def setUp(self):
         super().setUp()
-        self.other_business, self.other_branch, self.other_owner = create_business(
+        self.other_business, self.other_owner = create_business(
             name="Chittagong Rentals",
             owner_name="Other owner",
             owner_email="other@example.com",
@@ -567,13 +567,13 @@ class TenantIsolationTests(RentalTestCase):
             user=self.other_owner, sku="X-1", name="Theirs", rentable=True, rent_daily=Decimal("10.00")
         )
         adjust_stock(
-            user=self.other_owner, product=their_product, branch=self.other_branch, quantity=5,
+            user=self.other_owner, product=their_product, quantity=5,
             reason=StockMovement.Reason.ADJUSTMENT,
         )
         their_customer = create_customer(user=self.other_owner, name="Their customer")
         mine = self.rent(self.mr_x, [{"product": self.machine, "quantity": 1, "plan": "daily"}])
         theirs = services.create_rental(
-            user=self.other_owner, customer=their_customer, branch=self.other_branch,
+            user=self.other_owner, customer=their_customer,
             lines=[{"product": their_product, "quantity": 1, "plan": "daily"}],
         )
         # Both are number 1: the sequence is per business, so neither leaks the other's volume.
@@ -582,6 +582,45 @@ class TenantIsolationTests(RentalTestCase):
 
 
 class RightsTests(RentalTestCase):
+    def test_staff_added_through_the_users_screen_can_rent_and_take_back(self):
+        """Staff created exactly as the Add someone dialog creates them — no extra fields —
+        can rent out and take a return straight away."""
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        client.force_authenticate(self.owner)
+        res = client.post(
+            "/api/users/",
+            {
+                "name": "New staff", "email": "new-staff@example.com", "phone": "",
+                "password": "correct-horse-battery", "role": "staff",
+                "canRent": True, "canTakeReturns": True, "canAddStock": False,
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201, res.content)
+        client.force_authenticate(User.objects.get(email="new-staff@example.com"))
+
+        res = client.post(
+            "/api/rentals/",
+            {"customer": str(self.mr_x.id), "lines": [{"product": str(self.machine.id), "quantity": 3, "plan": "daily"}]},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201, res.content)
+        rental = res.json()
+        self.assertEqual(self.on_hand(self.machine), 997)
+        self.assertEqual(client.get("/api/rentals/").json()[0]["id"], rental["id"])
+
+        found = client.post("/api/rentals/resolve-return/", {"code": "8801234567890"}, format="json").json()
+        self.assertEqual([m["rentalId"] for m in found["matches"]], [rental["id"]])
+        res = client.post(
+            f"/api/rentals/{rental['id']}/return/",
+            {"lines": [{"item": rental["items"][0]["id"], "quantity": 3}]},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201, res.content)
+        self.assertEqual(self.on_hand(self.machine), 1000)
+
     def test_staff_without_the_rent_right_cannot_rent(self):
         staff = create_user(
             actor=self.owner, name="Helper", email="helper@example.com",

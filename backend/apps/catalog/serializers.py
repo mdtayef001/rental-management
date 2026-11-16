@@ -2,10 +2,9 @@
 
 from rest_framework import serializers
 
-from apps.accounts.models import Branch
 from apps.api import IdField, tenant_field
 
-from .models import Customer, CustomerRate, Product, StockLevel, StockMovement
+from .models import Customer, CustomerRate, Product, StockMovement
 
 PRODUCT_FIELDS = [
     "sku", "barcode", "name", "category", "unit", "description",
@@ -15,24 +14,19 @@ PRODUCT_FIELDS = [
 
 
 class ProductSerializer(serializers.ModelSerializer):
-    """A product with its stock per branch.
+    """A product with what is on the shelf and what is out on rent.
 
-    `stock` is a map of branch id to quantity, annotated by the viewset so a page of 50
-    products costs two queries rather than 51.
+    `out_on_rent` is annotated by the viewset, so a page of 50 products costs one query
+    rather than 51.
     """
 
     id = IdField()
-    stock = serializers.SerializerMethodField()
-    on_hand = serializers.IntegerField(read_only=True, default=0)
+    on_hand = serializers.IntegerField(source="quantity", read_only=True)
     out_on_rent = serializers.IntegerField(read_only=True, default=0)
 
     class Meta:
         model = Product
-        fields = ["id", *PRODUCT_FIELDS, "stock", "on_hand", "out_on_rent", "archived_at", "created_at"]
-
-    def get_stock(self, product):
-        # Prefetched by the viewset.
-        return {str(level.branch_id): level.quantity for level in product.stock.all()}
+        fields = ["id", *PRODUCT_FIELDS, "on_hand", "out_on_rent", "archived_at", "created_at"]
 
 
 class ProductWriteSerializer(serializers.ModelSerializer):
@@ -90,25 +84,10 @@ class ProductWriteSerializer(serializers.ModelSerializer):
         return data
 
 
-class StockLevelSerializer(serializers.ModelSerializer):
-    id = IdField()
-    product_id = IdField(source="product.id")
-    product_name = serializers.CharField(source="product.name", read_only=True)
-    product_sku = serializers.CharField(source="product.sku", read_only=True)
-    branch_id = IdField(source="branch.id")
-    branch_name = serializers.CharField(source="branch.name", read_only=True)
-    low = serializers.BooleanField(read_only=True, default=False)
-
-    class Meta:
-        model = StockLevel
-        fields = ["id", "product_id", "product_name", "product_sku", "branch_id", "branch_name", "quantity", "low"]
-
-
 class StockAdjustSerializer(serializers.Serializer):
     """Setting a shelf count to what was actually counted."""
 
     product = tenant_field(Product, write_only=True)
-    branch = tenant_field(Branch, write_only=True)
     quantity = serializers.IntegerField(min_value=0)
     reason = serializers.ChoiceField(
         choices=[
@@ -119,23 +98,15 @@ class StockAdjustSerializer(serializers.Serializer):
     )
     note = serializers.CharField(max_length=300, required=False, allow_blank=True, default="")
 
-    def validate_branch(self, branch):
-        """Staff can only correct stock at a branch they work at."""
-        allowed = self.context["request"].user.branch_ids()
-        if allowed is not None and branch.id not in allowed:
-            raise serializers.ValidationError("You don't work at that branch.")
-        return branch
-
 
 class StockMovementSerializer(serializers.ModelSerializer):
     id = IdField()
     product_name = serializers.CharField(source="product.name", read_only=True)
-    branch_name = serializers.CharField(source="branch.name", read_only=True, default="")
     by_name = serializers.CharField(source="by.name", read_only=True, default="")
 
     class Meta:
         model = StockMovement
-        fields = ["id", "at", "product_name", "branch_name", "change", "balance", "reason", "note", "by_name"]
+        fields = ["id", "at", "product_name", "change", "balance", "reason", "note", "by_name"]
 
 
 class CustomerSerializer(serializers.ModelSerializer):
@@ -194,7 +165,7 @@ class LookupSerializer(serializers.Serializer):
     """What the scanner gets back for one scanned code.
 
     Deliberately small: the scan screen needs the product, what it costs to rent and how
-    many are free at each branch — nothing else, because this runs on every scan.
+    many are on the shelf — nothing else, because this runs on every scan.
     """
 
     id = serializers.CharField()
@@ -208,11 +179,10 @@ class LookupSerializer(serializers.Serializer):
     rent_weekly = serializers.DecimalField(max_digits=12, decimal_places=2, allow_null=True)
     rent_monthly = serializers.DecimalField(max_digits=12, decimal_places=2, allow_null=True)
     replacement_cost = serializers.DecimalField(max_digits=12, decimal_places=2)
-    stock = serializers.DictField(child=serializers.IntegerField())
     on_hand = serializers.IntegerField()
 
     @staticmethod
-    def of(product, stock):
+    def of(product):
         return {
             "id": str(product.id),
             "sku": product.sku,
@@ -225,6 +195,5 @@ class LookupSerializer(serializers.Serializer):
             "rent_weekly": product.rent_weekly,
             "rent_monthly": product.rent_monthly,
             "replacement_cost": product.replacement_cost,
-            "stock": stock,
-            "on_hand": sum(stock.values()),
+            "on_hand": product.quantity,
         }

@@ -10,7 +10,7 @@ from decimal import Decimal
 from django.core.cache import cache
 from rest_framework.test import APITestCase
 
-from apps.accounts.models import Branch, Business, User
+from apps.accounts.models import Business, User
 from apps.accounts.services import create_business, create_user
 from apps.catalog.models import StockMovement
 from apps.catalog.services import adjust_stock, create_customer, create_product
@@ -24,7 +24,7 @@ class ApiTestCase(APITestCase):
         # throttle the next test's.
         cache.clear()
         self.superadmin = User.objects.create_superuser(email="root@example.com", password=PASSWORD, name="Root")
-        self.business, self.branch, self.owner = create_business(
+        self.business, self.owner = create_business(
             name="Dhaka Rentals", owner_name="Owner", owner_email="owner@example.com", owner_password=PASSWORD
         )
 
@@ -124,7 +124,7 @@ class LoginTests(ApiTestCase):
 
     def test_every_endpoint_needs_a_login(self):
         self.anonymous()
-        for path in ("/api/auth/me/", "/api/products/", "/api/rentals/", "/api/customers/", "/api/branches/"):
+        for path in ("/api/auth/me/", "/api/products/", "/api/rentals/", "/api/customers/", "/api/stock/movements/"):
             self.assertEqual(self.client.get(path).status_code, 401, path)
 
 
@@ -152,7 +152,7 @@ class MeTests(ApiTestCase):
 
 
 class BusinessCreationTests(ApiTestCase):
-    def test_the_super_admin_creates_a_business_with_its_owner_and_a_branch(self):
+    def test_the_super_admin_creates_a_business_with_its_owner(self):
         self.as_user(self.superadmin)
         res = self.client.post(
             "/api/platform/businesses/",
@@ -168,8 +168,6 @@ class BusinessCreationTests(ApiTestCase):
         business = Business.objects.get(name="Chittagong Rentals")
         self.assertEqual(business.users.count(), 1)
         self.assertEqual(business.users.get().role, User.Role.OWNER)
-        # A business is never created without somewhere to put stock.
-        self.assertEqual(business.branches.count(), 1)
 
     def test_a_duplicate_owner_email_creates_nothing(self):
         self.as_user(self.superadmin)
@@ -296,7 +294,7 @@ class CrossTenantTests(ApiTestCase):
 
     def setUp(self):
         super().setUp()
-        self.other, self.other_branch, self.other_owner = create_business(
+        self.other, self.other_owner = create_business(
             name="Rivals", owner_name="Rival", owner_email="rival@example.com", owner_password=PASSWORD
         )
         self.their_product = create_product(
@@ -304,8 +302,7 @@ class CrossTenantTests(ApiTestCase):
         )
         self.their_customer = create_customer(user=self.other_owner, name="Their customer")
         adjust_stock(
-            user=self.other_owner, product=self.their_product, branch=self.other_branch,
-            quantity=10, reason=StockMovement.Reason.ADJUSTMENT,
+            user=self.other_owner, product=self.their_product, quantity=10, reason=StockMovement.Reason.ADJUSTMENT,
         )
 
     def test_another_businesss_rows_are_invisible(self):
@@ -329,16 +326,19 @@ class CrossTenantTests(ApiTestCase):
             "/api/rentals/",
             {
                 "customer": str(self.their_customer.id),
-                "branch": str(self.other_branch.id),
                 "lines": [{"product": str(self.their_product.id), "quantity": 1, "plan": "daily"}],
             },
             format="json",
         )
         self.assertEqual(res.status_code, 400)
 
-    def test_another_businesss_branch_cannot_be_used(self):
+    def test_another_businesss_stock_cannot_be_corrected(self):
         self.as_user(self.owner)
-        res = self.client.post("/api/branches/", {"name": "Fine"}, format="json")
-        self.assertEqual(res.status_code, 201)
-        # The new branch belongs to the caller's business, not the one they named.
-        self.assertEqual(Branch.objects.get(name="Fine").business, self.business)
+        res = self.client.post(
+            "/api/stock/adjust/",
+            {"product": str(self.their_product.id), "quantity": 0, "reason": "adjustment"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 400)
+        self.their_product.refresh_from_db()
+        self.assertEqual(self.their_product.quantity, 10)

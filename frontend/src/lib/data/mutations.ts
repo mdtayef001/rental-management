@@ -20,7 +20,6 @@ type Collection =
   | "customers"
   | "rentals"
   | "returns"
-  | "branches"
   | "users"
   | "activity"
   | "platform"
@@ -61,7 +60,6 @@ export interface RentalLineInput {
 
 export interface RentalInput {
   customer: string | null
-  branch: string
   lines: RentalLineInput[]
   startedAt?: string | null
   dueAt?: string | null
@@ -255,7 +253,7 @@ export function useDeleteProduct() {
 export function useAdjustStock() {
   const refresh = useRefresh()
   return useMutation({
-    mutationFn: (body: { product: string; branch: string; quantity: number; reason: string; note?: string }) =>
+    mutationFn: (body: { product: string; quantity: number; reason: string; note?: string }) =>
       request("stock/adjust/", { method: "POST", body }),
     onSuccess: () => {
       refresh("stock", "products", "activity")

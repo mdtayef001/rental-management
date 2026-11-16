@@ -7,7 +7,6 @@ import type {
   Activity,
   Bill,
   BillList,
-  Branch,
   Customer,
   CustomerRate,
   PlatformBusiness,
@@ -118,13 +117,6 @@ export function useDebounced<T>(value: T, ms = 300) {
 
 const EMPTY: never[] = []
 
-/** Every branch in the business. Few, and needed on nearly every screen. */
-export const branchesQuery = { ...apiQuery<Branch[]>("branches/"), staleTime: 5 * 60_000 }
-
-export function useBranches() {
-  return useQuery(branchesQuery).data ?? (EMPTY as Branch[])
-}
-
 export function useCategories() {
   return useQuery({ ...apiQuery<string[]>("products/categories/"), staleTime: 5 * 60_000 }).data ?? (EMPTY as string[])
 }
@@ -202,11 +194,6 @@ export function useCustomer(id: string | null | undefined) {
 /** The prices agreed with one customer. Empty for most; short for the rest. */
 export function useCustomerRates(id: string | null | undefined) {
   return useQuery({ ...apiQuery<CustomerRate[]>(`customers/${id}/rates/`), enabled: !!id })
-}
-
-/** Stock of a product at a branch, from a product loaded with its stock map. */
-export function qtyAt(product: Pick<Product, "stock"> | Pick<ProductLookup, "stock"> | null | undefined, branchId: string | null | undefined) {
-  return (branchId && product?.stock?.[branchId]) || 0
 }
 
 // ---------- Totals ----------

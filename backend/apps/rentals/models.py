@@ -18,7 +18,7 @@ from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils import timezone
 
-from apps.accounts.models import Branch, TenantModel
+from apps.accounts.models import TenantModel
 from apps.catalog.models import Customer, Product
 
 
@@ -42,7 +42,6 @@ class Rental(TenantModel):
     # RESTRICT: a customer with rentals is archived, never deleted, so a bill can't lose
     # its name. Empty only on walk-in rentals from before a customer was required.
     customer = models.ForeignKey(Customer, null=True, on_delete=models.RESTRICT, related_name="rentals")
-    branch = models.ForeignKey(Branch, null=True, on_delete=models.SET_NULL, related_name="+")
 
     started_at = models.DateTimeField(default=timezone.now)
     # When everything is expected back. Optional: open-ended rentals are allowed when the

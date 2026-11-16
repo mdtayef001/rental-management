@@ -6,7 +6,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Spinner } from "@/components/common"
-import { useBranchScope } from "@/components/session"
 import { useAdjustStock } from "@/lib/data/mutations"
 import { count } from "@/lib/format"
 import type { Product } from "@/lib/types"
@@ -34,16 +33,14 @@ export function StockAdjustDialog({
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  product: Pick<Product, "id" | "name" | "unit" | "stock">
+  product: Pick<Product, "id" | "name" | "unit" | "onHand">
 }) {
-  const { branches, defaultBranchId, showPicker } = useBranchScope()
   const adjust = useAdjustStock()
-  const [branchId, setBranchId] = useState(defaultBranchId)
   const [quantity, setQuantity] = useState<number | "">("")
   const [reason, setReason] = useState<(typeof REASONS)[number]["value"]>("adjustment")
   const [note, setNote] = useState("")
 
-  const current = product.stock[branchId] ?? 0
+  const current = product.onHand
   const counted = quantity === "" ? current : quantity
   const change = counted - current
 
@@ -56,24 +53,6 @@ export function StockAdjustDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          {showPicker && (
-            <div className="space-y-1.5">
-              <Label htmlFor="s-branch">Branch</Label>
-              <select
-                id="s-branch"
-                value={branchId}
-                onChange={(e) => setBranchId(e.target.value)}
-                className="h-9 w-full rounded-md border bg-card px-2 text-sm"
-              >
-                {branches.map((branch) => (
-                  <option key={branch.id} value={branch.id}>
-                    {branch.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
           <div className="space-y-1.5">
             <Label htmlFor="s-quantity">
               Counted on the shelf — the system says {count(current)} {product.unit}
@@ -138,7 +117,7 @@ export function StockAdjustDialog({
             disabled={adjust.isPending || quantity === "" || change === 0}
             onClick={() =>
               adjust.mutate(
-                { product: product.id, branch: branchId, quantity: Number(quantity), reason, note },
+                { product: product.id, quantity: Number(quantity), reason, note },
                 {
                   onSuccess: () => {
                     setQuantity("")

@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { EmptyState, PageHeader, Spinner } from "@/components/common"
 import { CustomerPicker } from "@/components/customer-picker"
 import { ProductFinder } from "@/components/product-finder"
-import { useBranchScope, useCurrency, useCurrentUser, useSettings } from "@/components/session"
+import { useCurrency, useCurrentUser, useSettings } from "@/components/session"
 import { cn } from "@/lib/utils"
 import { request } from "@/lib/api/client"
 import { ApiError } from "@/lib/api/errors"
@@ -78,11 +78,9 @@ export function RentOutView() {
   const currency = useCurrency()
   const user = useCurrentUser()
   const settings = useSettings()
-  const { branches, defaultBranchId, showPicker } = useBranchScope()
   const rentOut = useRentOut()
 
   const [openedAt] = useState(() => Date.now())
-  const [branchId, setBranchId] = useState(defaultBranchId)
   const [lines, setLines] = useState<Line[]>([])
   const [customer, setCustomer] = useState<Customer | null>(null)
   const [days, setDays] = useState(7)
@@ -108,14 +106,12 @@ export function RentOutView() {
     )
   }, [rates])
 
-  const onHand = (product: ProductLookup) => product.stock[branchId] ?? 0
-
   /** Put a product in the cart. Adding the same thing twice means "one more of these". */
   const addProduct = useCallback(
     (product: ProductLookup) => {
       setLines((current) => {
         const existing = current.findIndex((l) => l.product.id === product.id)
-        const max = product.stock[branchId] ?? 0
+        const max = product.onHand
         if (existing >= 0) {
           const next = [...current]
           const line = next[existing]
@@ -127,7 +123,7 @@ export function RentOutView() {
           return next
         }
         if (max <= 0) {
-          toast.warning(`No ${product.name} are on the shelf at this branch.`)
+          toast.warning(`No ${product.name} are on the shelf.`)
           return current
         }
         const plan = (availablePlans(product).includes(settings.rentals.defaultPlan)
@@ -144,7 +140,7 @@ export function RentOutView() {
         ]
       })
     },
-    [branchId, settings.rentals.defaultPlan],
+    [settings.rentals.defaultPlan],
   )
 
   /** Look a scanned or typed code up and put it in the cart. */
@@ -190,7 +186,7 @@ export function RentOutView() {
       ? 0
       : lines.reduce((sum, l) => sum + quoteRental(l.plan, l.rate, billedDays, l.quantity).total, 0)
 
-  const tooMany = lines.filter((l) => l.quantity > onHand(l.product))
+  const tooMany = lines.filter((l) => l.quantity > l.product.onHand)
   // Every rental is in somebody's name.
   const needsCustomer = !customer
   const paidOk = paid === "" || paid >= 0
@@ -220,7 +216,6 @@ export function RentOutView() {
     rentOut.mutate(
       {
         customer: customer.id,
-        branch: branchId,
         lines: payload,
         dueAt,
         paidAmount: paid === "" ? 0 : paid,
@@ -236,22 +231,7 @@ export function RentOutView() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Rent out" description="Scan everything going out, then pick the customer.">
-        {showPicker && (
-          <select
-            value={branchId}
-            onChange={(e) => setBranchId(e.target.value)}
-            className="h-9 rounded-md border bg-card px-2 text-sm"
-            aria-label="Branch"
-          >
-            {branches.map((branch) => (
-              <option key={branch.id} value={branch.id}>
-                {branch.name}
-              </option>
-            ))}
-          </select>
-        )}
-      </PageHeader>
+      <PageHeader title="Rent out" description="Scan everything going out, then pick the customer." />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
         <div className="space-y-6">
@@ -283,7 +263,7 @@ export function RentOutView() {
                     key={line.product.id}
                     line={line}
                     days={billedDays}
-                    onHand={onHand(line.product)}
+                    onHand={line.product.onHand}
                     currency={currency}
                     rates={rates}
                     customerName={customer?.name}
@@ -613,7 +593,7 @@ function LineRow({
 
       {over && (
         <p className="text-xs text-destructive">
-          Only {count(onHand)} are on the shelf at this branch.
+          Only {count(onHand)} are on the shelf.
         </p>
       )}
     </div>

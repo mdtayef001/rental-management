@@ -13,7 +13,6 @@ export type PermissionId =
   | "managerUsers"
   | "managerProducts"
   | "managerCustomers"
-  | "managerBranches"
   | "managerActivity"
   | "managerProfit"
   | "staffCreateProducts"
@@ -54,13 +53,6 @@ export interface BusinessSettings {
   lowStockAlert: number
 }
 
-export interface Branch {
-  id: string
-  name: string
-  address: string
-  phone: string
-}
-
 export interface Business {
   id: string
   name: string
@@ -73,7 +65,6 @@ export interface Business {
   settings: BusinessSettings
   /** Changes whenever the logo does. Empty when the business has no logo. */
   logoVersion: string
-  branches: Branch[]
   createdAt: string
 }
 
@@ -85,7 +76,6 @@ export interface SessionUser {
   role: Role
   isActive: boolean
   isMainOwner: boolean
-  branchIds: string[]
   dateJoined: string
   lastLogin: string | null
   canRent: boolean
@@ -109,8 +99,7 @@ export interface Product {
   rentMonthly: number | null
   replacementCost: number
   lowStockThreshold: number
-  /** Quantity on the shelf, keyed by branch id. */
-  stock: Record<string, number>
+  /** Quantity on the shelf, ready to go out. */
   onHand: number
   outOnRent: number
   archivedAt: string | null
@@ -130,26 +119,13 @@ export interface ProductLookup {
   rentWeekly: number | null
   rentMonthly: number | null
   replacementCost: number
-  stock: Record<string, number>
   onHand: number
-}
-
-export interface StockLevel {
-  id: string
-  productId: string
-  productName: string
-  productSku: string
-  branchId: string
-  branchName: string
-  quantity: number
-  low: boolean
 }
 
 export interface StockMovement {
   id: string
   at: string
   productName: string
-  branchName: string
   change: number
   balance: number
   reason: StockReason
@@ -254,7 +230,6 @@ export interface Rental {
   customerId: string | null
   customerName: string
   customerPhone: string
-  branchName: string
   startedAt: string
   dueAt: string | null
   returnedAt: string | null
@@ -294,7 +269,6 @@ export interface ReturnMatch {
   customerId: string | null
   customerName: string
   customerPhone: string
-  branchName: string
   productId: string | null
   productName: string
   productSku: string

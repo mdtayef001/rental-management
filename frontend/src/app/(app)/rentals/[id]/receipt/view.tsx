@@ -29,7 +29,7 @@ export function ReceiptView({ id }: { id: string }) {
   if (isLoading || !rental) return <TableSkeleton rows={6} columns={3} />
 
   // The origin is only known in the browser; this component only ever renders there.
-  const receipt = fromRental(rental, business, rental.branchName, window.location.origin)
+  const receipt = fromRental(rental, business, window.location.origin)
   const share = whatsappLink(
     rental.customerPhone,
     `Hello ${rental.customerName}, here is your receipt ${rental.code} from ${business?.name ?? "us"}: ${receipt.link ?? ""}`,

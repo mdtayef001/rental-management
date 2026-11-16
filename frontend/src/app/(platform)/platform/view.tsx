@@ -206,7 +206,7 @@ function CreateDialog({ onClose }: { onClose: () => void }) {
         <DialogHeader>
           <DialogTitle>New business</DialogTitle>
           <DialogDescription>
-            This creates the business, its first branch and the owner&apos;s login together. Give the owner their
+            This creates the business and the owner&apos;s login together. Give the owner their
             password directly.
           </DialogDescription>
         </DialogHeader>

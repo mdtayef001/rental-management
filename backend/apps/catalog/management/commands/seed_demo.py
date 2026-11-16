@@ -43,12 +43,11 @@ class Command(BaseCommand):
         if not User.objects.filter(email="admin@example.com").exists():
             User.objects.create_superuser(email="admin@example.com", password=PASSWORD, name="Platform admin")
 
-        business, branch, owner = create_business(
+        business, owner = create_business(
             name="Dhaka Machine Rentals",
             industry="Equipment rental",
             phone="+8801711000000",
             address="12 Motijheel C/A, Dhaka",
-            branch_name="Motijheel shop",
             owner_name="Rahim Uddin",
             owner_email="owner@example.com",
             owner_password=PASSWORD,
@@ -63,7 +62,6 @@ class Command(BaseCommand):
             password=PASSWORD, role=User.Role.STAFF,
             rights={"can_rent": True, "can_take_returns": True},
         )
-        staff.branches.set([branch])
 
         products = {}
         for sku, barcode, name, daily, weekly, replacement, quantity in [
@@ -80,7 +78,7 @@ class Command(BaseCommand):
                 low_stock_threshold=max(2, quantity // 20),
             )
             adjust_stock(
-                user=owner, product=product, branch=branch, quantity=quantity,
+                user=owner, product=product, quantity=quantity,
                 reason=StockMovement.Reason.ADJUSTMENT, note="Opening count",
             )
             products[sku] = product
@@ -102,8 +100,7 @@ class Command(BaseCommand):
 
         # The client's own example: 100 of the 1,000 machines out with Mr. X.
         big = create_rental(
-            user=owner, customer=customers["Mr. X Garments"], branch=branch,
-            started_at=now - timedelta(days=12), due_at=now + timedelta(days=18),
+            user=owner, customer=customers["Mr. X Garments"],             started_at=now - timedelta(days=12), due_at=now + timedelta(days=18),
             # Paid in advance: it is used up as the machines come back and are charged.
             paid_amount=Decimal("50000.00"), payment_method="bank",
             lines=[
@@ -116,24 +113,21 @@ class Command(BaseCommand):
         # The same customer renting the same product again — so a scan has to ask which
         # rental is coming back.
         create_rental(
-            user=staff, customer=customers["Mr. X Garments"], branch=branch,
-            started_at=now - timedelta(days=2), due_at=now + timedelta(days=5),
+            user=staff, customer=customers["Mr. X Garments"],             started_at=now - timedelta(days=2), due_at=now + timedelta(days=5),
             lines=[{"product": products["SM-100"], "quantity": 20, "plan": "daily"}],
             notes="Extra machines for a rush order.",
         )
 
         # The same product out with a different customer, for the same reason.
         create_rental(
-            user=staff, customer=customers["Mr. Y Textiles"], branch=branch,
-            started_at=now - timedelta(days=5), due_at=now + timedelta(days=9),
+            user=staff, customer=customers["Mr. Y Textiles"],             started_at=now - timedelta(days=5), due_at=now + timedelta(days=9),
             paid_amount=Decimal("25000.00"), payment_method="cash",
             lines=[{"product": products["SM-100"], "quantity": 50, "plan": "weekly"}],
         )
 
         # Overdue, so the dashboard and the late fee have something to show.
         create_rental(
-            user=manager, customer=customers["Fatima Tailors"], branch=branch,
-            started_at=now - timedelta(days=20), due_at=now - timedelta(days=6),
+            user=manager, customer=customers["Fatima Tailors"],             started_at=now - timedelta(days=20), due_at=now - timedelta(days=6),
             lines=[
                 {"product": products["IRN-1"], "quantity": 5, "plan": "daily"},
                 {"product": products["OL-200"], "quantity": 2, "plan": "daily"},
@@ -144,21 +138,18 @@ class Command(BaseCommand):
         # Two more overdue, at different severities, so the chase list shows all three of
         # its levels: a nudge (1-3 days), a real problem (4-14), and stock at risk (15+).
         create_rental(
-            user=staff, customer=customers["Dhaka Events"], branch=branch,
-            started_at=now - timedelta(days=9), due_at=now - timedelta(days=2),
+            user=staff, customer=customers["Dhaka Events"],             started_at=now - timedelta(days=9), due_at=now - timedelta(days=2),
             lines=[{"product": products["IRN-1"], "quantity": 3, "plan": "daily"}],
         )
         create_rental(
-            user=owner, customer=customers["Mr. Y Textiles"], branch=branch,
-            started_at=now - timedelta(days=40), due_at=now - timedelta(days=21),
+            user=owner, customer=customers["Mr. Y Textiles"],             started_at=now - timedelta(days=40), due_at=now - timedelta(days=21),
             lines=[{"product": products["OL-200"], "quantity": 4, "plan": "weekly"}],
             notes="No answer on the phone for two weeks.",
         )
 
         # Open-ended, no agreed return date.
         create_rental(
-            user=owner, customer=customers["Dhaka Events"], branch=branch,
-            started_at=now - timedelta(days=3), due_at=None,
+            user=owner, customer=customers["Dhaka Events"],             started_at=now - timedelta(days=3), due_at=None,
             lines=[{"product": products["GEN-5"], "quantity": 2, "plan": "daily"}],
         )
 

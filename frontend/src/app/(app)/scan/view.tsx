@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PageHeader, Spinner, StatCard } from "@/components/common"
 import { CameraScanner, CodeInput } from "@/components/scanner"
-import { useBranchScope, useCurrency } from "@/components/session"
+import { useCurrency } from "@/components/session"
 import { useLookup, useProductSearch, useRentalSummary } from "@/lib/data/queries"
 import { count, money, plural } from "@/lib/format"
 import type { ProductLookup } from "@/lib/types"
@@ -39,7 +39,6 @@ import type { ProductLookup } from "@/lib/types"
  * or taking back, and only the person at the counter knows which.
  */
 export function ScanView({ canRent, canTakeReturns }: { canRent: boolean; canTakeReturns: boolean }) {
-  const { defaultBranchId } = useBranchScope()
   const [tab, setTab] = useState("type")
   const [code, setCode] = useState("")
   const [name, setName] = useState("")
@@ -176,7 +175,7 @@ export function ScanView({ canRent, canTakeReturns }: { canRent: boolean; canTak
       ) : lookup.data ? (
         <Found
           product={lookup.data}
-          onHand={lookup.data.stock[defaultBranchId] ?? 0}
+          onHand={lookup.data.onHand}
           canRent={canRent}
           canTakeReturns={canTakeReturns}
         />

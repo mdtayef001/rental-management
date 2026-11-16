@@ -40,7 +40,7 @@ class ReportsTestCase(APITestCase):
 
     def setUp(self):
         cache.clear()
-        self.business, self.branch, self.owner = create_business(
+        self.business, self.owner = create_business(
             name="Dhaka Machine Rentals",
             owner_name="Owner",
             owner_email="owner@example.com",
@@ -55,23 +55,21 @@ class ReportsTestCase(APITestCase):
         )
         for product, quantity in ((self.machine, 1000), (self.table, 50)):
             adjust_stock(
-                user=self.owner, product=product, branch=self.branch, quantity=quantity,
+                user=self.owner, product=product, quantity=quantity,
                 reason=StockMovement.Reason.ADJUSTMENT,
             )
         self.mr_x = create_customer(user=self.owner, name="Mr. X", phone="01700000001")
         self.mr_y = create_customer(user=self.owner, name="Mr. Y", phone="01700000002")
 
         self.x_rental = rentals.create_rental(
-            user=self.owner, customer=self.mr_x, branch=self.branch,
-            lines=[{"product": self.machine, "quantity": 100, "plan": "daily"}],
+            user=self.owner, customer=self.mr_x,             lines=[{"product": self.machine, "quantity": 100, "plan": "daily"}],
             started_at=days_ago(5),
         )
         self.x_return = rentals.take_return(
             user=self.owner, rental=self.x_rental, lines=[{"item": self.x_rental.items.get(), "quantity": 60}],
         )
         self.y_rental = rentals.create_rental(
-            user=self.owner, customer=self.mr_y, branch=self.branch,
-            lines=[{"product": self.table, "quantity": 10, "plan": "daily"}],
+            user=self.owner, customer=self.mr_y,             lines=[{"product": self.table, "quantity": 10, "plan": "daily"}],
             started_at=days_ago(3),
         )
 
@@ -173,8 +171,7 @@ class GroupedReportTests(ReportsTestCase):
         self.machine.name = "Industrial sewing machine"
         self.machine.save(update_fields=["name"])
         second = rentals.create_rental(
-            user=self.owner, customer=self.mr_y, branch=self.branch,
-            lines=[{"product": self.machine, "quantity": 5, "plan": "daily"}],
+            user=self.owner, customer=self.mr_y,             lines=[{"product": self.machine, "quantity": 5, "plan": "daily"}],
             started_at=days_ago(2),
         )
         rentals.take_return(user=self.owner, rental=second, lines=[{"item": second.items.get(), "quantity": 5}])
@@ -226,7 +223,7 @@ class ApiTests(ReportsTestCase):
             self.assertEqual(self.client.get(f"/api/reports/{path}/").status_code, 401, path)
 
     def test_a_report_only_ever_shows_your_own_business(self):
-        _, other_branch, other_owner = create_business(
+        _, other_owner = create_business(
             name="Chittagong Rentals", owner_name="Other", owner_email="other@example.com", owner_password=PASSWORD,
         )
         self.login(other_owner)
@@ -286,8 +283,7 @@ class CsvTests(ReportsTestCase):
         """A customer called `=HYPERLINK(...)` must not run when the owner opens the file."""
         attacker = create_customer(user=self.owner, name='=HYPERLINK("http://evil.example","Click")')
         rental = rentals.create_rental(
-            user=self.owner, customer=attacker, branch=self.branch,
-            lines=[{"product": self.table, "quantity": 1, "plan": "daily"}],
+            user=self.owner, customer=attacker,             lines=[{"product": self.table, "quantity": 1, "plan": "daily"}],
             started_at=days_ago(1),
         )
         rentals.take_return(user=self.owner, rental=rental, lines=[{"item": rental.items.get(), "quantity": 1}])

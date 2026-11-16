@@ -6,7 +6,6 @@ from . import views
 
 router = DefaultRouter()
 router.register("users", views.UserViewSet, basename="user")
-router.register("branches", views.BranchViewSet, basename="branch")
 router.register("activity", views.ActivityViewSet, basename="activity")
 router.register("platform/businesses", views.PlatformBusinessViewSet, basename="platform-business")
 

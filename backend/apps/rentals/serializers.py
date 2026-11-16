@@ -2,7 +2,6 @@
 
 from rest_framework import serializers
 
-from apps.accounts.models import Branch
 from apps.api import IdField, tenant_field
 from apps.catalog.models import Customer, Product
 
@@ -32,7 +31,6 @@ class RentalListSerializer(serializers.ModelSerializer):
     customer_id = IdField(source="customer.id", default=None)
     customer_name = serializers.CharField(source="customer.name", read_only=True, default="Walk-in")
     customer_phone = serializers.CharField(source="customer.phone", read_only=True, default="")
-    branch_name = serializers.CharField(source="branch.name", read_only=True, default="")
     charges = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
     balance = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
     is_overdue = serializers.BooleanField(read_only=True)
@@ -44,7 +42,7 @@ class RentalListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Rental
         fields = [
-            "id", "code", "status", "customer_id", "customer_name", "customer_phone", "branch_name",
+            "id", "code", "status", "customer_id", "customer_name", "customer_phone",
             "started_at", "due_at", "returned_at",
             "rent_total", "late_fee", "damage_fee", "discount", "paid_amount",
             "charges", "balance", "is_overdue", "days_late", "item_count", "units_out", "notes", "created_at",
@@ -125,7 +123,6 @@ class RentalLineSerializer(serializers.Serializer):
 class RentalCreateSerializer(serializers.Serializer):
     # Required: there are no walk-in rentals.
     customer = tenant_field(Customer)
-    branch = tenant_field(Branch)
     lines = RentalLineSerializer(many=True)
     started_at = serializers.DateTimeField(required=False, allow_null=True)
     due_at = serializers.DateTimeField(required=False, allow_null=True)
@@ -143,12 +140,6 @@ class RentalCreateSerializer(serializers.Serializer):
         if len(lines) > 100:
             raise serializers.ValidationError("That's more than 100 products on one rental. Split it up.")
         return lines
-
-    def validate_branch(self, branch):
-        allowed = self.context["request"].user.branch_ids()
-        if allowed is not None and branch.id not in allowed:
-            raise serializers.ValidationError("You don't work at that branch.")
-        return branch
 
 
 class ReturnLineSerializer(serializers.Serializer):

@@ -17,7 +17,6 @@ export const metadata: Metadata = {
 
 interface Receipt {
   business: { name: string; phone: string; address: string; currency: string; receiptNote: string; logoVersion: string; lateFeeMultiplier?: number }
-  branch: { name: string; phone: string; address: string } | null
   rental: {
     code: string
     status: string
@@ -83,7 +82,7 @@ export default async function PublicReceiptPage({ params }: PageProps<"/r/[token
     notFound()
   }
 
-  const { business, branch, rental, items, returns } = data
+  const { business, rental, items, returns } = data
   const currency = business.currency
 
   // The address this page was opened at, for the QR code: the customer's printed copy then
@@ -94,9 +93,8 @@ export default async function PublicReceiptPage({ params }: PageProps<"/r/[token
 
   const receipt: ReceiptView = {
     businessName: business.name,
-    branchName: branch?.name,
-    address: branch?.address || business.address,
-    phone: branch?.phone || business.phone,
+    address: business.address,
+    phone: business.phone,
     logo: publicLogoUrl(token, business.logoVersion),
     code: rental.code,
     startedAt: rental.startedAt,

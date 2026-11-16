@@ -48,7 +48,7 @@ export function PaperHeader({
   title,
   children,
 }: {
-  business: { name: string; address?: string; phone?: string; branch?: string }
+  business: { name: string; address?: string; phone?: string }
   logo?: string | null
   title: string
   /** The lines under the title: the number, the period, the date. */
@@ -62,7 +62,6 @@ export function PaperHeader({
           <img src={logo} alt="" className="mb-2 max-h-16 max-w-52 object-contain object-left" />
         )}
         <p className="font-heading text-xl font-bold [overflow-wrap:anywhere]">{business.name}</p>
-        {business.branch && <p className="text-neutral-800">{business.branch}</p>}
         {business.address && <p className="text-neutral-800">{business.address}</p>}
         {business.phone && <p className="text-neutral-800">{business.phone}</p>}
       </div>

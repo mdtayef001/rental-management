@@ -100,7 +100,6 @@ export function ReturnChooser({
 
                 <div className="text-xs text-muted-foreground">
                   Out {dateTime(match.startedAt)}
-                  {match.branchName && ` · ${match.branchName}`}
                 </div>
               </div>
 

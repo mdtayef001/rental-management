@@ -24,7 +24,6 @@ def default_settings():
             "managerUsers": True,
             "managerProducts": True,
             "managerCustomers": True,
-            "managerBranches": False,
             "managerActivity": False,
             "managerProfit": False,
             "staffCreateProducts": False,
@@ -122,30 +121,6 @@ class BusinessLogo(models.Model):
         return f"Logo of {self.business_id}"
 
 
-class Branch(models.Model):
-    """Where stock sits and rentals go out from.
-
-    Every business gets one on creation. Most clients will only ever have that one, and the
-    frontend hides the branch picker while there is a single branch — but stock, rentals and
-    staff are already keyed to it, so opening a second shop needs no migration.
-    """
-
-    business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name="branches")
-    name = models.CharField(max_length=150)
-    address = models.CharField(max_length=300, blank=True)
-    phone = models.CharField(max_length=40, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        verbose_name_plural = "branches"
-        # Creation order, so the branch the business started with stays first and is the
-        # default in every form.
-        ordering = ["id"]
-
-    def __str__(self):
-        return self.name
-
-
 class UserManager(BaseUserManager):
     use_in_migrations = True
 
@@ -183,8 +158,6 @@ class User(AbstractUser):
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.STAFF)
     # Null only for the platform super admin.
     business = models.ForeignKey(Business, null=True, blank=True, on_delete=models.CASCADE, related_name="users")
-    # Branches this user works at. Empty for owners, who see every branch.
-    branches = models.ManyToManyField(Branch, blank=True, related_name="users")
     created_by = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     # Per-person rights for staff, set by the owner or a manager. Owners and managers can
     # always do all of them.
@@ -232,12 +205,6 @@ class User(AbstractUser):
     @property
     def may_add_stock(self):
         return self._right("can_add_stock")
-
-    def branch_ids(self):
-        """The branches this user may act in. None means every branch (owners and managers)."""
-        if self.role in (self.Role.OWNER, self.Role.MANAGER):
-            return None
-        return set(self.branches.values_list("id", flat=True))
 
     def save(self, *args, **kwargs):
         # Super admins get Django admin access; everyone else uses the app only.

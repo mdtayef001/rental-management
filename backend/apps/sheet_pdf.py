@@ -196,7 +196,7 @@ class Sheet:
         if image is not None:
             left += [image, Spacer(1, 6)]
         left.append(self.p(business["name"], size=15 / BASE, weight="bold"))
-        for line in (business.get("branch"), business.get("address"), business.get("phone")):
+        for line in (business.get("address"), business.get("phone")):
             if line:
                 left.append(self.p(line, color=SOFT))
         right = [

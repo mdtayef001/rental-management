@@ -6,12 +6,11 @@ import { AlertTriangle, Archive, Boxes, Package, Pencil, Printer, ShieldAlert, S
 import { Button } from "@/components/ui/button"
 import { ButtonLink } from "@/components/ui/button-link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { CopyValue, ErrorState, PageHeader, Pill, StatCard, StatGrid, TableSkeleton } from "@/components/common"
 import { DataView, Primary } from "@/components/data-view"
 import { ProductDialog } from "@/components/product-form"
 import { StockAdjustDialog } from "@/components/stock-adjust"
-import { useBranchScope, useCurrency, useSettings } from "@/components/session"
+import { useCurrency, useSettings } from "@/components/session"
 import { useProduct, useStockMovements } from "@/lib/data/queries"
 import { count, friendlyDateTime, money } from "@/lib/format"
 
@@ -38,7 +37,6 @@ export function ProductDetailView({
 }) {
   const currency = useCurrency()
   const settings = useSettings()
-  const { branches } = useBranchScope()
   const [editing, setEditing] = useState(false)
   const [adjusting, setAdjusting] = useState(false)
   const { data: product, isLoading, isError, error, refetch } = useProduct(id)
@@ -134,39 +132,6 @@ export function ProductDetailView({
               )}
             </CardContent>
           </Card>
-
-          {branches.length > 1 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Where it is</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Branch</TableHead>
-                      <TableHead className="text-right">Available</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {branches.map((branch) => {
-                      const quantity = product.stock[branch.id] ?? 0
-                      return (
-                        <TableRow key={branch.id}>
-                          <TableCell>{branch.name}</TableCell>
-                          <TableCell className="text-right tabular-nums">
-                            <span className={quantity <= threshold ? "font-semibold text-destructive" : undefined}>
-                              {count(quantity)}
-                            </span>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          )}
 
           <Card>
             <CardHeader>

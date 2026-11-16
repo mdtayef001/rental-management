@@ -19,11 +19,10 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from apps.api import Pagination
 
 from . import services
-from .models import Activity, Branch, Business, BusinessLogo, User, log
+from .models import Activity, Business, BusinessLogo, User, log
 from .permissions import LEADS, TEAM, IsSuperAdmin, IsTenantMember, ManagerNeedsPermission, can_manage_user, creatable_roles
 from .serializers import (
     ActivitySerializer,
-    BranchSerializer,
     BusinessCreateSerializer,
     BusinessSerializer,
     BusinessSettingsSerializer,
@@ -190,41 +189,6 @@ class BusinessLogoView(TenantView):
         return Response(BusinessSerializer(business).data)
 
 
-class BranchViewSet(viewsets.ModelViewSet):
-    """Branches of the caller's own business. Small list, so it isn't paginated."""
-
-    permission_classes = [IsAuthenticated, IsTenantMember, ManagerNeedsPermission]
-    serializer_class = BranchSerializer
-    pagination_class = None
-    allowed_roles = TEAM
-    manager_permission = "managerBranches"
-
-    def get_queryset(self):
-        return Branch.objects.filter(business=self.request.user.business)
-
-    def check_permissions(self, request):
-        super().check_permissions(request)
-        # Staff may read the list (they need branch names on screen) but never change it.
-        if request.method not in ("GET", "HEAD", "OPTIONS") and request.user.role == User.Role.STAFF:
-            raise PermissionDenied("Only the owner or a manager can change branches.")
-
-    def perform_create(self, serializer):
-        services.add_branch(actor=self.request.user, **serializer.validated_data)
-
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        branch = services.add_branch(actor=request.user, **serializer.validated_data)
-        return Response(BranchSerializer(branch).data, status=status.HTTP_201_CREATED)
-
-    def perform_update(self, serializer):
-        branch = serializer.save()
-        log(self.request.user, "Branch changed", branch.name)
-
-    def perform_destroy(self, branch):
-        services.delete_branch(actor=self.request.user, branch=branch)
-
-
 class UserViewSet(viewsets.ModelViewSet):
     """The team inside one business.
 
@@ -241,7 +205,6 @@ class UserViewSet(viewsets.ModelViewSet):
         qs = (
             User.objects.filter(business=self.request.user.business)
             .exclude(role=User.Role.SUPERADMIN)
-            .prefetch_related("branches")
         )
         # A manager has no business seeing or editing owner-level accounts.
         if self.request.user.role == User.Role.MANAGER:
@@ -276,7 +239,6 @@ class UserViewSet(viewsets.ModelViewSet):
             phone=data["phone"],
             password=data["password"],
             role=data["role"],
-            branch_ids=data["branch_ids"],
             rights=rights,
         )
         return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
@@ -381,7 +343,7 @@ class PlatformBusinessViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         serializer = BusinessCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        business, _branch, owner = services.create_business(**serializer.validated_data, created_by=request.user)
+        business, owner = services.create_business(**serializer.validated_data, created_by=request.user)
         return Response(
             {**PlatformBusinessSerializer(business).data, "ownerName": owner.name, "ownerEmail": owner.email},
             status=status.HTTP_201_CREATED,

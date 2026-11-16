@@ -48,7 +48,7 @@ class RentalViewSet(TenantViewSet, mixins.ListModelMixin, mixins.RetrieveModelMi
     def get_queryset(self):
         qs = (
             Rental.objects.filter(business=self.request.user.business)
-            .select_related("customer", "branch")
+            .select_related("customer")
             .annotate(
                 item_count=Count("items", distinct=True),
                 units_out=Coalesce(
@@ -60,7 +60,7 @@ class RentalViewSet(TenantViewSet, mixins.ListModelMixin, mixins.RetrieveModelMi
         )
         if self.action == "retrieve":
             qs = qs.prefetch_related("items", "returns__lines__item", "payments__by")
-        return self.scope_to_branches(qs)
+        return qs
 
     def get_serializer_class(self):
         return RentalSerializer if self.action == "retrieve" else RentalListSerializer
@@ -87,9 +87,6 @@ class RentalViewSet(TenantViewSet, mixins.ListModelMixin, mixins.RetrieveModelMi
         customer = self.id_param("customer")
         if customer:
             qs = qs.filter(customer_id=customer)
-        branch = self.id_param("branch")
-        if branch:
-            qs = qs.filter(branch_id=branch)
         product = self.id_param("product")
         if product:
             qs = qs.filter(items__product_id=product).distinct()
@@ -134,7 +131,7 @@ class RentalViewSet(TenantViewSet, mixins.ListModelMixin, mixins.RetrieveModelMi
     def get_queryset_for_detail(self, pk):
         return (
             Rental.objects.filter(business=self.request.user.business, pk=pk)
-            .select_related("customer", "branch", "created_by")
+            .select_related("customer", "created_by")
             .prefetch_related("items", "returns__lines__item", "payments__by")
             .annotate(
                 item_count=Count("items", distinct=True),
@@ -175,7 +172,6 @@ class RentalViewSet(TenantViewSet, mixins.ListModelMixin, mixins.RetrieveModelMi
             code=data.get("code", ""),
             customer=data.get("customer"),
             rental=rental,
-            branch_ids=self.branches_allowed(),
         )
         return Response(result)
 
@@ -235,7 +231,7 @@ class RentalViewSet(TenantViewSet, mixins.ListModelMixin, mixins.RetrieveModelMi
         Computed in the database on purpose: a shop with 40,000 rentals must not load them
         into Python to count how many are overdue.
         """
-        qs = self.scope_to_branches(Rental.objects.filter(business=request.user.business))
+        qs = Rental.objects.filter(business=request.user.business)
         start = timezone.localtime().replace(hour=0, minute=0, second=0, microsecond=0)
         month_start = start.replace(day=1)
 
@@ -335,14 +331,14 @@ class PublicReceiptView(APIView):
     def get(self, request, token):
         rental = (
             Rental.objects.filter(token=token)
-            .select_related("business", "customer", "branch")
+            .select_related("business", "customer")
             .prefetch_related("items", "returns__lines__item")
             .first()
         )
         if rental is None:
             rental_return = (
                 RentalReturn.objects.filter(token=token)
-                .select_related("business", "rental", "rental__customer", "rental__branch")
+                .select_related("business", "rental", "rental__customer")
                 .prefetch_related("lines__item")
                 .first()
             )
@@ -365,9 +361,6 @@ class PublicReceiptView(APIView):
                 "lateFeeMultiplier": float(business.rental_setting("lateFeeMultiplier", 1.0) or 0),
                 "logoVersion": business.logo_version,
             },
-            "branch": {"name": rental.branch.name, "phone": rental.branch.phone, "address": rental.branch.address}
-            if rental.branch
-            else None,
             "rental": {
                 "code": rental.code,
                 "status": rental.status,
@@ -459,7 +452,7 @@ class PublicReceiptLogoView(APIView):
 class BillView(APIView):
     """Shared gate for bills: owners and managers, in a business that rents.
 
-    A bill puts everything one customer owes on a single sheet, across every branch, so it
+    A bill puts everything one customer owes on a single sheet, so it
     is kept to the people who already see the whole shop's money.
     """
 

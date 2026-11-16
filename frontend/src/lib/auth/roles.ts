@@ -51,7 +51,7 @@ const ROUTE_RULES: Rule[] = [
   { test: prefix("/rentals"), roles: TEAM, module: "rentals" },
   { test: prefix("/returns"), roles: TEAM, module: "rentals" },
   { test: prefix("/customers"), roles: TEAM },
-  // A bill is everything one customer owes across every branch, so it is kept to the
+  // A bill is everything one customer owes, so it is kept to the
   // people who already see the whole shop's money.
   { test: prefix("/bills"), roles: LEADS, module: "rentals" },
   { test: prefix("/products"), roles: TEAM },

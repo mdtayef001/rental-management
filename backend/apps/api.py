@@ -54,7 +54,7 @@ class Pagination(PageNumberPagination):
     """Pages of 50 when the caller asks with ?page= (and optionally ?page_size=, up to 200).
 
     Without ?page= the whole list comes back, which is only used for genuinely small lists
-    (branches, categories). A page past the end returns the last page instead of an error, so
+    (categories, units). A page past the end returns the last page instead of an error, so
     deleting the last row of a page doesn't break the list; the response says which page it is.
     """
 

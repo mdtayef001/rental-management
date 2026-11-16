@@ -43,7 +43,7 @@ export function ReceiptDocument({ receipt: r, paper = "sheet" }: { receipt: Rece
       {paper === "sheet" && <SheetPage />}
       <Paper className={paper === "slip" ? "print:hidden" : undefined}>
         <PaperHeader
-          business={{ name: r.businessName, branch: r.branchName, address: r.address, phone: r.phone }}
+          business={{ name: r.businessName, address: r.address, phone: r.phone }}
           logo={r.logo}
           title="Rental receipt"
         >
@@ -211,7 +211,6 @@ function TillReceipt({ receipt: r, cash }: { receipt: ReceiptView; cash: (value:
           <img src={r.logo} alt="" className="mx-auto mb-[1mm] max-h-[14mm] max-w-[50mm] object-contain" />
         )}
         <p className="text-[16px] leading-tight font-bold">{r.businessName}</p>
-        {r.branchName && <p>{r.branchName}</p>}
         {r.address && <p>{r.address}</p>}
         {r.phone && <p>{r.phone}</p>}
       </div>
