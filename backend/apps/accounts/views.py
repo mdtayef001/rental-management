@@ -321,6 +321,9 @@ class PlatformBusinessViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsSuperAdmin]
     serializer_class = PlatformBusinessSerializer
     pagination_class = Pagination
+    # No PATCH/PUT: the owner edits their own business; the super admin only creates,
+    # suspends, resets the owner's password and deletes.
+    http_method_names = ["get", "post", "delete", "head", "options"]
 
     def get_queryset(self):
         qs = Business.objects.prefetch_related(
@@ -349,16 +352,6 @@ class PlatformBusinessViewSet(viewsets.ModelViewSet):
             {**PlatformBusinessSerializer(business).data, "ownerName": owner.name, "ownerEmail": owner.email},
             status=status.HTTP_201_CREATED,
         )
-
-    def update(self, request, *args, **kwargs):
-        business = self.get_object()
-        serializer = BusinessSettingsSerializer(business, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(PlatformBusinessSerializer(business).data)
-
-    def partial_update(self, request, *args, **kwargs):
-        return self.update(request, *args, **kwargs)
 
     @action(detail=True, methods=["post"])
     def suspend(self, request, pk=None):

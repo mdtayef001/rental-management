@@ -24,7 +24,6 @@ from .expressions import BALANCE, MONEY, UNITS_OUT, ZERO, units_out
 from .serializers import (
     CancelSerializer,
     PaymentCreateSerializer,
-    QuoteSerializer,
     RentalCreateSerializer,
     RentalListSerializer,
     RentalReturnSerializer,
@@ -111,10 +110,6 @@ class RentalViewSet(TenantViewSet, mixins.ListModelMixin, mixins.RetrieveModelMi
             qs = qs.filter(started_at__date__gte=since)
         if until:
             qs = qs.filter(started_at__date__lte=until)
-
-        # Staff see only their own rentals unless the owner lets them see the shop's.
-        if self.request.user.role == User.Role.STAFF and params.get("mine") == "1":
-            qs = qs.filter(created_by=self.request.user)
 
         sort = params.get("sort", "")
         if sort == "due":
@@ -277,15 +272,6 @@ class RentalViewSet(TenantViewSet, mixins.ListModelMixin, mixins.RetrieveModelMi
         return Response(
             {**counts, "unitsOut": units_out, "returnsToday": back["returns"], "unitsReturnedToday": back["units"]}
         )
-
-    @action(detail=False, methods=["post"])
-    def quote(self, request):
-        """Price a line before it's saved. The same arithmetic the server charges at return."""
-        serializer = QuoteSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
-        total = RentalItem.quote(data["plan"], data["rate"], data["days"], data["quantity"], data["holidays"])
-        return Response({"total": total})
 
 
 class RentalReturnViewSet(TenantViewSet, mixins.ListModelMixin, mixins.RetrieveModelMixin):

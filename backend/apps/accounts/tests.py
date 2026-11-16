@@ -169,6 +169,14 @@ class BusinessCreationTests(ApiTestCase):
         self.assertEqual(business.users.count(), 1)
         self.assertEqual(business.users.get().role, User.Role.OWNER)
 
+    def test_the_super_admin_cannot_edit_a_business(self):
+        """The owner edits their own business; the platform only creates, suspends and deletes."""
+        self.as_user(self.superadmin)
+        res = self.client.patch(f"/api/platform/businesses/{self.business.id}/", {"name": "Renamed"}, format="json")
+        self.assertEqual(res.status_code, 405)
+        self.business.refresh_from_db()
+        self.assertEqual(self.business.name, "Dhaka Rentals")
+
     def test_a_duplicate_owner_email_creates_nothing(self):
         self.as_user(self.superadmin)
         before = Business.objects.count()

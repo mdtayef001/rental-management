@@ -210,13 +210,3 @@ class PaymentCreateSerializer(serializers.Serializer):
 
 class CancelSerializer(serializers.Serializer):
     reason = serializers.CharField(max_length=300, required=False, allow_blank=True, default="")
-
-
-class QuoteSerializer(serializers.Serializer):
-    """Priced before anything is saved, so staff can tell the customer the cost up front."""
-
-    plan = serializers.ChoiceField(choices=RentalItem.Plan.choices)
-    rate = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0)
-    days = serializers.IntegerField(min_value=1)
-    quantity = serializers.IntegerField(min_value=1, default=1)
-    holidays = serializers.IntegerField(min_value=0, default=0)
