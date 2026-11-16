@@ -168,6 +168,30 @@ class LookupTests(CatalogTestCase):
         self.assertEqual(self.client.get("/api/products/lookup/?code=SM-100").status_code, 404)
 
 
+class QueryParameterTests(CatalogTestCase):
+    """Query strings are sent camelCase, like the JSON bodies, and views read snake_case."""
+
+    def test_the_open_rentals_filter_returns_only_customers_with_something_out(self):
+        from apps.catalog.models import Customer
+        from apps.rentals.services import create_rental
+
+        adjust_stock(
+            user=self.owner, product=self.machine, branch=self.branch, quantity=5,
+            reason=StockMovement.Reason.ADJUSTMENT,
+        )
+        renting = Customer.objects.create(business=self.business, name="Has one out")
+        Customer.objects.create(business=self.business, name="Nothing out")
+        create_rental(
+            user=self.owner, customer=renting, branch=self.branch,
+            lines=[{"product": self.machine, "quantity": 1, "plan": "daily"}],
+        )
+        self.login(self.owner)
+        for query in ("hasOpenRentals=1", "has_open_rentals=1"):
+            names = [c["name"] for c in self.body(self.client.get(f"/api/customers/?{query}"))]
+            self.assertEqual(names, ["Has one out"], query)
+        self.assertEqual(len(self.body(self.client.get("/api/customers/"))), 2)
+
+
 class ProductTests(CatalogTestCase):
     def test_a_rentable_product_needs_at_least_one_rate(self):
         self.login(self.owner)

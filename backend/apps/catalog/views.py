@@ -141,9 +141,9 @@ class ProductViewSet(TenantViewSet, viewsets.ModelViewSet):
         category = params.get("category", "").strip()
         if category:
             qs = qs.filter(category__iexact=category)
-        if params.get("inStock") == "1" or params.get("in_stock") == "1":
+        if params.get("in_stock") == "1":
             qs = qs.filter(on_hand__gt=0)
-        if params.get("lowStock") == "1" or params.get("low_stock") == "1":
+        if params.get("low_stock") == "1":
             default = self.request.user.business.low_stock_alert
             qs = qs.filter(
                 Q(low_stock_threshold__gt=0, on_hand__lte=F("low_stock_threshold"))
@@ -208,7 +208,7 @@ class ProductViewSet(TenantViewSet, viewsets.ModelViewSet):
         rent-out screen from offering something that isn't for rent.
         """
         business = request.user.business
-        rentable_only = request.query_params.get("rentableOnly") == "1" or request.query_params.get("rentable_only") == "1"
+        rentable_only = request.query_params.get("rentable_only") == "1"
         code = request.query_params.get("code", "").strip()
 
         if code:
@@ -252,7 +252,7 @@ class StockViewSet(TenantViewSet, mixins.ListModelMixin):
         product = self.id_param("product")
         if product:
             qs = qs.filter(product_id=product)
-        if params.get("lowStock") == "1":
+        if params.get("low_stock") == "1":
             default = self.request.user.business.low_stock_alert
             qs = qs.filter(
                 Q(product__low_stock_threshold__gt=0, quantity__lte=F("product__low_stock_threshold"))
@@ -368,7 +368,7 @@ class CustomerViewSet(TenantViewSet, viewsets.ModelViewSet):
             qs = qs.filter(archived_at__isnull=params.get("archived") != "1")
         if params.get("blocked") == "1":
             qs = qs.filter(blocked=True)
-        if params.get("hasOpenRentals") == "1":
+        if params.get("has_open_rentals") == "1":
             from apps.rentals.models import Rental
 
             qs = qs.filter(rentals__status__in=Rental.OPEN).distinct()

@@ -44,7 +44,7 @@ export function CustomerPrices({ customerId, customerName, canEdit }: { customer
   async function lookUp(code: string) {
     setFinding(true)
     try {
-      start(await request<ProductLookup>(`products/lookup/?code=${encodeURIComponent(code)}&rentable_only=1`))
+      start(await request<ProductLookup>(`products/lookup/?code=${encodeURIComponent(code)}&rentableOnly=1`))
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Couldn't find that code.")
     } finally {

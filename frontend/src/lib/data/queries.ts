@@ -39,14 +39,14 @@ import type {
 
 export type Params = Record<string, string | number | boolean | string[] | null | undefined>
 
-/** `("products/", { search: "tv", inStock: true })` → `"products/?search=tv&in_stock=1"`. */
+/** `("products/", { search: "tv", inStock: true })` → `"products/?search=tv&inStock=1"`.
+ * Keys stay camelCase like the JSON bodies; the backend's middleware converts them. */
 export function withParams(path: string, params: Params = {}) {
   const query = new URLSearchParams()
   for (const [name, value] of Object.entries(params)) {
     // Empty values are left out entirely, so a cleared filter doesn't send `?search=`.
     if (value === undefined || value === null || value === "" || value === false) continue
-    const key = name.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`)
-    for (const v of Array.isArray(value) ? value : [value]) query.append(key, v === true ? "1" : String(v))
+    for (const v of Array.isArray(value) ? value : [value]) query.append(name, v === true ? "1" : String(v))
   }
   const qs = query.toString()
   return qs ? `${path}?${qs}` : path

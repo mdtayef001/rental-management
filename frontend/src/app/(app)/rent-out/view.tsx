@@ -152,7 +152,7 @@ export function RentOutView() {
     async (code: string) => {
       setAdding(true)
       try {
-        addProduct(await request<ProductLookup>(`products/lookup/?code=${encodeURIComponent(code)}&rentable_only=1`))
+        addProduct(await request<ProductLookup>(`products/lookup/?code=${encodeURIComponent(code)}&rentableOnly=1`))
       } catch (err) {
         toast.error(err instanceof ApiError ? err.message : "Couldn't find that code.")
       } finally {
