@@ -115,8 +115,8 @@ database table whenever the database is PostgreSQL.
 ## Tests
 
 ```bash
-cd backend  && .venv/bin/python manage.py test   # 184 tests
-cd frontend && npm test && npm run typecheck     # 14 tests
+cd backend  && .venv/bin/python manage.py test   # 170 tests
+cd frontend && npm test && npm run typecheck     # 18 tests
 ```
 
 The rental pricing exists on both sides — staff see it live in the form, the server charges
@@ -144,7 +144,7 @@ different from their quote.
    `request.user.business`; `TenantRelatedField` refuses any id that points outside it. A
    crafted request cannot read another tenant's rows or attach them to its own.
 4. **Roles plus per-person rights.** owner / manager / staff, with `canRent`,
-   `canTakeReturns`, `canSell`, `canAddStock` and `canHandleDeposits` per staff member, and
+   `canTakeReturns` and `canAddStock` per staff member, and
    owner-controlled manager permissions on top.
 5. Login throttled to 5/min, password validators, no account enumeration, HSTS, nosniff and
    frame-deny in production.
@@ -170,7 +170,7 @@ different from their quote.
   and filtered in the database.
 - Aggregates are database subqueries, never Python loops over a table — the dashboard costs
   the same at 50 rentals or 50,000.
-- TanStack Query caches with a 30s stale time and `keepPreviousData`, so paging never blanks
+- TanStack Query caches with a 15s stale time and `keepPreviousData`, so paging never blanks
   the screen. Mutations invalidate only the collections they touched.
 - The camera scanner is a dynamic import, so its bundle only downloads when a scanner opens.
 
@@ -178,8 +178,8 @@ different from their quote.
 
 ```
 backend/apps/
-  accounts/    Business, Branch, User, roles, the super admin's platform API, audit log
-  catalog/     Products, stock levels, the stock ledger, customers, the scanner lookup
+  accounts/    Business, User, roles, the super admin's platform API, audit log
+  catalog/     Products and their stock, the stock ledger, customers, the scanner lookup
   rentals/     Rentals, items, returns, payments, receipts  ← the core
 frontend/src/
   app/(app)/   The signed-in screens
@@ -249,9 +249,8 @@ admin's platform page, and the public receipt a customer opens from their QR cod
 There is no separate Stock screen either: the products list already carries what is on
 the shelf, what is out on rent and the total, and corrections are made from the row.
 
-There is no Branches screen. A business is created with exactly one branch and the branch
-pickers never render; the model and the `branch` column on stock and rentals
-stay as the seam for a second location later.
+A business is one shop. Stock is one number per product (`Product.quantity`), so there is
+no branch to pick anywhere and nothing to scope people to.
 
 ## Reports
 
@@ -319,9 +318,9 @@ on both the printed page and the PDF.
 - **Take payment** records one payment for the whole bill and spreads it over the
   customer's rentals, oldest first — a company pays its month with one cheque.
 
-Bills are for owners and managers. The PDF uses the Latin fonts bundled with ReportLab, so
-it writes money as `BDT 1,200.00`; a name in Bengali script prints correctly from the
-**Print** button, which uses the computer's own fonts.
+Bills are for owners and managers. The PDF is set in Archivo, with Noto Sans Bengali for
+the taka sign and Bengali names (`backend/apps/fonts/`), so it writes money as `৳1,200.00`
+just as the screen and the **Print** button do.
 
 ## A price for each company
 
