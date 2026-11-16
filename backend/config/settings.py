@@ -153,9 +153,10 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticated",
     ],
     # camelCase on the wire to match the frontend's types, snake_case in Python.
+    # The browsable HTML API is a development aid only.
     "DEFAULT_RENDERER_CLASSES": [
         "djangorestframework_camel_case.render.CamelCaseJSONRenderer",
-        "djangorestframework_camel_case.render.CamelCaseBrowsableAPIRenderer",
+        *(["djangorestframework_camel_case.render.CamelCaseBrowsableAPIRenderer"] if DEBUG else []),
     ],
     "DEFAULT_PARSER_CLASSES": [
         "djangorestframework_camel_case.parser.CamelCaseJSONParser",
@@ -175,6 +176,10 @@ REST_FRAMEWORK = {
         "login_account": "20/hour",
     },
     "EXCEPTION_HANDLER": "apps.api.exception_handler",
+    # How many proxies sit in front of Django and append to X-Forwarded-For. The login's
+    # per-IP throttle then keys on the address the nearest proxy saw, not on whatever a
+    # client wrote into the header itself. Vercel is one hop.
+    "NUM_PROXIES": int(os.environ.get("DJANGO_NUM_PROXIES", "1")),
 }
 
 # Shared with the Next.js frontend (the same JWT_SIGNING_KEY in both .env files) so its

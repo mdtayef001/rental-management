@@ -9,7 +9,7 @@ from django.db import transaction
 from rest_framework.exceptions import ValidationError
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 
-from .models import Business, User, log
+from .models import Activity, Business, User, log
 
 
 @transaction.atomic
@@ -65,7 +65,23 @@ def set_password(*, actor, user, password):
     """
     user.set_password(password)
     user.save(update_fields=["password"])
+    end_sessions(user)
+    if getattr(actor, "business_id", None):
+        log(actor, "Password changed", user.name)
+    else:
+        # The super admin has no business of their own, so `log` would drop this. The
+        # owner still needs to see in their own audit trail that the platform reset it.
+        Activity.objects.create(
+            business_id=user.business_id, user=actor, action="Password reset by the platform", detail=user.name
+        )
+    return user
+
+
+def end_sessions(user):
+    """Blacklist every refresh token the user holds, so no session of theirs can renew.
+
+    Used when an account is disabled or its password reset. Without it a disabled user's
+    old tokens would quietly work again if the account were re-enabled within 12 hours.
+    """
     for token in OutstandingToken.objects.filter(user=user):
         BlacklistedToken.objects.get_or_create(token=token)
-    log(actor, "Password changed", user.name)
-    return user

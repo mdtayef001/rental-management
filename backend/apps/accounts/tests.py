@@ -306,12 +306,14 @@ class UserManagementTests(ApiTestCase):
         self.assertFalse(staff.is_active)
         self.assertTrue(User.objects.filter(pk=staff.pk).exists())
 
-    def test_the_manager_users_permission_gates_writes_not_reads(self):
+    def test_the_manager_users_permission_gates_reads_and_writes(self):
+        """Without the switch the Users screen is hidden, so the team's contact details are
+        not readable through the API either."""
         manager = create_user(actor=self.owner, name="Mgr", email="mgr@example.com", password=PASSWORD, role=User.Role.MANAGER)
         self.business.settings["permissions"]["managerUsers"] = False
         self.business.save()
         self.as_user(manager)
-        self.assertEqual(self.client.get("/api/users/").status_code, 200)
+        self.assertEqual(self.client.get("/api/users/").status_code, 403)
         res = self.client.post(
             "/api/users/", {"name": "S", "email": "s2@example.com", "password": PASSWORD, "role": "staff"}, format="json"
         )
@@ -405,3 +407,57 @@ class PasswordResetSessionTests(ApiTestCase):
         )
         self.assertEqual(res.status_code, 204)
         self.assert_session_ended(access, refresh)
+
+
+class SessionEndingTests(ApiTestCase):
+    def test_disabling_a_user_ends_their_sessions_for_good(self):
+        """Even if the account is switched back on, the old tokens stay dead."""
+        staff = create_user(actor=self.owner, name="S", email="s@example.com", password=PASSWORD, role=User.Role.STAFF)
+        res = self.client.post("/api/auth/login/", {"email": "s@example.com", "password": PASSWORD}, format="json")
+        refresh = res.data["refresh"]
+        self.as_user(self.owner)
+        self.assertEqual(self.client.delete(f"/api/users/{staff.id}/").status_code, 204)
+        self.assertEqual(self.client.patch(f"/api/users/{staff.id}/", {"isActive": True}, format="json").status_code, 200)
+        self.anonymous()
+        self.assertEqual(self.client.post("/api/auth/refresh/", {"refresh": refresh}, format="json").status_code, 401)
+
+    def test_a_refresh_token_for_a_deleted_user_is_refused_not_a_crash(self):
+        res = self.client.post("/api/auth/login/", {"email": "owner@example.com", "password": PASSWORD}, format="json")
+        refresh = res.data["refresh"]
+        User.objects.filter(pk=self.owner.pk).delete()
+        self.anonymous()
+        self.assertEqual(self.client.post("/api/auth/refresh/", {"refresh": refresh}, format="json").status_code, 401)
+
+    def test_the_platform_resetting_the_owners_password_shows_in_their_activity(self):
+        self.as_user(self.superadmin)
+        self.client.post(
+            f"/api/platform/businesses/{self.business.id}/owner-password/", {"password": "another-horse-battery"}, format="json"
+        )
+        from apps.accounts.models import Activity
+
+        entry = Activity.objects.get(business=self.business, action="Password reset by the platform")
+        self.assertEqual(entry.user, self.superadmin)
+
+
+class LoginThrottleTests(ApiTestCase):
+    def test_the_ip_limit_cannot_be_dodged_with_a_forged_forwarded_for(self):
+        """Behind one proxy, only the address that proxy appended counts."""
+        codes = [
+            self.client.post(
+                "/api/auth/login/",
+                {"email": f"nobody{i}@example.com", "password": "wrong-password-123"},
+                format="json",
+                HTTP_X_FORWARDED_FOR=f"10.0.0.{i}, 203.0.113.9",
+            ).status_code
+            for i in range(7)
+        ]
+        self.assertEqual(codes[-1], 429)
+
+
+class SeedDemoTests(ApiTestCase):
+    def test_seed_demo_refuses_a_database_with_real_businesses(self):
+        from django.core.management import CommandError, call_command
+
+        with self.assertRaises(CommandError):
+            call_command("seed_demo")
+        self.assertFalse(User.objects.filter(email="admin@example.com").exists())

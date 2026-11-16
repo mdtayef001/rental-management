@@ -106,7 +106,7 @@ To rebuild the demo data against the deployment's database:
 cd backend
 DATABASE_URL="$NEON_UNPOOLED_URL" .venv/bin/python manage.py migrate
 DATABASE_URL="$NEON_UNPOOLED_URL" .venv/bin/python manage.py createcachetable
-DATABASE_URL="$NEON_UNPOOLED_URL" .venv/bin/python manage.py seed_demo --reset
+DATABASE_URL="$NEON_UNPOOLED_URL" .venv/bin/python manage.py seed_demo --reset --allow-production
 ```
 
 `createcachetable` is needed because the login rate limit moves from local memory to a
@@ -115,7 +115,7 @@ database table whenever the database is PostgreSQL.
 ## Tests
 
 ```bash
-cd backend  && .venv/bin/python manage.py test   # 179 tests
+cd backend  && .venv/bin/python manage.py test   # 187 tests
 cd frontend && npm test && npm run typecheck     # 18 tests
 ```
 

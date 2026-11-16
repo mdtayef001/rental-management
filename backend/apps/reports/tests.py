@@ -102,6 +102,10 @@ class RangeTests(APITestCase):
         self.assertEqual(rng.last_day, timezone.localdate())
         self.assertEqual(rng.days, 30)
 
+    def test_dates_at_the_edge_of_the_calendar_are_ignored_not_a_crash(self):
+        rng = services.parse_range({"from": "9999-12-01", "to": "9999-12-31"})
+        self.assertEqual(rng.last_day, timezone.localdate())
+
     def test_the_grouping_suits_the_length_of_the_range(self):
         self.assertEqual(services.auto_group(services.parse_range({}, default_days=14)), "day")
         self.assertEqual(services.auto_group(services.parse_range({}, default_days=90)), "week")
@@ -345,3 +349,13 @@ class PrintedReportTests(ReportsTestCase):
         self.login(manager)
         self.assertEqual(self.client.get("/api/reports/pdf/").status_code, 403)
         self.assertEqual(self.client.get("/api/reports/debtors/").status_code, 403)
+
+
+class FormulaGuardTests(APITestCase):
+    def test_leading_whitespace_does_not_hide_a_formula(self):
+        from apps.reports.views import safe
+
+        for value in ("=1+2", " =1+2", "\n=HYPERLINK(1)", "\t+1", "@SUM(A1)"):
+            self.assertTrue(safe(value).startswith("'"), repr(value))
+        self.assertEqual(safe("Mr. X"), "Mr. X")
+        self.assertEqual(safe(5), 5)

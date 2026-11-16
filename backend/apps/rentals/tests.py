@@ -566,6 +566,18 @@ class MoneyTests(RentalTestCase):
             services.cancel_rental(user=self.owner, rental=rental)
 
 
+class SummaryTests(RentalTestCase):
+    def test_earnings_are_left_out_for_people_who_cannot_see_profit(self):
+        from rest_framework.test import APIClient
+
+        staff = create_user(actor=self.owner, name="S", email="s@example.com", password="correct-horse-battery", role=User.Role.STAFF)
+        client = APIClient()
+        client.force_authenticate(staff)
+        self.assertNotIn("revenueMonth", client.get("/api/rentals/summary/").json())
+        client.force_authenticate(self.owner)
+        self.assertIn("revenueMonth", client.get("/api/rentals/summary/").json())
+
+
 class PublicReceiptTests(RentalTestCase):
     def test_the_public_receipt_leaves_out_staff_notes(self):
         """Anyone with the receipt link can read it, so internal notes and cancellation

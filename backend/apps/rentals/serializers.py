@@ -116,7 +116,7 @@ class RentalLineSerializer(serializers.Serializer):
     # Left out to use the product's own rate for the plan.
     rate = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0, required=False, allow_null=True)
     replacement_cost = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0, required=False, allow_null=True)
-    holidays = serializers.IntegerField(min_value=0, required=False, default=0)
+    holidays = serializers.IntegerField(min_value=0, max_value=10_000, required=False, default=0)
     note = serializers.CharField(max_length=300, required=False, allow_blank=True, default="")
 
 
@@ -148,7 +148,7 @@ class ReturnLineSerializer(serializers.Serializer):
     item = serializers.CharField()
     quantity = serializers.IntegerField(min_value=1)
     condition = serializers.ChoiceField(choices=RentalReturnLine.Condition.choices, default=RentalReturnLine.Condition.GOOD)
-    holidays = serializers.IntegerField(min_value=0, required=False, allow_null=True)
+    holidays = serializers.IntegerField(min_value=0, max_value=10_000, required=False, allow_null=True)
     note = serializers.CharField(max_length=300, required=False, allow_blank=True, default="")
 
     def validate_item(self, value):

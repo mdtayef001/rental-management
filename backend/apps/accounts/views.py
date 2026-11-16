@@ -6,20 +6,30 @@ from django.db import transaction
 from django.db.models import Count, Prefetch, Q
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import AuthenticationFailed, PermissionDenied, ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle, SimpleRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from apps.api import Pagination
 
 from . import services
 from .models import Activity, Business, BusinessLogo, User, log
-from .permissions import LEADS, TEAM, IsSuperAdmin, IsTenantMember, ManagerNeedsPermission, can_manage_user, creatable_roles
+from .permissions import (
+    LEADS,
+    TEAM,
+    IsSuperAdmin,
+    IsTenantMember,
+    ManagerNeedsPermission,
+    ReadNeedsPermission,
+    can_manage_user,
+    creatable_roles,
+)
 from .serializers import (
     ActivitySerializer,
     BusinessCreateSerializer,
@@ -71,6 +81,21 @@ class LoginView(TokenObtainPairView):
     permission_classes = [AllowAny]
     throttle_classes = [ScopedRateThrottle, LoginAccountThrottle]
     throttle_scope = "login"
+
+
+class RefreshSerializer(TokenRefreshSerializer):
+    """SimpleJWT's refresh, but a token whose user has since been deleted (their business
+    was deleted) is refused with 401 instead of crashing with a 500."""
+
+    def validate(self, attrs):
+        try:
+            return super().validate(attrs)
+        except User.DoesNotExist:
+            raise AuthenticationFailed("No active account found for the given token.", "no_active_account")
+
+
+class RefreshView(TokenRefreshView):
+    serializer_class = RefreshSerializer
 
 
 class LogoutView(APIView):
@@ -204,10 +229,13 @@ class UserViewSet(viewsets.ModelViewSet):
     `can_manage_user`, not by the client.
     """
 
-    permission_classes = [IsAuthenticated, IsTenantMember, ManagerNeedsPermission]
+    # A manager without the owner's "manage users" switch can't open the Users screen, so
+    # the list (names, emails, phones, last login) is withheld from them here as well.
+    permission_classes = [IsAuthenticated, IsTenantMember, ManagerNeedsPermission, ReadNeedsPermission]
     pagination_class = Pagination
     allowed_roles = LEADS
     manager_permission = "managerUsers"
+    read_permission = "managerUsers"
 
     def get_queryset(self):
         qs = (
@@ -256,6 +284,8 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer = UserUpdateSerializer(user, data=request.data, partial=True, context={"request": request})
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        if not user.is_active:
+            services.end_sessions(user)
         log(request.user, "User changed", user.name)
         return Response(UserSerializer(user).data)
 
@@ -268,6 +298,7 @@ class UserViewSet(viewsets.ModelViewSet):
         user = self.target()
         user.is_active = False
         user.save(update_fields=["is_active"])
+        services.end_sessions(user)
         log(request.user, "User disabled", user.name)
         return Response(status=status.HTTP_204_NO_CONTENT)
 

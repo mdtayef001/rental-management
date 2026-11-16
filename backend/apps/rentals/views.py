@@ -253,7 +253,11 @@ class RentalViewSet(TenantViewSet, mixins.ListModelMixin, mixins.RetrieveModelMi
             rent=Coalesce(Sum("rent_total"), Value(0), output_field=MONEY),
             fees=Coalesce(Sum(F("late_fee") + F("damage_fee") - F("discount")), Value(0), output_field=MONEY),
         )
-        counts["revenue_month"] = earned["rent"] + earned["fees"]
+        # Earnings are what the owner's "see profit" switch is about; staff, and managers
+        # without it, get the operational counts only (the dashboard hides the tile too).
+        user = request.user
+        if user.role == User.Role.OWNER or (user.role == User.Role.MANAGER and user.business.permission_on("managerProfit")):
+            counts["revenue_month"] = earned["rent"] + earned["fees"]
         units_out = (
             RentalItem.objects.filter(rental__business=request.user.business, rental__status__in=Rental.OPEN)
             .aggregate(n=Coalesce(Sum(UNITS_OUT), Value(0), output_field=IntegerField()))

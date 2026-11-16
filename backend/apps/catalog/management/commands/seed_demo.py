@@ -9,7 +9,8 @@ rental, and one that is overdue.
 from datetime import timedelta
 from decimal import Decimal
 
-from django.core.management.base import BaseCommand
+from django.conf import settings
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 
@@ -27,9 +28,24 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--reset", action="store_true", help="Delete the demo business first.")
+        parser.add_argument(
+            "--allow-production",
+            action="store_true",
+            help="Seed even with DEBUG off or other businesses present (only for a demo database).",
+        )
 
     @transaction.atomic
     def handle(self, *args, **options):
+        # The demo accounts all share a password published in the README, one of them a
+        # super admin. Seeding them into a database real shops use would hand anyone the
+        # platform, so refuse unless this is clearly a development or demo database.
+        others = Business.objects.exclude(name="Dhaka Machine Rentals").exists()
+        if (not settings.DEBUG or others) and not options["allow_production"]:
+            raise CommandError(
+                "Refusing to seed: "
+                + ("DEBUG is off" if not settings.DEBUG else "other businesses exist in this database")
+                + ". The demo accounts share a public password. Pass --allow-production only for a demo database."
+            )
         if options["reset"]:
             Business.objects.filter(name="Dhaka Machine Rentals").delete()
             User.objects.filter(email="admin@example.com").delete()

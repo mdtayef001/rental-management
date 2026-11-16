@@ -75,11 +75,16 @@ class Range:
 
 def parse_date(text):
     """A `YYYY-MM-DD` query parameter, or None. Nonsense is ignored rather than raising, so
-    a stale bookmark shows this month instead of an error."""
+    a stale bookmark shows this month instead of an error.
+
+    Years far outside any shop's life count as nonsense too: a day near 9999-12-31 has no
+    "next day" to end the range on, and used to fail with a 500.
+    """
     try:
-        return date.fromisoformat((text or "").strip())
+        day = date.fromisoformat((text or "").strip())
     except ValueError:
         return None
+    return day if 1900 <= day.year <= 2999 else None
 
 
 def day_start(day):

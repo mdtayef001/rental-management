@@ -116,7 +116,7 @@ class ExportView(ReportView):
 
 def _lines(business, rng, header, rows):
     """The file: a line saying what it is, then the header, then the data."""
-    yield [f"{business.name} — {rng.start.date().isoformat()} to {rng.last_day.isoformat()}"]
+    yield [safe(f"{business.name} — {rng.start.date().isoformat()} to {rng.last_day.isoformat()}")]
     yield header
     for row in rows:
         yield [safe(value) for value in row]
@@ -128,9 +128,12 @@ def safe(value):
     Excel and Sheets run a cell starting `=`, `+`, `-` or `@` as a formula, so a customer
     who names themselves `=HYPERLINK(...)` would have that formula execute on the owner's
     machine when they open the export. Prefixing an apostrophe is the standard defence: the
-    cell reads the same and does nothing.
+    cell reads the same and does nothing. Leading whitespace is looked through, because
+    spreadsheets skip it too before deciding whether a cell is a formula.
     """
-    if isinstance(value, str) and value[:1] in ("=", "+", "-", "@", "\t", "\r"):
+    if isinstance(value, str) and (
+        value[:1] in ("\t", "\r") or value.lstrip(" \t\r\n")[:1] in ("=", "+", "-", "@")
+    ):
         return f"'{value}"
     return "" if value is None else value
 
