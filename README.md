@@ -115,7 +115,7 @@ database table whenever the database is PostgreSQL.
 ## Tests
 
 ```bash
-cd backend  && .venv/bin/python manage.py test   # 170 tests
+cd backend  && .venv/bin/python manage.py test   # 172 tests
 cd frontend && npm test && npm run typecheck     # 18 tests
 ```
 
