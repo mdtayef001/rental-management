@@ -298,9 +298,9 @@ def run_up_total(rental, at):
 
 
 def billable(business):
-    """Rentals a bill can be about: a named customer's, and not cancelled."""
+    """Rentals a bill can be about: every one that wasn't cancelled."""
     return (
-        Rental.objects.filter(business=business, customer__isnull=False)
+        Rental.objects.filter(business=business)
         .exclude(status=Rental.Status.CANCELLED)
         .prefetch_related(
             Prefetch("items", queryset=RentalItem.objects.order_by("id")),
@@ -442,7 +442,7 @@ def period_bills(business, rng, search=""):
 
     paid = (
         RentalPayment.objects.filter(
-            business=business, rental__customer__isnull=False, at__gte=start, at__lt=end
+            business=business, at__gte=start, at__lt=end
         )
         .exclude(rental__status=Rental.Status.CANCELLED)
         .values("rental__customer_id")

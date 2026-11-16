@@ -335,7 +335,7 @@ class PublicReceiptView(APIView):
             "rental": {
                 "code": rental.code,
                 "status": rental.status,
-                "customerName": rental.customer.name if rental.customer else "Walk-in",
+                "customerName": rental.customer.name,
                 "startedAt": rental.started_at,
                 "dueAt": rental.due_at,
                 "returnedAt": rental.returned_at,

@@ -226,7 +226,7 @@ export interface Rental {
   id: string
   code: string
   status: RentalStatus
-  customerId: string | null
+  customerId: string
   customerName: string
   customerPhone: string
   startedAt: string
@@ -265,7 +265,7 @@ export interface ReturnMatch {
   itemId: string
   rentalId: string
   rentalCode: string
-  customerId: string | null
+  customerId: string
   customerName: string
   customerPhone: string
   productId: string | null

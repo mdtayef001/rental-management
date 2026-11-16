@@ -40,8 +40,8 @@ class Rental(TenantModel):
     # Numbered 1, 2, 3… per business, shown as RN-000001.
     number = models.PositiveIntegerField()
     # RESTRICT: a customer with rentals is archived, never deleted, so a bill can't lose
-    # its name. Empty only on walk-in rentals from before a customer was required.
-    customer = models.ForeignKey(Customer, null=True, on_delete=models.RESTRICT, related_name="rentals")
+    # its name.
+    customer = models.ForeignKey(Customer, on_delete=models.RESTRICT, related_name="rentals")
 
     started_at = models.DateTimeField(default=timezone.now)
     # When everything is expected back. Optional: open-ended rentals are allowed when the

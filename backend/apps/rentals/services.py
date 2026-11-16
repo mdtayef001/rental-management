@@ -255,9 +255,9 @@ def item_match(item, now=None):
         "itemId": str(item.id),
         "rentalId": str(rental.id),
         "rentalCode": rental.code,
-        "customerId": str(rental.customer_id) if rental.customer_id else None,
-        "customerName": rental.customer.name if rental.customer else "Walk-in",
-        "customerPhone": rental.customer.phone if rental.customer else "",
+        "customerId": str(rental.customer_id),
+        "customerName": rental.customer.name,
+        "customerPhone": rental.customer.phone,
         "productId": str(item.product_id) if item.product_id else None,
         "productName": item.product_name,
         "productSku": item.product_sku,
@@ -287,7 +287,7 @@ def rental_brief(rental):
         "id": str(rental.id),
         "code": rental.code,
         "status": rental.status,
-        "customerName": rental.customer.name if rental.customer else "Walk-in",
+        "customerName": rental.customer.name,
         "startedAt": rental.started_at,
         "dueAt": rental.due_at,
         "balance": rental.balance,
@@ -491,7 +491,7 @@ def take_return(*, user, rental, lines, at=None, discount=ZERO, paid_amount=ZERO
         user,
         "Return taken",
         f"{rental_return.code} · {units} unit(s) back on {rental.code}"
-        + (f" from {rental.customer.name}" if rental.customer else ""),
+        + f" from {rental.customer.name}",
     )
     return rental_return
 

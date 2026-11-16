@@ -243,7 +243,7 @@ def revenue_series(business: Business, rng: Range, group=""):
     for line in lines:
         details.setdefault(line["period"], []).append(
             {
-                "customer": line["customer"] or "Walk-in",
+                "customer": line["customer"],
                 "rentalCode": f"RN-{line['rental_number']:06d}",
                 "product": line["product"],
                 "sku": line["sku"] or "",
@@ -332,7 +332,7 @@ def top_customers(business: Business, rng: Range, limit=TOP_N):
     rows = list(rows[:limit])
 
     # One extra query for the balances, rather than one per customer.
-    ids = [row["rental__customer_id"] for row in rows if row["rental__customer_id"]]
+    ids = [row["rental__customer_id"] for row in rows]
     owed = {
         row["customer_id"]: row["balance"]
         for row in Rental.objects.filter(business=business, customer_id__in=ids)
@@ -341,9 +341,9 @@ def top_customers(business: Business, rng: Range, limit=TOP_N):
     }
     return [
         {
-            "id": str(row["rental__customer_id"]) if row["rental__customer_id"] else None,
-            "name": row["name"] or "Walk-in",
-            "phone": row["phone"] or "",
+            "id": str(row["rental__customer_id"]),
+            "name": row["name"],
+            "phone": row["phone"],
             "rentals": row["rentals"],
             "returns": row["returns"],
             "rent": row["rent"],
@@ -380,9 +380,9 @@ def debtors(business: Business, limit=TOP_N):
     )
     return [
         {
-            "id": str(row["customer_id"]) if row["customer_id"] else None,
-            "name": row["name"] or "Walk-in",
-            "phone": row["phone"] or "",
+            "id": str(row["customer_id"]),
+            "name": row["name"],
+            "phone": row["phone"],
             "openRentals": row["rentals"],
             "oldestOpen": row["oldest"],
             "owed": row["owed"],
@@ -477,8 +477,8 @@ def _export_rentals(business, rng, group):
                 _when(rental.started_at),
                 _when(rental.due_at),
                 rental.get_status_display(),
-                rental.customer.name if rental.customer else "Walk-in",
-                rental.customer.phone if rental.customer else "",
+                rental.customer.name,
+                rental.customer.phone,
                 rental.item_count,
                 rental.out,
                 rental.rent_total,
@@ -515,7 +515,7 @@ def _export_returns(business, rng, group):
                 taken.code,
                 _when(taken.at),
                 taken.rental.code,
-                taken.rental.customer.name if taken.rental.customer else "Walk-in",
+                taken.rental.customer.name,
                 line.item.product_name,
                 line.item.product_sku,
                 line.quantity,
@@ -544,7 +544,7 @@ def _export_payments(business, rng, group):
             yield [
                 _when(payment.at),
                 payment.rental.code,
-                payment.rental.customer.name if payment.rental.customer else "Walk-in",
+                payment.rental.customer.name,
                 payment.get_kind_display(),
                 payment.get_method_display(),
                 payment.reference,

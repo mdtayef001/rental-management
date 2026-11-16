@@ -413,7 +413,7 @@ function OutNow({ onPick, busy }: { onPick: (rentalId: string) => void; busy: bo
                 className="flex min-h-14 w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none disabled:opacity-50"
               >
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">{rental.customerName || "Walk-in"}</span>
+                  <span className="block truncate font-medium">{rental.customerName}</span>
                   <span className="block truncate text-xs text-muted-foreground">
                     <span className="font-mono">{rental.code}</span> · {plural(rental.unitsOut, "unit")} out
                   </span>
