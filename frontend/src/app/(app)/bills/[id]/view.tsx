@@ -20,6 +20,7 @@ import { BILL_TITLE, rangeQuery } from "@/lib/bills"
 import { useReceivePayment } from "@/lib/data/mutations"
 import { billPdfUrl, useBill } from "@/lib/data/queries"
 import { money, whatsappLink } from "@/lib/format"
+import { PAYMENT_METHODS } from "@/lib/rental"
 import type { Bill } from "@/lib/types"
 import { usePeriod } from "../view"
 
@@ -87,13 +88,6 @@ function message(bill: Bill) {
   ].join("\n")
 }
 
-const METHODS = [
-  { value: "cash", label: "Cash" },
-  { value: "bank", label: "Bank transfer" },
-  { value: "mobile", label: "Mobile banking" },
-  { value: "card", label: "Card" },
-]
-
 /**
  * One payment for the whole bill.
  *
@@ -135,7 +129,7 @@ function PaymentDialog({ bill, onClose }: { bill: Bill; onClose: () => void }) {
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="bill-method">How</Label>
-            <SimpleSelect id="bill-method" value={method} onChange={setMethod} options={METHODS} />
+            <SimpleSelect id="bill-method" value={method} onChange={setMethod} options={PAYMENT_METHODS} />
           </div>
           {method !== "cash" && (
             <div className="space-y-1.5">

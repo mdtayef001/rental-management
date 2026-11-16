@@ -19,7 +19,7 @@ import { ApiError } from "@/lib/api/errors"
 import { type RentalLineInput, useRentOut } from "@/lib/data/mutations"
 import { useCustomerRates } from "@/lib/data/queries"
 import { count, money, plural } from "@/lib/format"
-import { PLAN_LABEL, availablePlans, quoteRental, rateFor } from "@/lib/rental"
+import { PAYMENT_METHODS, PLAN_LABEL, availablePlans, quoteRental, rateFor } from "@/lib/rental"
 import type { Customer, CustomerRate, ProductLookup, RentalPlan } from "@/lib/types"
 import { toast } from "sonner"
 
@@ -399,10 +399,11 @@ export function RentOutView() {
                       onChange={(e) => setMethod(e.target.value)}
                       className="h-9 w-full rounded-md border bg-card px-2 text-sm"
                     >
-                      <option value="cash">Cash</option>
-                      <option value="mobile">Mobile banking</option>
-                      <option value="card">Card</option>
-                      <option value="bank">Bank transfer</option>
+                      {PAYMENT_METHODS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   {method !== "cash" && (

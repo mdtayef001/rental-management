@@ -4,7 +4,7 @@
 in rentals starts from `business=request.user.business`, so no view can forget.
 """
 
-from django.db.models import BooleanField, Count, DecimalField, ExpressionWrapper, F, IntegerField, OuterRef, Q, Subquery, Sum, Value
+from django.db.models import BooleanField, Count, ExpressionWrapper, IntegerField, OuterRef, Q, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -15,6 +15,7 @@ from rest_framework.response import Response
 from apps.accounts.models import User, log
 from apps.accounts.permissions import LEADS, TEAM, IsTenantMember, ManagerNeedsPermission
 from apps.api import Pagination
+from apps.rentals.expressions import BALANCE, MONEY, UNITS_OUT
 
 from . import services
 from .models import Customer, CustomerRate, Product, StockMovement
@@ -31,8 +32,6 @@ from .serializers import (
 )
 
 
-# Money columns are 14,2 throughout, so Coalesce over them needs this output field.
-MONEY = DecimalField(max_digits=14, decimal_places=2)
 
 
 class TenantViewSet(viewsets.GenericViewSet):
@@ -93,7 +92,7 @@ class ProductViewSet(TenantViewSet, viewsets.ModelViewSet):
         out_on_rent = (
             RentalItem.objects.filter(product=OuterRef("pk"), rental__status__in=Rental.OPEN)
             .values("product")
-            .annotate(n=Sum(F("quantity") - F("quantity_returned") - F("quantity_lost")))
+            .annotate(n=Sum(UNITS_OUT))
             .values("n")
         )
         return (
@@ -286,11 +285,7 @@ class CustomerViewSet(TenantViewSet, viewsets.ModelViewSet):
             ),
             balance_due=Coalesce(
                 Subquery(
-                    rentals.values("customer")
-                    .annotate(
-                        n=Sum(F("rent_total") + F("late_fee") + F("damage_fee") - F("discount") - F("paid_amount"))
-                    )
-                    .values("n")
+                    rentals.values("customer").annotate(n=Sum(BALANCE)).values("n")
                 ),
                 Value(0),
                 output_field=MONEY,

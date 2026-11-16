@@ -212,6 +212,15 @@ class RentalItem(models.Model):
         periods = math.ceil(days / cls.PLAN_DAYS[plan])
         return periods * rate * quantity
 
+    @classmethod
+    def daily_value(cls, plan, rate):
+        """What one day of `plan` at `rate` is worth, for the late fee. A fixed price has no
+        daily value, so its own rate stands in for one. Mirrored by `dailyValue` in
+        frontend/src/lib/rental.ts."""
+        if plan in (cls.Plan.WEEKLY, cls.Plan.MONTHLY):
+            return rate / cls.PLAN_DAYS[plan]
+        return rate
+
     @staticmethod
     def count_days(start, end):
         """Days out, counting any started day: out at 10:00 and back at 10:00 the next day is

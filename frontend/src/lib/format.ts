@@ -1,4 +1,5 @@
 import { format, formatDistanceToNowStrict, isToday, isYesterday } from "date-fns"
+import { daysLate } from "@/lib/rental"
 
 /**
  * Money, with the business's currency.
@@ -80,10 +81,10 @@ export function plural(n: number, one: string, many = one + "s") {
 export function dueLabel(dueAt: string | null, now = new Date()) {
   if (!dueAt) return "No return date"
   const due = new Date(dueAt)
-  const days = Math.ceil((due.getTime() - now.getTime()) / 86_400_000)
-  if (days < 0) return `${plural(-days, "day")} overdue`
-  if (days === 0) return "Due today"
-  return `Due in ${plural(days, "day")}`
+  // Overdue days count any started day, as the late fee does: 1½ days late reads "2 days".
+  if (now.getTime() > due.getTime()) return `${plural(daysLate(dueAt, now), "day")} overdue`
+  if (isToday(due)) return "Due today"
+  return `Due in ${plural(Math.ceil((due.getTime() - now.getTime()) / 86_400_000), "day")}`
 }
 
 /** A phone number as a WhatsApp link, for sending a customer their receipt. */

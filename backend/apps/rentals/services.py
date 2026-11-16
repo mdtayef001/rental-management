@@ -24,9 +24,9 @@ from apps.accounts.models import Business, log
 from apps.catalog.models import StockMovement
 from apps.catalog.services import change_stock, customer_rate, set_customer_rate
 
+from .expressions import UNITS_OUT, ZERO
 from .models import Rental, RentalItem, RentalPayment, RentalReturn, RentalReturnLine
 
-ZERO = Decimal("0.00")
 
 
 def lock_business(business_id):
@@ -166,7 +166,7 @@ def open_items(business, *, product=None, customer=None, rental=None):
     """
     qs = (
         RentalItem.objects.filter(rental__business=business, rental__status__in=Rental.OPEN)
-        .annotate(out=F("quantity") - F("quantity_returned") - F("quantity_lost"))
+        .annotate(out=UNITS_OUT)
         .filter(out__gt=0)
         .select_related("rental", "rental__customer", "product")
         .order_by("rental__started_at", "id")
@@ -325,14 +325,7 @@ def late_fee_for(business, item, days_late, quantity):
     multiplier = Decimal(str(business.rental_setting("lateFeeMultiplier", 1.0) or 0))
     if days_late <= 0 or multiplier <= 0:
         return ZERO
-    if item.plan == RentalItem.Plan.DAILY:
-        daily = item.rate
-    elif item.plan == RentalItem.Plan.WEEKLY:
-        daily = item.rate / 7
-    elif item.plan == RentalItem.Plan.MONTHLY:
-        daily = item.rate / 30
-    else:
-        daily = item.rate
+    daily = RentalItem.daily_value(item.plan, item.rate)
     return (daily * multiplier * days_late * quantity).quantize(Decimal("0.01"))
 
 
@@ -511,7 +504,7 @@ def close_if_done(rental, at=None):
     """
     still_out = (
         RentalItem.objects.filter(rental=rental)
-        .annotate(out=F("quantity") - F("quantity_returned") - F("quantity_lost"))
+        .annotate(out=UNITS_OUT)
         .filter(out__gt=0)
         .exists()
     )

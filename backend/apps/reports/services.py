@@ -19,19 +19,16 @@ credit a month with money it had not charged yet.
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 
-from django.db.models import Count, DecimalField, F, IntegerField, Max, Min, Q, Sum, Value
+from django.db.models import Count, F, IntegerField, Max, Min, Q, Sum, Value
 from django.db.models.functions import Coalesce, TruncDay, TruncMonth, TruncWeek
 from django.utils import timezone
 
 from apps.accounts.models import Business
 from apps.catalog.models import Customer
+from apps.rentals.expressions import BALANCE, MONEY, UNITS_OUT, units_out
 from apps.rentals.models import Rental, RentalItem, RentalPayment, RentalReturn, RentalReturnLine
 
-MONEY = DecimalField(max_digits=14, decimal_places=2)
 COUNT = IntegerField()
-
-#: What a rental still has to be paid: negative while the customer is ahead.
-BALANCE = F("rent_total") + F("late_fee") + F("damage_fee") - F("discount") - F("paid_amount")
 
 #: How many rows a grouped report will return at most. A report is for reading, so the long
 #: tail belongs in the CSV export rather than on screen.
@@ -167,7 +164,7 @@ def summary(business: Business, rng: Range):
         )
     )
     out_now = RentalItem.objects.filter(rental__business=business, rental__status__in=Rental.OPEN).aggregate(
-        units=units(F("quantity") - F("quantity_returned") - F("quantity_lost"))
+        units=units(UNITS_OUT)
     )
 
     return {
@@ -340,7 +337,7 @@ def top_customers(business: Business, rng: Range, limit=TOP_N):
         row["customer_id"]: row["balance"]
         for row in Rental.objects.filter(business=business, customer_id__in=ids)
         .values("customer_id")
-        .annotate(balance=total(F("rent_total") + F("late_fee") + F("damage_fee") - F("discount") - F("paid_amount")))
+        .annotate(balance=total(BALANCE))
     }
     return [
         {
@@ -468,7 +465,7 @@ def _export_rentals(business, rng, group):
         .select_related("customer", "created_by")
         .annotate(
             item_count=Count("items", distinct=True),
-            out=units(F("items__quantity") - F("items__quantity_returned") - F("items__quantity_lost")),
+            out=units(units_out("items__")),
         )
         .order_by("number")
     )

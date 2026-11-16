@@ -1,4 +1,4 @@
-import type { RentalPlan } from "@/lib/types"
+import type { PaymentMethod, RentalPlan } from "@/lib/types"
 
 // The price arithmetic, duplicated from backend/apps/rentals/models.py (RentalItem.quote).
 //
@@ -6,6 +6,14 @@ import type { RentalPlan } from "@/lib/types"
 // the server must charge exactly that. Both are covered by tests with the same cases, so a
 // change to one that doesn't match the other fails the suite rather than quietly charging
 // the customer something different from what they were quoted.
+
+/** How a customer can pay, in the order every payment form offers them. */
+export const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
+  { value: "cash", label: "Cash" },
+  { value: "mobile", label: "Mobile banking" },
+  { value: "card", label: "Card" },
+  { value: "bank", label: "Bank transfer" },
+]
 
 export const PLAN_LABEL: Record<RentalPlan, string> = {
   daily: "Per day",
@@ -85,6 +93,14 @@ export function daysLate(dueAt: string | null, at: string | Date = new Date()) {
   const due = new Date(dueAt).getTime()
   const now = new Date(at).getTime()
   return now <= due ? 0 : countDays(dueAt, at)
+}
+
+/**
+ * What one day of a plan is worth, for the late fee. A fixed price has no daily value, so
+ * its own rate stands in for one. Mirrors `RentalItem.daily_value` on the server.
+ */
+export function dailyValue(plan: RentalPlan, rate: number) {
+  return plan === "weekly" || plan === "monthly" ? rate / PLAN_DAYS[plan] : rate
 }
 
 /** The product's rate for a plan, or null when it has none set. */

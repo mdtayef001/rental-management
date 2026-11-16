@@ -31,7 +31,7 @@ import { useCurrency, useSettings } from "@/components/session"
 import { useResolveReturn, useTakeReturn } from "@/lib/data/mutations"
 import { useCustomers, useDebounced, useProductSearch, useRentals } from "@/lib/data/queries"
 import { count, dateTime, dueLabel, money, plural, round2 } from "@/lib/format"
-import { quoteRental } from "@/lib/rental"
+import { PAYMENT_METHODS, dailyValue, quoteRental } from "@/lib/rental"
 import { cn } from "@/lib/utils"
 import type { ResolveReturnResult, ReturnCondition, ReturnMatch } from "@/lib/types"
 
@@ -539,7 +539,7 @@ function SettleReturn({
   const rent = quoteRental(match.plan, match.rate, match.daysOut, qty, holidays)
   const lateFee =
     match.overdueDays > 0
-      ? round2(dailyValue(match) * (settings.rentals.lateFeeMultiplier || 0) * match.overdueDays * qty)
+      ? round2(dailyValue(match.plan, match.rate) * (settings.rentals.lateFeeMultiplier || 0) * match.overdueDays * qty)
       : 0
   const damage = condition === "good" ? 0 : match.replacementCost * qty
   const charges = round2(Math.max(0, rent.total + lateFee + damage - (discount || 0)))
@@ -816,7 +816,7 @@ function SettleReturn({
             <div className="space-y-2">
               <Label>Paid by</Label>
               <div className="grid grid-cols-2 gap-2">
-                {METHODS.map((option) => (
+                {PAYMENT_METHODS.map((option) => (
                   <button
                     key={option.value}
                     type="button"
@@ -870,13 +870,6 @@ function SettleReturn({
     </div>
   )
 }
-
-const METHODS = [
-  { value: "cash", label: "Cash" },
-  { value: "mobile", label: "Mobile banking" },
-  { value: "card", label: "Card" },
-  { value: "bank", label: "Bank transfer" },
-]
 
 /** The return is recorded: say so, and offer what usually comes next. */
 function DonePanel({
@@ -933,8 +926,3 @@ function Row({ label, value, warn }: { label: string; value: string; warn?: bool
 }
 
 /** A line's value per day, used to show the late fee. Mirrors `late_fee_for` in Django. */
-function dailyValue(match: ReturnMatch) {
-  if (match.plan === "weekly") return match.rate / 7
-  if (match.plan === "monthly") return match.rate / 30
-  return match.rate
-}

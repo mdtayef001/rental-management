@@ -14,6 +14,13 @@ from .permissions import creatable_roles
 RIGHTS = ("can_rent", "can_take_returns", "can_add_stock")
 
 
+def check_role(serializer, role):
+    """A role the acting user may hand out, or a field error. Used when adding and editing."""
+    if role not in creatable_roles(serializer.context["request"].user):
+        raise serializers.ValidationError("You can't give someone that role.")
+    return role
+
+
 def check_password_strength(password, user=None):
     """Django's validators, reported as a field error the frontend can show."""
     try:
@@ -73,10 +80,7 @@ class UserCreateSerializer(serializers.Serializer):
     can_add_stock = serializers.BooleanField(default=False)
 
     def validate_role(self, role):
-        allowed = creatable_roles(self.context["request"].user)
-        if role not in allowed:
-            raise serializers.ValidationError("You can't give someone that role.")
-        return role
+        return check_role(self, role)
 
     def validate_password(self, password):
         return check_password_strength(password)
@@ -91,10 +95,7 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         fields = ["name", "phone", "role", "is_active", *RIGHTS]
 
     def validate_role(self, role):
-        allowed = creatable_roles(self.context["request"].user)
-        if role not in allowed:
-            raise serializers.ValidationError("You can't give someone that role.")
-        return role
+        return check_role(self, role)
 
 
 class PasswordSerializer(serializers.Serializer):

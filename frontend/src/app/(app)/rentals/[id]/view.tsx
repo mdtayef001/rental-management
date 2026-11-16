@@ -25,7 +25,7 @@ import { useCurrency, useCurrentUser, useSession } from "@/components/session"
 import { useCancelRental, useRefund, useRentalPayment } from "@/lib/data/mutations"
 import { useRental } from "@/lib/data/queries"
 import { count, dateTime, dueLabel, friendlyDateTime, money, plural, whatsappLink } from "@/lib/format"
-import { PLAN_LABEL } from "@/lib/rental"
+import { PAYMENT_METHODS, PLAN_LABEL } from "@/lib/rental"
 import { StatusBadge } from "../view"
 
 /**
@@ -366,10 +366,11 @@ function PaymentDialog({
               onChange={(e) => setMethod(e.target.value)}
               className="h-9 w-full rounded-md border bg-card px-2 text-sm"
             >
-              <option value="cash">Cash</option>
-              <option value="mobile">Mobile banking</option>
-              <option value="card">Card</option>
-              <option value="bank">Bank transfer</option>
+              {PAYMENT_METHODS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </div>
           {method === "mobile" && (

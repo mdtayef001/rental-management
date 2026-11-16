@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { countDays, daysLate, quoteRental } from "@/lib/rental"
+import { countDays, dailyValue, daysLate, quoteRental } from "@/lib/rental"
 
 /**
  * The same cases as `QuoteTests` in backend/apps/rentals/tests.py.
@@ -48,6 +48,19 @@ describe("quoteRental", () => {
   it("treats nonsense input as the cheapest sane value rather than crashing", () => {
     expect(total("daily", 50, 0, 0)).toBe(50)
     expect(total("daily", -5, 3, 1)).toBe(0)
+  })
+})
+
+describe("dailyValue", () => {
+  // The same cases as `test_a_days_value_for_the_late_fee` in backend/apps/rentals/tests.py.
+  it("is a day's share of the plan's rate", () => {
+    expect(dailyValue("daily", 50)).toBe(50)
+    expect(dailyValue("weekly", 350)).toBe(50)
+    expect(dailyValue("monthly", 900)).toBe(30)
+  })
+
+  it("lets a fixed price stand in for a day", () => {
+    expect(dailyValue("fixed", 5000)).toBe(5000)
   })
 })
 

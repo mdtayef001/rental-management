@@ -26,17 +26,16 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import DecimalField, F, Prefetch, Q, Sum, Value
+from django.db.models import Prefetch, Q, Sum, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from apps.reports.services import Range, day_start, parse_date
 
+from .expressions import CHARGED, MONEY, ZERO
 from .models import Rental, RentalItem, RentalPayment, RentalReturn, RentalReturnLine
 
-ZERO = Decimal("0.00")
-MONEY = DecimalField(max_digits=14, decimal_places=2)
 
 
 def money(value):
@@ -343,7 +342,7 @@ def build_statement(business, customer, rng):
 
     # Rentals finished before the period: their charges are final, so the database adds them.
     finished = mine.filter(status=Rental.Status.RETURNED, returned_at__lt=start).aggregate(
-        n=Coalesce(Sum(F("rent_total") + F("late_fee") + F("damage_fee") - F("discount")), Value(0), output_field=MONEY)
+        n=Coalesce(Sum(CHARGED), Value(0), output_field=MONEY)
     )["n"]
     opening += finished
 

@@ -1,6 +1,6 @@
 import { round2 } from "@/lib/format"
 import { logoUrl } from "@/lib/logo"
-import { countDays, daysLate, quoteRental } from "@/lib/rental"
+import { countDays, dailyValue, daysLate, quoteRental } from "@/lib/rental"
 import type { Business, Rental, RentalPlan } from "@/lib/types"
 
 /**
@@ -109,11 +109,10 @@ export function receiptEstimate(r: ReceiptView, now = new Date()) {
     const out = open ? Math.max(0, item.quantity - item.quantityReturned - item.quantityLost) : 0
     if (!out) return { out: 0, rent: 0, lateFee: 0 }
     const plan = item.plan as RentalPlan
-    const daily = plan === "weekly" ? item.rate / 7 : plan === "monthly" ? item.rate / 30 : item.rate
     return {
       out,
       rent: round2(quoteRental(plan, item.rate, days, out).total),
-      lateFee: round2(daily * multiplier * overdueDays * out),
+      lateFee: round2(dailyValue(plan, item.rate) * multiplier * overdueDays * out),
     }
   })
   const rent = round2(lines.reduce((sum, line) => sum + line.rent, 0))

@@ -165,11 +165,13 @@ def delete_product(*, user, product):
     Either way it is refused while units are out on rent, so an item cannot vanish from the
     catalogue while a customer still has it.
     """
+    from apps.rentals.expressions import UNITS_OUT
     from apps.rentals.models import Rental, RentalItem
 
     out = (
         RentalItem.objects.filter(product=product, rental__status__in=Rental.OPEN)
-        .exclude(quantity=F("quantity_returned") + F("quantity_lost"))
+        .annotate(out=UNITS_OUT)
+        .filter(out__gt=0)
         .exists()
     )
     if out:

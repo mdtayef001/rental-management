@@ -29,6 +29,7 @@ from .serializers import (
     DeleteBusinessSerializer,
     LoginSerializer,
     LogoSerializer,
+    RIGHTS,
     PasswordSerializer,
     PlatformBusinessSerializer,
     SuspendSerializer,
@@ -231,7 +232,7 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer = UserCreateSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         data = dict(serializer.validated_data)
-        rights = {k: data.pop(k) for k in ("can_rent", "can_take_returns", "can_add_stock")}
+        rights = {k: data.pop(k) for k in RIGHTS}
         user = services.create_user(
             actor=request.user,
             name=data["name"],

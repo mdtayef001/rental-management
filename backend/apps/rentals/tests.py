@@ -444,6 +444,14 @@ class QuoteTests(TestCase):
         self.assertEqual(self.q("fixed", 5000, 90), Decimal("5000"))
         self.assertEqual(self.q("fixed", 5000, 90, quantity=3), Decimal("15000"))
 
+    def test_a_days_value_for_the_late_fee(self):
+        """Mirrored by the dailyValue cases in frontend/src/lib/__tests__/rental.test.ts."""
+        self.assertEqual(RentalItem.daily_value("daily", Decimal("50")), Decimal("50"))
+        self.assertEqual(RentalItem.daily_value("weekly", Decimal("350")), Decimal("50"))
+        self.assertEqual(RentalItem.daily_value("monthly", Decimal("900")), Decimal("30"))
+        # A fixed price has no days in it, so the price itself stands in for one.
+        self.assertEqual(RentalItem.daily_value("fixed", Decimal("5000")), Decimal("5000"))
+
     def test_counting_days_counts_any_started_day(self):
         """Out at 10:00 and back by 10:00 the next day is one day; 11:00 is two.
 

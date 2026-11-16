@@ -2,7 +2,7 @@
 
 from datetime import timedelta
 
-from django.db.models import Count, DecimalField, F, IntegerField, Q, Sum, Value
+from django.db.models import Count, F, IntegerField, Q, Sum, Value, prefetch_related_objects
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from rest_framework import mixins, status
@@ -20,7 +20,7 @@ from apps.catalog.models import Customer
 
 from . import services, statements
 from .models import Rental, RentalItem, RentalPayment, RentalReturn, RentalReturnLine
-from .services import ZERO
+from .expressions import BALANCE, MONEY, UNITS_OUT, ZERO, units_out
 from .serializers import (
     CancelSerializer,
     PaymentCreateSerializer,
@@ -33,7 +33,34 @@ from .serializers import (
     ReturnCreateSerializer,
 )
 
-MONEY = DecimalField(max_digits=14, decimal_places=2)
+
+
+def with_counts(qs):
+    """How many lines a rental has and how many units are still out, for lists and detail."""
+    return qs.annotate(
+        item_count=Count("items", distinct=True),
+        units_out=Coalesce(Sum(units_out("items__")), Value(0), output_field=IntegerField()),
+    )
+
+
+def detail_queryset(qs):
+    """Everything the rental detail serializer reads, loaded up front."""
+    return qs.select_related("customer", "created_by").prefetch_related("items", "returns__lines__item", "payments__by")
+
+
+def by_token(token, *, rental_related=(), return_related=()):
+    """The rental a receipt token belongs to, and the return it names if it is a return's.
+
+    A token is either a rental's or one of its returns'; either way the customer sees the
+    rental. Raises NotFound for anything else.
+    """
+    rental = Rental.objects.filter(token=token).select_related("business", *rental_related).first()
+    if rental is not None:
+        return rental, None
+    taken = RentalReturn.objects.filter(token=token).select_related("rental__business", *return_related).first()
+    if taken is None:
+        raise NotFound("This receipt link is no longer valid.")
+    return taken.rental, taken
 
 
 class RentalViewSet(TenantViewSet, mixins.ListModelMixin, mixins.RetrieveModelMixin):
@@ -46,20 +73,9 @@ class RentalViewSet(TenantViewSet, mixins.ListModelMixin, mixins.RetrieveModelMi
     module = "rentals"
 
     def get_queryset(self):
-        qs = (
-            Rental.objects.filter(business=self.request.user.business)
-            .select_related("customer")
-            .annotate(
-                item_count=Count("items", distinct=True),
-                units_out=Coalesce(
-                    Sum(F("items__quantity") - F("items__quantity_returned") - F("items__quantity_lost")),
-                    Value(0),
-                    output_field=IntegerField(),
-                ),
-            )
-        )
+        qs = with_counts(Rental.objects.filter(business=self.request.user.business).select_related("customer"))
         if self.action == "retrieve":
-            qs = qs.prefetch_related("items", "returns__lines__item", "payments__by")
+            qs = detail_queryset(qs)
         return qs
 
     def get_serializer_class(self):
@@ -79,7 +95,7 @@ class RentalViewSet(TenantViewSet, mixins.ListModelMixin, mixins.RetrieveModelMi
             qs = qs.filter(status__in=Rental.OPEN, due_at__gte=start, due_at__lt=start + timedelta(days=1))
         elif state == "unpaid":
             qs = qs.annotate(
-                owing=F("rent_total") + F("late_fee") + F("damage_fee") - F("discount") - F("paid_amount")
+                owing=BALANCE
             ).filter(owing__gt=0)
         elif state in Rental.Status.values:
             qs = qs.filter(status=state)
@@ -126,23 +142,8 @@ class RentalViewSet(TenantViewSet, mixins.ListModelMixin, mixins.RetrieveModelMi
 
     def full(self, rental):
         """Re-read the rental with everything the detail serializer needs."""
-        return RentalSerializer(self.get_queryset_for_detail(rental.pk)).data
-
-    def get_queryset_for_detail(self, pk):
-        return (
-            Rental.objects.filter(business=self.request.user.business, pk=pk)
-            .select_related("customer", "created_by")
-            .prefetch_related("items", "returns__lines__item", "payments__by")
-            .annotate(
-                item_count=Count("items", distinct=True),
-                units_out=Coalesce(
-                    Sum(F("items__quantity") - F("items__quantity_returned") - F("items__quantity_lost")),
-                    Value(0),
-                    output_field=IntegerField(),
-                ),
-            )
-            .get()
-        )
+        qs = with_counts(Rental.objects.filter(business=self.request.user.business, pk=rental.pk))
+        return RentalSerializer(detail_queryset(qs).get()).data
 
     # ---------- Returning ----------
 
@@ -244,7 +245,7 @@ class RentalViewSet(TenantViewSet, mixins.ListModelMixin, mixins.RetrieveModelMi
         # Two figures, not one net sum: a customer who has paid in advance must not hide
         # another who owes. `owed` is what is still to collect; `advances` is money the shop
         # is holding against rent it hasn't charged yet.
-        balance = F("rent_total") + F("late_fee") + F("damage_fee") - F("discount") - F("paid_amount")
+        balance = BALANCE
         money = qs.exclude(status=Rental.Status.CANCELLED).annotate(owing=balance).aggregate(
             owed=Coalesce(Sum("owing", filter=Q(owing__gt=0)), Value(0), output_field=MONEY),
             advances=Coalesce(Sum(-F("owing"), filter=Q(owing__lt=0)), Value(0), output_field=MONEY),
@@ -261,7 +262,7 @@ class RentalViewSet(TenantViewSet, mixins.ListModelMixin, mixins.RetrieveModelMi
         counts["revenue_month"] = earned["rent"] + earned["fees"]
         units_out = (
             RentalItem.objects.filter(rental__business=request.user.business, rental__status__in=Rental.OPEN)
-            .aggregate(n=Coalesce(Sum(F("quantity") - F("quantity_returned") - F("quantity_lost")), Value(0), output_field=IntegerField()))
+            .aggregate(n=Coalesce(Sum(UNITS_OUT), Value(0), output_field=IntegerField()))
         )["n"]
         # What has come back today, counted from the take-backs themselves. A rental only
         # reads as "returned" once its last unit is in, so counting rentals would show
@@ -329,23 +330,9 @@ class PublicReceiptView(APIView):
     authentication_classes = []
 
     def get(self, request, token):
-        rental = (
-            Rental.objects.filter(token=token)
-            .select_related("business", "customer")
-            .prefetch_related("items", "returns__lines__item")
-            .first()
-        )
-        if rental is None:
-            rental_return = (
-                RentalReturn.objects.filter(token=token)
-                .select_related("business", "rental", "rental__customer")
-                .prefetch_related("lines__item")
-                .first()
-            )
-            if rental_return is None:
-                raise NotFound("This receipt link is no longer valid.")
-            return Response(self.body(rental_return.rental, highlight=rental_return))
-        return Response(self.body(rental))
+        rental, highlight = by_token(token, rental_related=("customer",), return_related=("rental__customer",))
+        prefetch_related_objects([rental], "items", "returns__lines__item", "payments")
+        return Response(self.body(rental, highlight=highlight))
 
     def body(self, rental, highlight=None):
         business = rental.business
@@ -437,12 +424,7 @@ class PublicReceiptLogoView(APIView):
     def get(self, request, token):
         from apps.accounts.views import logo_response
 
-        rental = Rental.objects.filter(token=token).select_related("business").first()
-        if rental is None:
-            taken = RentalReturn.objects.filter(token=token).select_related("business").first()
-            if taken is None:
-                raise NotFound("This receipt link is no longer valid.")
-            return logo_response(taken.business)
+        rental, _ = by_token(token)
         return logo_response(rental.business)
 
 
