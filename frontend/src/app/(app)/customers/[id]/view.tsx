@@ -1,15 +1,17 @@
 "use client"
 
 import { useState } from "react"
-import { Archive, FileText, MessageCircle, Pencil, Phone, ReceiptText, UserX } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Archive, FileText, MessageCircle, Pencil, Phone, ReceiptText, Trash2, UserX } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ButtonLink } from "@/components/ui/button-link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { EmptyState, ErrorState, PageHeader, Pagination, Pill, TableSkeleton } from "@/components/common"
+import { ConfirmAction, EmptyState, ErrorState, PageHeader, Pagination, Pill, TableSkeleton } from "@/components/common"
 import { Code, DataView, Primary } from "@/components/data-view"
 import { CustomerDialog } from "@/components/customer-picker"
 import { CustomerPrices } from "@/components/customer-prices"
-import { useCurrency, useCurrentUser } from "@/components/session"
+import { useCurrency, useCurrentUser, useHasPermission } from "@/components/session"
+import { useDeleteCustomer } from "@/lib/data/mutations"
 import { useCustomer, usePaging, useRentals } from "@/lib/data/queries"
 import { count, date, dueLabel, money, plural, whatsappLink } from "@/lib/format"
 import { StatusBadge } from "../../rentals/view"
@@ -25,6 +27,10 @@ import { StatusBadge } from "../../rentals/view"
 export function CustomerDetailView({ id }: { id: string }) {
   const currency = useCurrency()
   const user = useCurrentUser()
+  const router = useRouter()
+  // The same gate as the server's: owners, and managers the owner lets manage customers.
+  const canRemove = useHasPermission("managerCustomers")
+  const remove = useDeleteCustomer()
   const [editing, setEditing] = useState(false)
   const { data: customer, isLoading, isError, error, refetch } = useCustomer(id)
   const { page, pageSize, setPage, setPageSize } = usePaging(id)
@@ -73,6 +79,31 @@ export function CustomerDetailView({ id }: { id: string }) {
             <FileText className="size-4" />
             Monthly bill
           </ButtonLink>
+        )}
+        {canRemove && !customer.archivedAt && (
+          <ConfirmAction
+            trigger={
+              <Button variant="outline">
+                <Trash2 className="size-4" />
+                Delete
+              </Button>
+            }
+            title={`Delete ${customer.name}?`}
+            description={
+              <>
+                They come off the customer list and can&apos;t be rented to. Their past rentals, receipts and bills
+                keep their name, so nothing in your records changes. Someone who has never rented is removed
+                completely. Not possible while they still have something out.
+              </>
+            }
+            confirmLabel="Delete"
+            destructive
+            onConfirm={async () => {
+              const { archived } = await remove.mutateAsync(id)
+              // Archived, the page still exists and now says "Removed"; deleted, it doesn't.
+              if (!archived) router.push("/customers")
+            }}
+          />
         )}
         {!customer.archivedAt && <ButtonLink href="/rent-out">Rent to them</ButtonLink>}
       </PageHeader>

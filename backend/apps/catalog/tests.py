@@ -210,6 +210,26 @@ class LowStockTests(CatalogTestCase):
         self.assertEqual(never.quantity, 0)
 
 
+class CustomerDeleteTests(CatalogTestCase):
+    """The customer page's Delete button."""
+
+    def test_leads_delete_a_customer_and_staff_cannot(self):
+        from apps.catalog.models import Customer
+
+        gone = Customer.objects.create(business=self.business, name="Typo")
+        staff = create_user(
+            actor=self.owner, name="S", email="s@example.com", password=PASSWORD, role=User.Role.STAFF,
+        )
+        self.login(staff)
+        self.assertEqual(self.client.delete(f"/api/customers/{gone.id}/").status_code, 403)
+
+        self.login(self.owner)
+        res = self.client.delete(f"/api/customers/{gone.id}/")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json(), {"archived": False})
+        self.assertFalse(Customer.objects.filter(pk=gone.pk).exists())
+
+
 class ProductTests(CatalogTestCase):
     def test_a_rentable_product_needs_at_least_one_rate(self):
         self.login(self.owner)
