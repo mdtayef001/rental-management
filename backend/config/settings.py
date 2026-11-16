@@ -34,7 +34,6 @@ if not SECRET_KEY:
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
 
 INSTALLED_APPS = [
-    "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
@@ -193,6 +192,8 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(hours=12),
     "ROTATE_REFRESH_TOKENS": False,
     "UPDATE_LAST_LOGIN": True,
+    # Tokens carry a hash of the password, so a password reset ends every session at once.
+    "CHECK_REVOKE_TOKEN": True,
 }
 
 # The Next.js app calls the API from its own server, but allow the browser too.

@@ -122,6 +122,27 @@ class LoginTests(ApiTestCase):
         again = self.client.post("/api/auth/refresh/", {"refresh": refresh}, format="json")
         self.assertEqual(again.status_code, 401)
 
+    def test_logout_works_without_an_access_token(self):
+        """The web app's server logs out with only the refresh token, often after the access
+        token has expired. That alone has to be enough to blacklist it."""
+        res = self.client.post("/api/auth/login/", {"email": "owner@example.com", "password": PASSWORD}, format="json")
+        refresh = res.data["refresh"]
+        self.anonymous()
+        out = self.client.post("/api/auth/logout/", {"refresh": refresh}, format="json")
+        self.assertEqual(out.status_code, 204)
+        again = self.client.post("/api/auth/refresh/", {"refresh": refresh}, format="json")
+        self.assertEqual(again.status_code, 401)
+
+    def test_there_is_no_django_admin_login(self):
+        """The admin login would be a second, unthrottled way to check the super admin's
+        password, so it isn't mounted and nobody is staff."""
+        self.anonymous()
+        res = self.client.post("/admin/login/", {"username": "root@example.com", "password": PASSWORD})
+        self.assertEqual(res.status_code, 404)
+        self.superadmin.refresh_from_db()
+        self.assertFalse(self.superadmin.is_staff)
+        self.assertFalse(self.superadmin.is_superuser)
+
     def test_every_endpoint_needs_a_login(self):
         self.anonymous()
         for path in ("/api/auth/me/", "/api/products/", "/api/rentals/", "/api/customers/", "/api/stock/movements/"):
@@ -350,3 +371,37 @@ class CrossTenantTests(ApiTestCase):
         self.assertEqual(res.status_code, 400)
         self.their_product.refresh_from_db()
         self.assertEqual(self.their_product.quantity, 10)
+
+
+class PasswordResetSessionTests(ApiTestCase):
+    """A reset is how a taken-over account is recovered, so it must end every session."""
+
+    def tokens(self, email):
+        res = self.client.post("/api/auth/login/", {"email": email, "password": PASSWORD}, format="json")
+        self.assertEqual(res.status_code, 200)
+        return res.data["access"], res.data["refresh"]
+
+    def assert_session_ended(self, access, refresh):
+        self.client.credentials()
+        self.assertEqual(self.client.post("/api/auth/refresh/", {"refresh": refresh}, format="json").status_code, 401)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {access}")
+        self.assertEqual(self.client.get("/api/auth/me/").status_code, 401)
+
+    def test_resetting_a_team_members_password_ends_their_sessions(self):
+        staff = create_user(actor=self.owner, name="Staff", email="staff@example.com", password=PASSWORD, role=User.Role.STAFF)
+        access, refresh = self.tokens("staff@example.com")
+        self.as_user(self.owner)
+        res = self.client.post(f"/api/users/{staff.id}/password/", {"password": "another-horse-battery"}, format="json")
+        self.assertEqual(res.status_code, 204)
+        self.assert_session_ended(access, refresh)
+
+    def test_the_super_admin_resetting_the_owners_password_ends_their_sessions(self):
+        access, refresh = self.tokens("owner@example.com")
+        self.as_user(self.superadmin)
+        res = self.client.post(
+            f"/api/platform/businesses/{self.business.id}/owner-password/",
+            {"password": "another-horse-battery"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 204)
+        self.assert_session_ended(access, refresh)

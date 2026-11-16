@@ -94,7 +94,7 @@ requests.
 Django runs as a single Vercel Python function. `backend/api/index.py` exposes the WSGI
 app and `backend/vercel.json` routes every path to it with `routes`/`dest` rather than
 `rewrites` — a rewrite replaces the path the function is handed, which makes Django answer
-404 to everything, `/admin/` included.
+404 to everything.
 
 The seeded one-click logins on the login page are shown in a production build only when
 `NEXT_PUBLIC_SHOW_DEMO_LOGINS=true`. It is set on the demo deployment and should stay
@@ -115,7 +115,7 @@ database table whenever the database is PostgreSQL.
 ## Tests
 
 ```bash
-cd backend  && .venv/bin/python manage.py test   # 172 tests
+cd backend  && .venv/bin/python manage.py test   # 179 tests
 cd frontend && npm test && npm run typecheck     # 18 tests
 ```
 

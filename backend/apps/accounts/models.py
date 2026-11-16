@@ -202,8 +202,10 @@ class User(AbstractUser):
         return self._right("can_add_stock")
 
     def save(self, *args, **kwargs):
-        # Super admins get Django admin access; everyone else uses the app only.
-        self.is_staff = self.is_superuser = self.role == self.Role.SUPERADMIN
+        # There is no Django admin: the super admin works through the platform API, which is
+        # behind the login throttles. A staff flag would only open a second, unthrottled
+        # password check if the admin were ever mounted again.
+        self.is_staff = self.is_superuser = False
         super().save(*args, **kwargs)
 
 

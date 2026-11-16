@@ -7,6 +7,7 @@ always agree) live in one place instead of being repeated in every view that tou
 
 from django.db import transaction
 from rest_framework.exceptions import ValidationError
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 
 from .models import Business, User, log
 
@@ -56,7 +57,15 @@ def create_user(*, actor, name, email, password, role, rights=None, phone=""):
 
 @transaction.atomic
 def set_password(*, actor, user, password):
+    """Sets a new password and ends every session the user already has.
+
+    A reset is how an account is recovered after someone else got into it, so their tokens
+    must stop working too: refresh tokens are blacklisted here, and access tokens carry a
+    hash of the password (CHECK_REVOKE_TOKEN), so they fail as soon as it changes.
+    """
     user.set_password(password)
     user.save(update_fields=["password"])
+    for token in OutstandingToken.objects.filter(user=user):
+        BlacklistedToken.objects.get_or_create(token=token)
     log(actor, "Password changed", user.name)
     return user

@@ -349,7 +349,6 @@ class PublicReceiptView(APIView):
                 "paidAmount": rental.paid_amount,
                 "charges": rental.charges,
                 "balance": rental.balance,
-                "notes": rental.notes,
             },
             "items": [
                 {

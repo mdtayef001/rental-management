@@ -33,7 +33,6 @@ interface Receipt {
     paidAmount: number
     charges: number
     balance: number
-    notes: string
   }
   items: {
     productName: string

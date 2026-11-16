@@ -2,7 +2,6 @@
 
 import hashlib
 
-from django.contrib.auth import update_session_auth_hash  # noqa: F401  (kept for admin flows)
 from django.db import transaction
 from django.db.models import Count, Prefetch, Q
 from rest_framework import mixins, status, viewsets
@@ -75,7 +74,15 @@ class LoginView(TokenObtainPairView):
 
 
 class LogoutView(APIView):
-    """Blacklists the refresh token, so it stops working even if someone copied it."""
+    """Blacklists the refresh token, so it stops working even if someone copied it.
+
+    The signed refresh token is the credential. Logout often happens because the 15-minute
+    access token has already expired, and the web app's server sends no Authorization
+    header, so requiring one here meant the blacklist was never reached.
+    """
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
 
     def post(self, request):
         token = request.data.get("refresh")
@@ -373,8 +380,7 @@ class PlatformBusinessViewSet(viewsets.ModelViewSet):
             raise ValidationError("This business has no owner account.")
         serializer = PasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        owner.set_password(serializer.validated_data["password"])
-        owner.save(update_fields=["password"])
+        services.set_password(actor=request.user, user=owner, password=serializer.validated_data["password"])
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @transaction.atomic

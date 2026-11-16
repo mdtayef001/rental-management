@@ -542,7 +542,9 @@ function SettleReturn({
       ? round2(dailyValue(match.plan, match.rate) * (settings.rentals.lateFeeMultiplier || 0) * match.overdueDays * qty)
       : 0
   const damage = condition === "good" ? 0 : match.replacementCost * qty
-  const charges = round2(Math.max(0, rent.total + lateFee + damage - (discount || 0)))
+  // The server refuses a discount bigger than this return charges, so the field stops there.
+  const gross = round2(rent.total + lateFee + damage)
+  const charges = round2(Math.max(0, gross - (discount || 0)))
   // What they paid in advance is used first; only the rest is asked for now.
   const credit = match.rentalCredit
   const fromAdvance = Math.min(credit, charges)
@@ -721,9 +723,10 @@ function SettleReturn({
                       id="discount"
                       type="number"
                       min={0}
+                      max={gross}
                       step="0.01"
                       value={discount || ""}
-                      onChange={(e) => setDiscount(Math.max(0, Number(e.target.value)))}
+                      onChange={(e) => setDiscount(Math.min(gross, Math.max(0, Number(e.target.value))))}
                       placeholder="0.00"
                       className="tabular-nums"
                     />

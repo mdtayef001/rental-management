@@ -8,7 +8,7 @@ not the project root, and `config.settings` would not be importable otherwise.
 `vercel.json` routes every path here, so this one function answers the whole API, and the
 real routing still happens in `config/urls.py`. It uses the `routes`/`dest` form rather
 than `rewrites`: a rewrite replaces the path the function is handed, so Django would see
-`/api/index` for every request and answer 404 to all of them, including `/admin/`.
+`/api/index` for every request and answer 404 to all of them.
 """
 
 import sys

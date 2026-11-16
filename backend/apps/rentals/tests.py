@@ -516,6 +516,32 @@ class MoneyTests(RentalTestCase):
         with self.assertRaises(ValidationError):
             services.refund(user=self.owner, rental=rental, amount=Decimal("50.00"))
 
+    def test_a_discount_cannot_be_more_than_the_return_charges(self):
+        """Otherwise charges go below zero and become 'credit' that was never paid in,
+        which a refund would then hand out as cash."""
+        start = days_ago(2)
+        rental = self.rent(self.mr_x, [{"product": self.machine, "quantity": 1, "plan": "daily"}], started_at=start)
+        with self.assertRaises(ValidationError):
+            services.take_return(
+                user=self.owner, rental=rental, at=start + timedelta(days=2),
+                lines=[{"item": rental.items.get(), "quantity": 1}], discount=Decimal("10000.00"),
+            )
+        rental.refresh_from_db()
+        self.assertEqual(rental.discount, Decimal("0.00"))
+        self.assertEqual(rental.payments.count(), 0)
+
+    def test_a_full_discount_leaves_nothing_to_give_back(self):
+        start = days_ago(2)
+        rental = self.rent(self.mr_x, [{"product": self.machine, "quantity": 1, "plan": "daily"}], started_at=start)
+        services.take_return(
+            user=self.owner, rental=rental, at=start + timedelta(days=2),
+            lines=[{"item": rental.items.get(), "quantity": 1}], discount=Decimal("100.00"),
+        )
+        rental.refresh_from_db()
+        self.assertEqual(rental.charges, Decimal("0.00"))
+        with self.assertRaises(ValidationError):
+            services.refund(user=self.owner, rental=rental, amount=Decimal("1.00"))
+
     def test_the_balance_is_charges_less_what_was_paid(self):
         start = days_ago(2)
         rental = self.rent(self.mr_x, [{"product": self.machine, "quantity": 1, "plan": "daily"}], started_at=start)
@@ -538,6 +564,21 @@ class MoneyTests(RentalTestCase):
         services.take_return(user=self.owner, rental=rental, lines=[{"item": rental.items.get(), "quantity": 10}])
         with self.assertRaises(ValidationError):
             services.cancel_rental(user=self.owner, rental=rental)
+
+
+class PublicReceiptTests(RentalTestCase):
+    def test_the_public_receipt_leaves_out_staff_notes(self):
+        """Anyone with the receipt link can read it, so internal notes and cancellation
+        reasons stay inside the shop."""
+        rental = self.rent(
+            self.mr_x, [{"product": self.machine, "quantity": 1, "plan": "daily"}], notes="Holding NID as surety"
+        )
+        services.cancel_rental(user=self.owner, rental=rental, reason="Customer unreliable")
+        res = self.client.get(f"/api/receipts/{rental.token}/")
+        self.assertEqual(res.status_code, 200)
+        self.assertNotIn("notes", res.json()["rental"])
+        self.assertNotIn("surety", res.content.decode())
+        self.assertNotIn("unreliable", res.content.decode())
 
 
 class TenantIsolationTests(RentalTestCase):

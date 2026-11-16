@@ -455,6 +455,14 @@ def take_return(*, user, rental, lines, at=None, discount=ZERO, paid_amount=ZERO
         late_total += late
         damage_total += damage
 
+    # A discount reduces what this return charges and nothing more. Letting it go further
+    # would push the rental's charges below zero and turn into "credit" the customer never
+    # paid, which refund() would then hand out as cash.
+    if (discount or ZERO) > rent_total + late_total + damage_total:
+        raise ValidationError(
+            f"The discount can't be more than this return charges ({rent_total + late_total + damage_total})."
+        )
+
     rental_return.rent_total = rent_total
     rental_return.late_fee = late_total
     rental_return.damage_fee = damage_total
@@ -556,10 +564,13 @@ def refund(*, user, rental, amount, method="", reference="", note="", rental_ret
     rental = Rental.objects.select_for_update(of=("self",)).get(pk=rental.pk)
     if amount <= 0:
         raise ValidationError("A refund has to be more than zero.")
-    if amount > rental.credit:
+    # Never more than money actually received: credit alone could be inflated by charges
+    # that went below zero, and cash can't go back out if it never came in.
+    refundable = max(min(rental.credit, rental.paid_amount), ZERO)
+    if amount > refundable:
         raise ValidationError(
-            f"Only {rental.credit} has been paid beyond what {rental.code} has been charged."
-            if rental.credit
+            f"Only {refundable} has been paid beyond what {rental.code} has been charged."
+            if refundable
             else f"Nothing has been paid beyond what {rental.code} has been charged."
         )
     RentalPayment.objects.create(
