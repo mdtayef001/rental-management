@@ -20,7 +20,7 @@ import { Code, DataView, Primary, type Column } from "@/components/data-view"
 import { ProductDialog } from "@/components/product-form"
 import { StockAdjustDialog } from "@/components/stock-adjust"
 import { useDeleteProduct } from "@/lib/data/mutations"
-import { useCurrency, useSettings } from "@/components/session"
+import { useCurrency } from "@/components/session"
 import { useCategories, useDebounced, usePaging, useProducts } from "@/lib/data/queries"
 import { count, money } from "@/lib/format"
 import type { Product } from "@/lib/types"
@@ -41,7 +41,6 @@ export function ProductsView({
   canDelete: boolean
 }) {
   const currency = useCurrency()
-  const settings = useSettings()
   const categories = useCategories()
   const params = useSearchParams()
   const [text, setText] = useState("")
@@ -69,9 +68,6 @@ export function ProductsView({
     { pageSize },
   )
 
-  function isLow(product: Product) {
-    return product.onHand <= (product.lowStockThreshold || settings.lowStockAlert)
-  }
 
   const columns: Column<Product>[] = [
     {
@@ -98,7 +94,7 @@ export function ProductsView({
       cell: (product) =>
         !product.rentable ? (
           <Badge variant="outline">Not for rent</Badge>
-        ) : isLow(product) ? (
+        ) : product.isLow ? (
           <Badge variant="warning">Low stock</Badge>
         ) : null,
     },
@@ -121,7 +117,7 @@ export function ProductsView({
       header: "On shelf",
       align: "end",
       cell: (product) => (
-        <span className={isLow(product) ? "font-medium text-warning-soft-foreground dark:text-warning" : undefined}>
+        <span className={product.isLow ? "font-medium text-warning-soft-foreground dark:text-warning" : undefined}>
           {count(product.onHand)}
         </span>
       ),

@@ -4,7 +4,7 @@
 in rentals starts from `business=request.user.business`, so no view can forget.
 """
 
-from django.db.models import Count, DecimalField, F, IntegerField, OuterRef, Q, Subquery, Sum, Value
+from django.db.models import BooleanField, Count, DecimalField, ExpressionWrapper, F, IntegerField, OuterRef, Q, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -89,6 +89,7 @@ class ProductViewSet(TenantViewSet, viewsets.ModelViewSet):
         """
         from apps.rentals.models import Rental, RentalItem
 
+        business = self.request.user.business
         out_on_rent = (
             RentalItem.objects.filter(product=OuterRef("pk"), rental__status__in=Rental.OPEN)
             .values("product")
@@ -96,8 +97,11 @@ class ProductViewSet(TenantViewSet, viewsets.ModelViewSet):
             .values("n")
         )
         return (
-            Product.objects.filter(business=self.request.user.business)
-            .annotate(out_on_rent=Coalesce(Subquery(out_on_rent, output_field=IntegerField()), Value(0)))
+            Product.objects.filter(business=business)
+            .annotate(
+                out_on_rent=Coalesce(Subquery(out_on_rent, output_field=IntegerField()), Value(0)),
+                is_low=ExpressionWrapper(services.low_stock_q(business), output_field=BooleanField()),
+            )
         )
 
     def filter_queryset(self, qs):
@@ -115,11 +119,7 @@ class ProductViewSet(TenantViewSet, viewsets.ModelViewSet):
         if params.get("in_stock") == "1":
             qs = qs.filter(quantity__gt=0)
         if params.get("low_stock") == "1":
-            default = self.request.user.business.low_stock_alert
-            qs = qs.filter(
-                Q(low_stock_threshold__gt=0, quantity__lte=F("low_stock_threshold"))
-                | Q(low_stock_threshold=0, quantity__lte=default)
-            )
+            qs = qs.filter(is_low=True)
         order = params.get("sort", "")
         return qs.order_by({"name": "name", "stock": "quantity", "newest": "-created_at"}.get(order, "-created_at"))
 
@@ -210,16 +210,12 @@ class StockViewSet(TenantViewSet):
     def summary(self, request):
         """Totals for the stock page header, all in one query."""
         qs = self.get_queryset()
-        default = request.user.business.low_stock_alert
         totals = qs.aggregate(
             units=Coalesce(Sum("quantity"), Value(0)),
             lines=Count("id"),
+            low=Count("id", filter=services.low_stock_q(request.user.business)),
         )
-        low = qs.filter(
-            Q(low_stock_threshold__gt=0, quantity__lte=F("low_stock_threshold"))
-            | Q(low_stock_threshold=0, quantity__lte=default)
-        ).count()
-        return Response({"units": totals["units"], "lines": totals["lines"], "lowStock": low})
+        return Response({"units": totals["units"], "lines": totals["lines"], "lowStock": totals["low"]})
 
     @action(detail=False, methods=["post"])
     def adjust(self, request):

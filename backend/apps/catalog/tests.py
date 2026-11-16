@@ -187,6 +187,29 @@ class QueryParameterTests(CatalogTestCase):
         self.assertEqual(len(self.body(self.client.get("/api/customers/"))), 2)
 
 
+class LowStockTests(CatalogTestCase):
+    """Low stock has one meaning: the list filter, each product's flag and the dashboard agree."""
+
+    def test_the_dashboard_count_equals_the_list_including_a_never_stocked_product(self):
+        # The machine warns at 10 and has 5; this one was never stocked at all.
+        adjust_stock(
+            user=self.owner, product=self.machine, quantity=5, reason=StockMovement.Reason.ADJUSTMENT,
+        )
+        never = create_product(user=self.owner, sku="NEW-1", name="Never stocked", rentable=True, rent_daily=Decimal("5.00"))
+        plenty = create_product(user=self.owner, sku="FULL-1", name="Plenty", rentable=True, rent_daily=Decimal("5.00"))
+        adjust_stock(user=self.owner, product=plenty, quantity=500, reason=StockMovement.Reason.ADJUSTMENT)
+        self.login(self.owner)
+
+        listed = self.client.get("/api/products/?lowStock=1&page=1").json()
+        names = sorted(p["name"] for p in listed["results"])
+        self.assertEqual(names, ["Never stocked", "Sewing machine"])
+        self.assertEqual(self.client.get("/api/stock/summary/").json()["lowStock"], listed["count"])
+
+        flags = {p["name"]: p["isLow"] for p in self.client.get("/api/products/").json()}
+        self.assertEqual(flags, {"Sewing machine": True, "Never stocked": True, "Plenty": False})
+        self.assertEqual(never.quantity, 0)
+
+
 class ProductTests(CatalogTestCase):
     def test_a_rentable_product_needs_at_least_one_rate(self):
         self.login(self.owner)

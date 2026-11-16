@@ -65,6 +65,18 @@ def adjust_stock(*, user, product, quantity, reason, note=""):
     return quantity
 
 
+def low_stock_q(business):
+    """The one definition of low stock: on the shelf at or below the product's own alert,
+    or the business's default alert when the product has none.
+
+    The products filter, the `is_low` flag on each product and the dashboard's count all
+    use this, so they can't disagree.
+    """
+    return Q(low_stock_threshold__gt=0, quantity__lte=F("low_stock_threshold")) | Q(
+        low_stock_threshold=0, quantity__lte=business.low_stock_alert
+    )
+
+
 def find_by_code(business, code, *, rentable_only=False):
     """Resolve a scanned or typed code to one product.
 

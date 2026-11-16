@@ -46,7 +46,7 @@ export function ProductDetailView({
   if (isLoading || !product) return <TableSkeleton rows={5} columns={4} />
 
   const threshold = product.lowStockThreshold || settings.lowStockAlert
-  const low = !product.archivedAt && product.onHand <= threshold
+  const low = !product.archivedAt && product.isLow
   const rates = [
     { label: "Per day", value: product.rentDaily },
     { label: "Per week", value: product.rentWeekly },

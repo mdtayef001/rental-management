@@ -23,10 +23,12 @@ class ProductSerializer(serializers.ModelSerializer):
     id = IdField()
     on_hand = serializers.IntegerField(source="quantity", read_only=True)
     out_on_rent = serializers.IntegerField(read_only=True, default=0)
+    # At or below its low-stock alert: see `services.low_stock_q`, which the viewset annotates.
+    is_low = serializers.BooleanField(read_only=True, default=False)
 
     class Meta:
         model = Product
-        fields = ["id", *PRODUCT_FIELDS, "on_hand", "out_on_rent", "archived_at", "created_at"]
+        fields = ["id", *PRODUCT_FIELDS, "on_hand", "out_on_rent", "is_low", "archived_at", "created_at"]
 
 
 class ProductWriteSerializer(serializers.ModelSerializer):

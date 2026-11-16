@@ -102,6 +102,8 @@ export interface Product {
   /** Quantity on the shelf, ready to go out. */
   onHand: number
   outOnRent: number
+  /** At or below its low-stock alert. Worked out by the server, the one place the rule lives. */
+  isLow: boolean
   archivedAt: string | null
   createdAt: string
 }
