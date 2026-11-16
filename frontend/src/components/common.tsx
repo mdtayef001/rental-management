@@ -857,33 +857,3 @@ export function Field({
     </div>
   )
 }
-
-/** A titled block of content. The app's one container; nothing nests inside another. */
-export function Section({
-  title,
-  description,
-  actions,
-  children,
-  className,
-}: {
-  title?: string
-  description?: string
-  actions?: React.ReactNode
-  children: React.ReactNode
-  className?: string
-}) {
-  return (
-    <section className={cn("space-y-3", className)}>
-      {(title || actions) && (
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            {title && <h2 className="font-heading font-semibold">{title}</h2>}
-            {description && <p className="text-sm text-muted-foreground">{description}</p>}
-          </div>
-          {actions}
-        </div>
-      )}
-      {children}
-    </section>
-  )
-}

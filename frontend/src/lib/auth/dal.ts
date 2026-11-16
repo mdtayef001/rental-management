@@ -3,7 +3,7 @@ import { cache } from "react"
 import { redirect } from "next/navigation"
 import { ApiError } from "@/lib/api/errors"
 import { api } from "@/lib/api/server"
-import type { Business, Role, SessionUser } from "@/lib/types"
+import type { Business, SessionUser } from "@/lib/types"
 import { ROLE_HOME, canAccess } from "./roles"
 
 export interface Context {
@@ -33,18 +33,6 @@ export const getContext = cache(async (): Promise<Context | null> => {
   if (!business || business.suspended) return null
   return { user, business }
 })
-
-export async function getCurrentUser() {
-  return (await getContext())?.user ?? null
-}
-
-/** Use at the top of a page or server action. Redirects rather than rendering an error. */
-export async function requireRole(roles: Role[]): Promise<Context> {
-  const ctx = await getContext()
-  if (!ctx) redirect("/logout")
-  if (!roles.includes(ctx.user.role)) redirect(ROLE_HOME[ctx.user.role])
-  return ctx
-}
 
 /** Business pages: checks the role, the owner's feature switches and the per-person rights. */
 export async function requireAccess(path: string): Promise<{ user: SessionUser; business: Business }> {

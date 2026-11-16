@@ -1,5 +1,4 @@
-import { addDays, differenceInCalendarDays } from "date-fns"
-import type { Rental, RentalPlan } from "@/lib/types"
+import type { RentalPlan } from "@/lib/types"
 
 // The price arithmetic, duplicated from backend/apps/rentals/models.py (RentalItem.quote).
 //
@@ -86,22 +85,6 @@ export function daysLate(dueAt: string | null, at: string | Date = new Date()) {
   const due = new Date(dueAt).getTime()
   const now = new Date(at).getTime()
   return now <= due ? 0 : countDays(dueAt, at)
-}
-
-/** Positive = days overdue, negative = days remaining, null = open-ended. */
-export function overdueDays(rental: Pick<Rental, "dueAt">, now = new Date()) {
-  return rental.dueAt ? differenceInCalendarDays(now, new Date(rental.dueAt)) : null
-}
-
-export function isOverdue(rental: Pick<Rental, "status" | "dueAt">, now = new Date()) {
-  const open = rental.status === "active" || rental.status === "partly_returned"
-  return open && !!rental.dueAt && new Date(rental.dueAt).getTime() < now.getTime()
-}
-
-/** When a rental starting now on this plan would be due back, for prefilling the form. */
-export function suggestedDueDate(plan: RentalPlan, periods = 1, from = new Date()) {
-  if (plan === "fixed") return null
-  return addDays(from, PLAN_DAYS[plan] * Math.max(1, periods))
 }
 
 /** The product's rate for a plan, or null when it has none set. */

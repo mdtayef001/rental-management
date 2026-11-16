@@ -22,7 +22,7 @@ period that return happened in.
 """
 
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import timedelta
 from decimal import Decimal
 
 from django.db import transaction

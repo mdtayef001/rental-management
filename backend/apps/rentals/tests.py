@@ -17,7 +17,7 @@ from apps.accounts.services import create_business, create_user
 from apps.catalog.models import StockLevel, StockMovement
 from apps.catalog.services import adjust_stock, find_by_code
 from apps.rentals import services
-from apps.rentals.models import Rental, RentalItem, RentalPayment, RentalReturn, RentalReturnLine
+from apps.rentals.models import Rental, RentalItem, RentalPayment, RentalReturnLine
 
 
 def days_ago(n):

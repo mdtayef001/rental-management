@@ -204,14 +204,12 @@ class PlatformBusinessSerializer(serializers.ModelSerializer):
     owner_name = serializers.SerializerMethodField()
     owner_email = serializers.SerializerMethodField()
     user_count = serializers.IntegerField(read_only=True)
-    product_count = serializers.IntegerField(read_only=True)
-    open_rental_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Business
         fields = [
             "id", "name", "industry", "phone", "address", "status", "suspended", "suspended_reason",
-            "owner_name", "owner_email", "user_count", "product_count", "open_rental_count", "created_at",
+            "owner_name", "owner_email", "user_count", "created_at",
         ]
 
     def _owner(self, business):

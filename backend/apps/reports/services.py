@@ -599,7 +599,6 @@ def overview(business: Business, rng: Range, group=""):
             "currency": business.settings.get("currency", "BDT"),
         },
         "generated_at": timezone.now(),
-        "label": range_label(rng),
         "summary": summary(business, rng),
         "group": group,
         "revenue": series,
@@ -607,10 +606,3 @@ def overview(business: Business, rng: Range, group=""):
         "customers": top_customers(business, rng, limit=10),
         "debtors": debtors(business, limit=15),
     }
-
-
-def range_label(rng: Range):
-    first, last = rng.start.date(), rng.last_day
-    if first == last:
-        return f"{first.day} {first:%B %Y}"
-    return f"{first.day} {first:%b %Y} – {last.day} {last:%b %Y}"

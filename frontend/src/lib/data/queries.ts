@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useSearchParams } from "next/navigation"
 import { keepPreviousData, queryOptions, useQuery, useQueryClient } from "@tanstack/react-query"
 import { request } from "@/lib/api/client"
 import type {
@@ -18,7 +17,6 @@ import type {
   RentalReturn,
   RentalSummary,
   SessionUser,
-  StockLevel,
   StockMovement,
   CustomerReportRow,
   DebtorRow,
@@ -114,19 +112,6 @@ export function useDebounced<T>(value: T, ms = 300) {
     return () => clearTimeout(timer)
   }, [value, ms])
   return settled
-}
-
-/** A list's search box, filled from `?q=` so another screen can link straight to a match. */
-export function useLinkedSearch(onLink?: (q: string) => void) {
-  const linked = useSearchParams().get("q") ?? ""
-  const [query, setQuery] = useState(linked)
-  const [seen, setSeen] = useState(linked)
-  if (linked !== seen) {
-    setSeen(linked)
-    setQuery(linked)
-    onLink?.(linked)
-  }
-  return [query, setQuery] as const
 }
 
 // ---------- Small lists, cached longer ----------
@@ -253,7 +238,6 @@ export const useProducts = (params: Params & { page: number }, o?: ListOptions) 
 export const useCustomers = (params: Params & { page: number }, o?: ListOptions) => usePage<Customer>("customers/", params, o)
 export const useRentals = (params: Params & { page: number }, o?: ListOptions) => usePage<Rental>("rentals/", params, o)
 export const useReturns = (params: Params & { page: number }, o?: ListOptions) => usePage<RentalReturn>("returns/", params, o)
-export const useStock = (params: Params & { page: number }, o?: ListOptions) => usePage<StockLevel>("stock/", params, o)
 export const useStockMovements = (params: Params & { page: number }, o?: ListOptions) =>
   usePage<StockMovement>("stock/movements/", params, o)
 export const useActivity = (params: Params & { page: number }, o?: ListOptions) => usePage<Activity>("activity/", params, o)

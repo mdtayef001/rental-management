@@ -5,7 +5,7 @@ import { z } from "zod"
 import { API_URL } from "@/lib/api/config"
 import { SERVER_TIMEOUT_MS, errorMessage } from "@/lib/api/errors"
 import { isAppRoute } from "./roles"
-import { createSession, deleteSession } from "./session"
+import { createSession } from "./session"
 
 // `FormData.get` returns null for a field that isn't on the form, so every optional
 // field has to accept null rather than only undefined.
@@ -59,9 +59,4 @@ export async function login(_state: LoginState, form: FormData): Promise<LoginSt
   await createSession({ access: data.access, refresh: data.refresh })
   // Only an in-app path, so `?next=` can't be used to bounce someone to another site.
   redirect(next && isAppRoute(next) ? next : "/")
-}
-
-export async function logout() {
-  await deleteSession()
-  redirect("/login")
 }

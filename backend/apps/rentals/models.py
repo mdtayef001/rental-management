@@ -12,7 +12,6 @@ changing a product's price later never rewrites a past rental.
 
 import math
 import secrets
-from datetime import timedelta
 
 from django.conf import settings
 from django.core.validators import MinValueValidator

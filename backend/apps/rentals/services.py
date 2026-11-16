@@ -16,7 +16,7 @@ Three rules hold this file together:
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import F, Max, Q, Sum
+from django.db.models import F, Max
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
@@ -151,7 +151,7 @@ def create_rental(*, user, customer, branch, lines, started_at=None, due_at=None
         user,
         "Rented out",
         f"{rental.code} · {sum(i.quantity for i in items)} units across {len(items)} product(s)"
-        + (f" to {customer.name}" if customer else " (walk-in)"),
+        + f" to {customer.name}",
     )
     return rental
 

@@ -6,7 +6,7 @@ go negative and writes a ledger entry. Nothing else is allowed to touch
 """
 
 from django.db import transaction
-from django.db.models import F, Q, Sum
+from django.db.models import F, Q
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
@@ -84,10 +84,6 @@ def availability(product, branch=None):
         rows = rows.filter(branch=branch)
         return rows.values_list("quantity", flat=True).first() or 0
     return {str(branch_id): qty for branch_id, qty in rows.values_list("branch_id", "quantity")}
-
-
-def total_on_hand(product):
-    return StockLevel.objects.filter(product=product).aggregate(n=Sum("quantity"))["n"] or 0
 
 
 def find_by_code(business, code, *, rentable_only=False):

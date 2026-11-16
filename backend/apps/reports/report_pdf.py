@@ -8,7 +8,7 @@ page.
 
 from datetime import date
 
-from reportlab.platypus import CondPageBreak, KeepTogether, Spacer, Table, TableStyle
+from reportlab.platypus import CondPageBreak, KeepTogether, Spacer
 
 from apps.sheet_pdf import LINE, THIN, TINT, Sheet, cash, day  # noqa: F401
 
@@ -44,10 +44,7 @@ def render(report, logo=None):
     def money(value):
         return cash(value, currency)
 
-    try:
-        label = range_label(date.fromisoformat(s["from"]), date.fromisoformat(s["to"]))
-    except (KeyError, ValueError):
-        label = report["label"]
+    label = range_label(date.fromisoformat(s["from"]), date.fromisoformat(s["to"]))
 
     sheet = Sheet(title=f"Report {label}", author=business["name"])
     p = sheet.p

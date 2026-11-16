@@ -206,8 +206,3 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = "DENY"
-
-# ---------- App ----------
-
-# Public address of the Next.js app, used in the receipt links customers open.
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")

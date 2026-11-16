@@ -5,7 +5,7 @@ from datetime import timedelta
 from django.db.models import Count, DecimalField, F, IntegerField, Q, Sum, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
-from rest_framework import mixins, status, viewsets
+from rest_framework import mixins, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -236,7 +236,6 @@ class RentalViewSet(TenantViewSet, mixins.ListModelMixin, mixins.RetrieveModelMi
         into Python to count how many are overdue.
         """
         qs = self.scope_to_branches(Rental.objects.filter(business=request.user.business))
-        now = timezone.now()
         start = timezone.localtime().replace(hour=0, minute=0, second=0, microsecond=0)
         month_start = start.replace(day=1)
 

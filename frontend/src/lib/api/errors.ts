@@ -42,15 +42,3 @@ export function unreachable(err: unknown): ApiError {
     ? new ApiError(504, "The server took too long to answer. Please try again.")
     : new ApiError(503, "Couldn't reach the server. Check your connection and try again.")
 }
-
-/** Field-by-field errors, for marking up a form rather than showing one sentence. */
-export function fieldErrors(data: unknown): Record<string, string> {
-  if (!data || typeof data !== "object" || Array.isArray(data)) return {}
-  const out: Record<string, string> = {}
-  for (const [key, value] of Object.entries(data)) {
-    if (key === "detail") continue
-    const message = Array.isArray(value) ? value.find((v) => typeof v === "string") : value
-    if (typeof message === "string") out[key] = message
-  }
-  return out
-}

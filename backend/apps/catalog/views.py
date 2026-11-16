@@ -12,7 +12,7 @@ from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.accounts.models import Branch, User, log
+from apps.accounts.models import User, log
 from apps.accounts.permissions import LEADS, TEAM, IsTenantMember, ManagerNeedsPermission
 from apps.api import Pagination
 
