@@ -27,6 +27,8 @@ export const metadata: Metadata = {
   title: { default: "Rental Manager", template: "%s · Rental Manager" },
   description: "Rent out stock, take it back by scanning, and keep the books straight.",
   appleWebApp: { capable: true, statusBarStyle: "default", title: "Rental Manager" },
+  // iOS ignores the manifest's icons and uses this for "Add to Home Screen".
+  icons: { apple: "/icons/apple-touch-icon.png" },
   robots: { index: false, follow: false },
 }
 
@@ -35,6 +37,12 @@ export const viewport: Viewport = {
   initialScale: 1,
   // Scanning happens one-handed on a phone, so don't lock zoom away from people who need it.
   maximumScale: 5,
+  // The window's title bar when installed, and the phone's browser bar, follow the theme's
+  // background so the chrome blends into the page.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fafafc" },
+    { media: "(prefers-color-scheme: dark)", color: "#0d1015" },
+  ],
 }
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
