@@ -24,10 +24,11 @@ import { useCurrency } from "@/components/session"
 import { useCategories, useDebounced, usePaging, useProducts } from "@/lib/data/queries"
 import { count, money } from "@/lib/format"
 import type { Product } from "@/lib/types"
+import { msg, t } from "@/lib/i18n"
 
 const FILTERS = [
-  { value: "", label: "All" },
-  { value: "lowStock", label: "Low stock" },
+  { value: "", label: msg("All") },
+  { value: "lowStock", label: msg("Low stock") },
 ] as const
 
 /** The catalogue, with what is on the shelf and what is out on rent for each line. */
@@ -72,7 +73,7 @@ export function ProductsView({
   const columns: Column<Product>[] = [
     {
       id: "product",
-      header: "Product",
+      header: t("Product"),
       role: "title",
       cell: (product) => (
         <Primary
@@ -93,18 +94,18 @@ export function ProductsView({
       role: "status",
       cell: (product) =>
         !product.rentable ? (
-          <Badge variant="outline">Not for rent</Badge>
+          <Badge variant="outline">{t("Not for rent")}</Badge>
         ) : product.isLow ? (
-          <Badge variant="warning">Low stock</Badge>
+          <Badge variant="warning">{t("Low stock")}</Badge>
         ) : null,
     },
     {
       id: "rates",
-      header: "Rates",
+      header: t("Rates"),
       cell: (product) =>
         product.rentable ? (
           <div className="flex flex-wrap gap-x-3 text-sm text-muted-foreground">
-            {product.rentDaily != null && <span>{money(product.rentDaily, currency)}/day</span>}
+            {product.rentDaily != null && <span>{money(product.rentDaily, currency)}/{t("day")}</span>}
             {product.rentWeekly != null && <span>{money(product.rentWeekly, currency)}/wk</span>}
             {product.rentMonthly != null && <span>{money(product.rentMonthly, currency)}/mo</span>}
           </div>
@@ -114,7 +115,7 @@ export function ProductsView({
     },
     {
       id: "shelf",
-      header: "On shelf",
+      header: t("On shelf"),
       align: "end",
       cell: (product) => (
         <span className={product.isLow ? "font-medium text-warning-soft-foreground dark:text-warning" : undefined}>
@@ -124,7 +125,7 @@ export function ProductsView({
     },
     {
       id: "out",
-      header: "Out on rent",
+      header: t("Out on rent"),
       align: "end",
       cell: (product) =>
         product.outOnRent > 0 ? (
@@ -135,7 +136,7 @@ export function ProductsView({
     },
     {
       id: "total",
-      header: "Total",
+      header: t("Total"),
       align: "end",
       cell: (product) => <span className="text-muted-foreground">{count(product.onHand + product.outOnRent)}</span>,
     },
@@ -143,25 +144,25 @@ export function ProductsView({
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Products" description="What you rent out, and how much of it you hold.">
+      <PageHeader title={t("Products")} description={t("What you rent out, and how much of it you hold.")}>
         {canEdit && (
           <Button onClick={() => setAdding(true)}>
             <Plus className="size-4" />
-            New product
+            {t("New product")}
           </Button>
         )}
       </PageHeader>
 
       <Toolbar>
-        <SearchInput value={text} onChange={setText} placeholder="Name, SKU or barcode" label="Search products" suggest="products" />
+        <SearchInput value={text} onChange={setText} placeholder={t("Name, SKU or barcode")} label={t("Search products")} suggest="products" />
         {categories.length > 0 && (
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
             className="h-9 shrink-0 rounded-md border bg-card px-2 text-sm"
-            aria-label="Category"
+            aria-label={t("Category")}
           >
-            <option value="">All categories</option>
+            <option value="">{t("All categories")}</option>
             {categories.map((name) => (
               <option key={name} value={name}>
                 {name}
@@ -169,7 +170,7 @@ export function ProductsView({
             ))}
           </select>
         )}
-        <FilterTabs value={filter} onChange={setFilter} options={FILTERS} label="Filter products" />
+        <FilterTabs value={filter} onChange={setFilter} options={FILTERS} label={t("Filter products")} />
       </Toolbar>
 
       {isError ? (
@@ -178,14 +179,14 @@ export function ProductsView({
         <TableSkeleton rows={6} columns={5} />
       ) : data && data.results.length === 0 ? (
         <EmptyState
-          title={search ? `Nothing matches “${search}”` : "No products yet"}
-          description={search ? "Try a different name, SKU or barcode." : "Add what you rent out to get started."}
-          action={canEdit ? <Button onClick={() => setAdding(true)}>Add a product</Button> : undefined}
+          title={search ? t("Nothing matches “{search}”", { search }) : t("No products yet")}
+          description={search ? t("Try a different name, SKU or barcode.") : t("Add what you rent out to get started.")}
+          action={canEdit ? <Button onClick={() => setAdding(true)}>{t("Add a product")}</Button> : undefined}
         />
       ) : (
         <>
           <DataView
-            label="Products"
+            label={t("Products")}
             rows={data?.results ?? []}
             columns={columns}
             getKey={(product) => product.id}
@@ -197,13 +198,13 @@ export function ProductsView({
                       {canAdjust && (
                         <Button variant="outline" size="sm" onClick={() => setAdjusting(product)}>
                           <SlidersHorizontal className="size-4" />
-                          <span className="md:sr-only">Correct the count</span>
+                          <span className="md:sr-only">{t("Correct the count")}</span>
                         </Button>
                       )}
                       {canDelete && (
                         <Button variant="ghost" size="sm" onClick={() => setDeleting(product)}>
                           <Trash2 className="size-4" />
-                          <span className="md:sr-only">Delete</span>
+                          <span className="md:sr-only">{t("Delete")}</span>
                         </Button>
                       )}
                     </>
@@ -234,15 +235,11 @@ export function ProductsView({
         <ConfirmAction
           open
           onOpenChange={(open) => !open && setDeleting(null)}
-          title={`Delete ${deleting.name}?`}
-          description={
-            <>
-              It comes out of the catalogue and off the scanner straight away. Past rentals, receipts and bills keep
-              its name and SKU exactly as they were printed, so nothing in your records changes. A product that has
-              never been rented, bought or counted is removed completely.
-            </>
-          }
-          confirmLabel="Delete it"
+          title={t("Delete {name}?", { name: deleting.name })}
+          description={t(
+            "It comes out of the catalogue and off the scanner straight away. Past rentals, receipts and bills keep its name and SKU exactly as they were printed, so nothing in your records changes. A product that has never been rented, bought or counted is removed completely.",
+          )}
+          confirmLabel={t("Delete it")}
           destructive
           onConfirm={async () => {
             await remove.mutateAsync(deleting.id)

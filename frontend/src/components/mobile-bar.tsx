@@ -6,13 +6,14 @@ import { Boxes, Menu, PackagePlus, ScanLine, Undo2 } from "lucide-react"
 import { useSession } from "@/components/session"
 import { useSidebar } from "@/components/ui/sidebar"
 import { canAccess } from "@/lib/auth/roles"
+import { msg, t } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 
 const TABS = [
-  { href: "/scan", label: "Scan", icon: ScanLine },
-  { href: "/rent-out", label: "Rent out", icon: PackagePlus },
-  { href: "/take-back", label: "Take back", icon: Undo2 },
-  { href: "/rentals", label: "Rentals", icon: Boxes },
+  { href: "/scan", label: msg("Scan"), icon: ScanLine },
+  { href: "/rent-out", label: msg("Rent out"), icon: PackagePlus },
+  { href: "/take-back", label: msg("Take back"), icon: Undo2 },
+  { href: "/rentals", label: msg("Rentals"), icon: Boxes },
 ]
 
 const TAB = "relative flex min-h-14 flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors"
@@ -36,7 +37,7 @@ export function MobileBar() {
       // Sticky to the bottom of the screen and padded for the phone's home indicator, so
       // the last row of a list is never hidden under it.
       className="sticky bottom-0 z-20 flex border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden print:hidden"
-      aria-label="Main"
+      aria-label={t("Main")}
     >
       {tabs.map((tab) => {
         const active = path === tab.href || path.startsWith(tab.href + "/")
@@ -54,13 +55,13 @@ export function MobileBar() {
             )}
           >
             <Icon className="size-5" />
-            {tab.label}
+            {t(tab.label)}
           </Link>
         )
       })}
       <button type="button" onClick={toggleSidebar} className={cn(TAB, "text-muted-foreground hover:text-foreground")}>
         <Menu className="size-5" />
-        More
+        {t("More")}
       </button>
     </nav>
   )

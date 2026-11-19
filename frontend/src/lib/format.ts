@@ -1,5 +1,22 @@
-import { format, formatDistanceToNowStrict, isToday, isYesterday } from "date-fns"
+import { format as formatDate, formatDistanceToNowStrict, isToday, isYesterday } from "date-fns"
+import { bn } from "date-fns/locale/bn"
+import { getLang, t } from "@/lib/i18n"
 import { daysLate } from "@/lib/rental"
+
+/**
+ * date-fns in the reader's language: Bangla month names and AM/PM in Bangla. Digits are
+ * put back to Western ones, the same as everywhere else in the app (see lib/i18n).
+ */
+export function format(value: Date, pattern: string) {
+  if (getLang() !== "bn") return formatDate(value, pattern)
+  return westernDigits(formatDate(value, pattern, { locale: bn }))
+}
+
+const BANGLA_DIGITS = "০১২৩৪৫৬৭৮৯"
+
+function westernDigits(text: string) {
+  return text.replace(/[০-৯]/g, (digit) => String(BANGLA_DIGITS.indexOf(digit)))
+}
 
 /**
  * Money, with the business's currency.
@@ -32,7 +49,11 @@ export function compactMoney(amount: number | string | null | undefined, currenc
   if (abs < 1_000) return money(value, currency)
 
   const [scaled, unit] =
-    abs >= 10_000_000 ? [abs / 10_000_000, " crore"] : abs >= 100_000 ? [abs / 100_000, " lakh"] : [abs / 1_000, "k"]
+    abs >= 10_000_000
+      ? [abs / 10_000_000, ` ${t("crore")}`]
+      : abs >= 100_000
+        ? [abs / 100_000, ` ${t("lakh")}`]
+        : [abs / 1_000, getLang() === "bn" ? " হাজার" : "k"]
 
   // Two decimals while the number is small enough for them to mean something, one after.
   const rounded = scaled < 10 ? Math.round(scaled * 100) / 100 : Math.round(scaled * 10) / 10
@@ -63,28 +84,33 @@ export function dateTime(value: string | Date | null | undefined) {
 export function friendlyDateTime(value: string | Date | null | undefined) {
   if (!value) return "—"
   const d = new Date(value)
-  if (isToday(d)) return `Today, ${format(d, "h:mm a")}`
-  if (isYesterday(d)) return `Yesterday, ${format(d, "h:mm a")}`
+  if (isToday(d)) return t("Today, {time}", { time: format(d, "h:mm a") })
+  if (isYesterday(d)) return t("Yesterday, {time}", { time: format(d, "h:mm a") })
   return format(d, "d MMM yyyy, h:mm a")
 }
 
 export function ago(value: string | Date | null | undefined) {
   if (!value) return "—"
+  if (getLang() === "bn") return `${westernDigits(formatDistanceToNowStrict(new Date(value), { locale: bn }))} আগে`
   return `${formatDistanceToNowStrict(new Date(value))} ago`
 }
 
+/**
+ * "1 day" / "3 days". The word is translated, so "day" and "days" both need a Bangla entry
+ * (usually the same one: Bangla doesn't change the noun for a number).
+ */
 export function plural(n: number, one: string, many = one + "s") {
-  return `${count(n)} ${n === 1 ? one : many}`
+  return `${count(n)} ${t(n === 1 ? one : many)}`
 }
 
 /** "3 days overdue" / "due in 2 days" / "due today" / "" when open-ended. */
 export function dueLabel(dueAt: string | null, now = new Date()) {
-  if (!dueAt) return "No return date"
+  if (!dueAt) return t("No return date")
   const due = new Date(dueAt)
   // Overdue days count any started day, as the late fee does: 1½ days late reads "2 days".
-  if (now.getTime() > due.getTime()) return `${plural(daysLate(dueAt, now), "day")} overdue`
-  if (isToday(due)) return "Due today"
-  return `Due in ${plural(Math.ceil((due.getTime() - now.getTime()) / 86_400_000), "day")}`
+  if (now.getTime() > due.getTime()) return t("{days} overdue", { days: plural(daysLate(dueAt, now), "day") })
+  if (isToday(due)) return t("Due today")
+  return t("Due in {days}", { days: plural(Math.ceil((due.getTime() - now.getTime()) / 86_400_000), "day") })
 }
 
 /** A phone number as a WhatsApp link, for sending a customer their receipt. */

@@ -8,11 +8,16 @@ import { ReceiptDocument } from "@/components/receipt"
 import { count, dateTime, money } from "@/lib/format"
 import { publicLogoUrl } from "@/lib/logo"
 import type { ReceiptView } from "@/lib/receipt"
+import { getRequestLang, getT } from "@/lib/i18n/server"
+import { setLang } from "@/lib/i18n"
 
-export const metadata: Metadata = {
-  title: "Your receipt",
-  // A receipt is somebody's private record; it should never turn up in a search engine.
-  robots: { index: false, follow: false },
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT()
+  return {
+    title: t("Your receipt"),
+    // A receipt is somebody's private record; it should never turn up in a search engine.
+    robots: { index: false, follow: false },
+  }
 }
 
 interface Receipt {
@@ -68,6 +73,10 @@ interface Receipt {
  */
 export default async function PublicReceiptPage({ params }: PageProps<"/r/[token]">) {
   const { token } = await params
+  const t = await getT()
+  // The dates and amounts below are formatted by the shared helpers, which read the
+  // current language rather than taking one.
+  setLang(await getRequestLang())
 
   let data: Receipt
   try {
@@ -128,14 +137,14 @@ export default async function PublicReceiptPage({ params }: PageProps<"/r/[token
   return (
     <main className="mx-auto w-full max-w-3xl space-y-4 p-4 sm:py-8">
       <div className="flex justify-end print:hidden">
-        <PrintButton label="Print or save as PDF" />
+        <PrintButton label={t("Print or save as PDF")} />
       </div>
 
       <ReceiptDocument receipt={receipt} />
 
       {returns.length > 0 && (
         <section className="rounded-xl border bg-card p-5 text-sm print:hidden">
-          <h2 className="font-heading font-semibold">What you have brought back</h2>
+          <h2 className="font-heading font-semibold">{t("What you have brought back")}</h2>
           <ul className="mt-3 space-y-2">
             {returns.map((taken) => (
               <li key={taken.code} className="border-b pb-2 last:border-0 last:pb-0">
@@ -155,7 +164,7 @@ export default async function PublicReceiptPage({ params }: PageProps<"/r/[token
       )}
 
       <p className="text-center text-xs text-muted-foreground print:hidden">
-        Keep this link to check what you have out. Show it when you bring the items back.
+        {t("Keep this link to check what you have out. Show it when you bring the items back.")}
       </p>
     </main>
   )

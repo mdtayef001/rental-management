@@ -31,6 +31,7 @@ import {
 } from "@/lib/data/queries"
 import { count } from "@/lib/format"
 import { cn } from "@/lib/utils"
+import { t } from "@/lib/i18n"
 
 /**
  * The furniture every screen is built from.
@@ -131,7 +132,7 @@ function useSuggestions(kind: Suggest | undefined, text: string): Suggestion[] {
     (products.data ?? []).map((p) => ({
       id: `p-${p.id}`,
       label: p.name,
-      sub: open ? `${p.sku} · ${count(p.onHand)} on the shelf` : "Product",
+      sub: open ? `${p.sku} · ${t("{count} on the shelf", { count: count(p.onHand) })}` : t("Product"),
       href: open ? `/products/${p.id}` : undefined,
     }))
   const customerRows = (open: boolean): Suggestion[] =>
@@ -173,7 +174,7 @@ function useSuggestions(kind: Suggest | undefined, text: string): Suggestion[] {
 export function SearchInput({
   value,
   onChange,
-  placeholder = "Search",
+  placeholder = t("Search"),
   label,
   suggest,
 }: {
@@ -242,7 +243,7 @@ export function SearchInput({
         <ul
           id={listId}
           role="listbox"
-          aria-label={`Suggestions for ${label.toLowerCase()}`}
+          aria-label={t("Suggestions for {list}", { list: label })}
           className="absolute top-full right-0 left-0 z-30 mt-1 overflow-hidden rounded-lg border bg-popover py-1 text-popover-foreground shadow-md"
         >
           {suggestions.map((suggestion, index) => (
@@ -289,7 +290,7 @@ export function ChoiceInput({
   onChange,
   options,
   placeholder,
-  noun = "option",
+  noun = t("option"),
 }: {
   id: string
   value: string
@@ -390,7 +391,7 @@ export function ChoiceInput({
           ))}
           {isNew && (
             <li className="border-t px-3 py-1.5 text-xs text-muted-foreground first:border-t-0" aria-hidden>
-              New {noun}: <span className="font-medium text-foreground">{value.trim()}</span>
+              {t("New {noun}", { noun })}: <span className="font-medium text-foreground">{value.trim()}</span>
             </li>
           )}
         </ul>
@@ -410,16 +411,16 @@ export function CopyValue({ value, label }: { value: string; label: string }) {
   return (
     <button
       type="button"
-      title={`Copy ${label}`}
-      aria-label={`Copy ${label} ${value}`}
+      title={t("Copy {label}", { label })}
+      aria-label={`${t("Copy {label}", { label })} ${value}`}
       onClick={async () => {
         try {
           await navigator.clipboard.writeText(value)
           setCopied(true)
-          toast.success(`${label} copied`)
+          toast.success(t("{label} copied", { label }))
           setTimeout(() => setCopied(false), 1500)
         } catch {
-          toast.error("Couldn't copy. Select it and copy by hand.")
+          toast.error(t("Couldn't copy. Select it and copy by hand."))
         }
       }}
       className="group -mx-1.5 inline-flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 text-left font-mono text-sm transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
@@ -472,7 +473,9 @@ export function FilterTabs<T extends string>({
               active ? "bg-card text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground",
             )}
           >
-            {option.label}
+            {/* Options are often module constants, marked with msg() and translated here.
+                A label already translated by the caller passes through unchanged. */}
+            {t(option.label)}
             {option.count !== undefined && (
               <span className={cn("ml-1.5 tabular-nums", active ? "text-muted-foreground" : "opacity-60")}>
                 {count(option.count)}
@@ -593,7 +596,7 @@ export function SimpleSelect({
   value,
   onChange,
   options,
-  placeholder = "Select…",
+  placeholder = t("Select…"),
   className,
   id,
   disabled,
@@ -609,14 +612,14 @@ export function SimpleSelect({
   label?: string
 }) {
   return (
-    <Select items={options} value={value || null} onValueChange={(v) => onChange((v as string | null) ?? "")} disabled={disabled}>
+    <Select items={options.map((option) => ({ ...option, label: t(option.label) }))} value={value || null} onValueChange={(v) => onChange((v as string | null) ?? "")} disabled={disabled}>
       <SelectTrigger id={id} aria-label={label} className={cn("h-9 w-full", className)}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent>
         {options.map((option) => (
           <SelectItem key={option.value} value={option.value}>
-            {option.label}
+            {t(option.label)}
           </SelectItem>
         ))}
       </SelectContent>
@@ -635,7 +638,7 @@ export function ConfirmAction({
   trigger,
   title,
   description,
-  confirmLabel = "Confirm",
+  confirmLabel = t("Confirm"),
   destructive,
   onConfirm,
   open,
@@ -669,7 +672,7 @@ export function ConfirmAction({
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogCancel>{t("Cancel")}</AlertDialogCancel>
           <AlertDialogAction
             variant={destructive ? "destructive" : "default"}
             disabled={busy}
@@ -706,7 +709,7 @@ export function ConfirmAction({
  */
 export function TableSkeleton({ rows = 5, columns = 4 }: { rows?: number; columns?: number }) {
   return (
-    <div aria-busy="true" aria-label="Loading">
+    <div aria-busy="true" aria-label={t("Loading")}>
       <div className="hidden overflow-hidden rounded-lg border bg-card md:block">
         <div className="h-9 border-b bg-muted/40" />
         {Array.from({ length: rows }).map((_, r) => (
@@ -757,14 +760,14 @@ export function EmptyState({
 
 /** A failed query, with the server's own message and a way to try again. */
 export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
-  const message = error instanceof Error ? error.message : "Something went wrong."
+  const message = t(error instanceof Error ? error.message : "Something went wrong.")
   return (
     <div className="rounded-lg border border-destructive/30 bg-destructive-soft/50 px-6 py-8 text-center">
       <AlertCircle className="mx-auto size-6 text-destructive" />
       <p className="mt-2 text-sm text-pretty">{message}</p>
       {onRetry && (
         <Button variant="outline" size="sm" className="mt-4" onClick={onRetry}>
-          Try again
+          {t("Try again")}
         </Button>
       )}
     </div>
@@ -807,7 +810,7 @@ export function Pagination({
     <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
       <div className="flex items-center gap-2 text-muted-foreground">
         <span className="tabular-nums">
-          {count(from)}–{count(to)} of {count(total)}
+          {t("{from}–{to} of {total}", { from: count(from), to: count(to), total: count(total) })}
         </span>
         {busy && <Spinner className="size-3.5" />}
       </div>
@@ -817,23 +820,23 @@ export function Pagination({
             value={pageSize}
             onChange={(e) => onPageSize(Number(e.target.value))}
             className="hidden h-9 rounded-md border bg-card px-2 text-sm sm:block"
-            aria-label="Rows per page"
+            aria-label={t("Rows per page")}
           >
             {PAGE_SIZES.map((size) => (
               <option key={size} value={size}>
-                {size} per page
+                {t("{size} per page", { size })}
               </option>
             ))}
           </select>
         )}
         <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => onPage(page - 1)} className="max-sm:flex-1">
-          Previous
+          {t("Previous")}
         </Button>
         <span className="shrink-0 tabular-nums text-muted-foreground">
           {page} / {pages}
         </span>
         <Button variant="outline" size="sm" disabled={page >= pages} onClick={() => onPage(page + 1)} className="max-sm:flex-1">
-          Next
+          {t("Next")}
         </Button>
       </div>
     </div>

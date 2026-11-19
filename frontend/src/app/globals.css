@@ -7,9 +7,10 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-mono);
-  --font-heading: var(--font-sans);
+  /* Archivo has no Bangla letters, so they fall through to Noto Sans Bengali. */
+  --font-sans: var(--font-sans), var(--font-bangla);
+  --font-mono: var(--font-mono), var(--font-bangla);
+  --font-heading: var(--font-sans), var(--font-bangla);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -218,12 +219,12 @@
 }
 
 /* The printed sheet: receipts, bills and reports (see `components/paper.tsx`).
-   Its colours are fixed rather than themed, because it is paper. `print-color-adjust`
-   makes the browser put the few tints there are on the page instead of dropping them,
-   which is what left printouts looking washed out. */
+   Black and white only: the shop prints on a black-and-white printer, where any colour
+   turns into a muddy grey. Headings and totals stand out by weight and by ruled lines
+   instead. `print-color-adjust` keeps the browser from thinning the lines on paper. */
 .bill-paper {
-  --sheet-accent: #0b4f59;
-  --sheet-tint: #dcecee;
+  --sheet-accent: #000;
+  --sheet-tint: #fff;
   --sheet-line: #1f1f1f;
   --sheet-rule: #6b6b6b;
   -webkit-print-color-adjust: exact;
@@ -250,6 +251,7 @@
 
 .sheet-table th {
   border-color: var(--sheet-line);
+  border-bottom-width: 2px;
   background: var(--sheet-tint);
   color: var(--sheet-accent);
   font-size: 0.82em;

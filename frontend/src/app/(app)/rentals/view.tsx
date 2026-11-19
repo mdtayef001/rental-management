@@ -20,14 +20,15 @@ import { useCurrency } from "@/components/session"
 import { useDebounced, usePaging, useRentals } from "@/lib/data/queries"
 import { count, date, dueLabel, money, plural } from "@/lib/format"
 import type { Rental, RentalStatus } from "@/lib/types"
+import { msg, t } from "@/lib/i18n"
 
 const FILTERS = [
-  { value: "open", label: "Out now" },
-  { value: "overdue", label: "Overdue" },
-  { value: "due_today", label: "Due today" },
-  { value: "unpaid", label: "Unpaid" },
-  { value: "returned", label: "Returned" },
-  { value: "", label: "All" },
+  { value: "open", label: msg("Out now") },
+  { value: "overdue", label: msg("Overdue") },
+  { value: "due_today", label: msg("Due today") },
+  { value: "unpaid", label: msg("Unpaid") },
+  { value: "returned", label: msg("Returned") },
+  { value: "", label: msg("All") },
 ] as const
 
 /**
@@ -53,7 +54,7 @@ export function RentalsView() {
   const columns: Column<Rental>[] = [
     {
       id: "customer",
-      header: "Customer",
+      header: t("Customer"),
       role: "title",
       cell: (rental) => (
         <Primary sub={<Code>{rental.code}</Code>}>
@@ -66,13 +67,13 @@ export function RentalsView() {
     },
     {
       id: "status",
-      header: "Status",
+      header: t("Status"),
       role: "status",
       cell: (rental) => <StatusBadge status={rental.status} overdue={rental.isOverdue} />,
     },
     {
       id: "out",
-      header: "Out",
+      header: t("Out"),
       align: "end",
       cell: (rental) => (
         <>
@@ -83,16 +84,16 @@ export function RentalsView() {
     },
     {
       id: "due",
-      header: "Due",
+      header: t("Due"),
       cell: (rental) => (
         <span className={rental.isOverdue ? "font-medium text-destructive" : undefined}>
-          {rental.dueAt ? dueLabel(rental.dueAt) : "Open-ended"}
+          {rental.dueAt ? dueLabel(rental.dueAt) : t("Open-ended")}
         </span>
       ),
     },
     {
       id: "balance",
-      header: "Owed",
+      header: t("Owed"),
       align: "end",
       cell: (rental) =>
         rental.balance > 0 ? (
@@ -101,19 +102,19 @@ export function RentalsView() {
           <span className="text-muted-foreground">—</span>
         ),
     },
-    { id: "started", header: "Started", role: "hidden", cell: (rental) => date(rental.startedAt) },
+    { id: "started", header: t("Started"), role: "hidden", cell: (rental) => date(rental.startedAt) },
   ]
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Rentals" description="Everything that has gone out, and what has come back.">
+      <PageHeader title={t("Rentals")} description={t("Everything that has gone out, and what has come back.")}>
         <ButtonLink href="/take-back" variant="outline">
           <Undo2 className="size-4" />
-          Take back
+          {t("Take back")}
         </ButtonLink>
         <ButtonLink href="/rent-out">
           <Package className="size-4" />
-          Rent out
+          {t("Rent out")}
         </ButtonLink>
       </PageHeader>
 
@@ -121,11 +122,11 @@ export function RentalsView() {
         <SearchInput
           value={text}
           onChange={setText}
-          placeholder="Customer, phone number or product"
-          label="Search rentals"
+          placeholder={t("Customer, phone number or product")}
+          label={t("Search rentals")}
           suggest="rentals"
         />
-        <FilterTabs value={status} onChange={setStatus} options={FILTERS} label="Filter rentals" />
+        <FilterTabs value={status} onChange={setStatus} options={FILTERS} label={t("Filter rentals")} />
       </Toolbar>
 
       {isError ? (
@@ -134,20 +135,20 @@ export function RentalsView() {
         <TableSkeleton rows={6} columns={5} />
       ) : data && data.results.length === 0 ? (
         <EmptyState
-          title={search ? `Nothing matches “${search}”` : "No rentals here"}
+          title={search ? t("Nothing matches “{search}”", { search }) : t("No rentals here")}
           description={
             search
-              ? "Try a different name, phone number or product."
+              ? t("Try a different name, phone number or product.")
               : status === "open"
-                ? "Nothing is out on rent at the moment."
-                : "Nothing matches this filter."
+                ? t("Nothing is out on rent at the moment.")
+                : t("Nothing matches this filter.")
           }
-          action={<ButtonLink href="/rent-out">Rent something out</ButtonLink>}
+          action={<ButtonLink href="/rent-out">{t("Rent something out")}</ButtonLink>}
         />
       ) : (
         <>
           <DataView
-            label="Rentals"
+            label={t("Rentals")}
             rows={data?.results ?? []}
             columns={columns}
             getKey={(rental) => rental.id}
@@ -155,7 +156,7 @@ export function RentalsView() {
             actions={(rental) => (
               <ButtonLink href={`/rentals/${rental.id}/receipt`} variant="outline" size="sm">
                 <ReceiptText className="size-4" />
-                <span className="md:sr-only">Receipt</span>
+                <span className="md:sr-only">{t("Receipt")}</span>
               </ButtonLink>
             )}
           />
@@ -176,10 +177,10 @@ export function RentalsView() {
 /** One rental's state, in the three colours that mean something: late, out, done. */
 export function StatusBadge({ status, overdue }: { status: RentalStatus; overdue?: boolean }) {
   if (overdue && (status === "active" || status === "partly_returned")) {
-    return <Badge variant="destructive">Overdue</Badge>
+    return <Badge variant="destructive">{t("Overdue")}</Badge>
   }
-  if (status === "active") return <Badge variant="info">Out</Badge>
-  if (status === "partly_returned") return <Badge variant="warning">Partly back</Badge>
-  if (status === "returned") return <Badge variant="success">Returned</Badge>
-  return <Badge variant="outline">Cancelled</Badge>
+  if (status === "active") return <Badge variant="info">{t("Out")}</Badge>
+  if (status === "partly_returned") return <Badge variant="warning">{t("Partly back")}</Badge>
+  if (status === "returned") return <Badge variant="success">{t("Returned")}</Badge>
+  return <Badge variant="outline">{t("Cancelled")}</Badge>
 }

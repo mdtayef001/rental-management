@@ -20,11 +20,12 @@ import { useCurrency } from "@/components/session"
 import { useCustomers, useDebounced, usePaging } from "@/lib/data/queries"
 import { count, money } from "@/lib/format"
 import type { Customer } from "@/lib/types"
+import { msg, t } from "@/lib/i18n"
 
 const FILTERS = [
-  { value: "", label: "All" },
-  { value: "open", label: "Has items out" },
-  { value: "blocked", label: "Blocked" },
+  { value: "", label: msg("All") },
+  { value: "open", label: msg("Has items out") },
+  { value: "blocked", label: msg("Blocked") },
 ] as const
 
 /** Who the business rents to, with what each of them has out and owes. */
@@ -50,7 +51,7 @@ export function CustomersView() {
   const columns: Column<Customer>[] = [
     {
       id: "name",
-      header: "Name",
+      header: t("Name"),
       role: "title",
       cell: (customer) => <Primary sub={customer.company || customer.phone}>{customer.name}</Primary>,
     },
@@ -62,19 +63,19 @@ export function CustomersView() {
         customer.blocked ? (
           <Badge variant="destructive" className="gap-1">
             <UserX className="size-3" />
-            Blocked
+            {t("Blocked")}
           </Badge>
         ) : null,
     },
     {
       id: "phone",
-      header: "Phone",
+      header: t("Phone"),
       role: "hidden",
       cell: (customer) => <span className="font-mono text-xs">{customer.phone || "—"}</span>,
     },
     {
       id: "out",
-      header: "Out now",
+      header: t("Out now"),
       align: "end",
       cell: (customer) =>
         customer.openRentalCount ? (
@@ -85,13 +86,13 @@ export function CustomersView() {
     },
     {
       id: "rentals",
-      header: "Rentals",
+      header: t("Rentals"),
       align: "end",
       cell: (customer) => <span className="text-muted-foreground">{count(customer.rentalCount ?? 0)}</span>,
     },
     {
       id: "owes",
-      header: "Owes",
+      header: t("Owes"),
       align: "end",
       cell: (customer) =>
         (customer.balanceDue ?? 0) > 0 ? (
@@ -104,10 +105,10 @@ export function CustomersView() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Customers" description="Everyone you rent to, and what they have out.">
+      <PageHeader title={t("Customers")} description={t("Everyone you rent to, and what they have out.")}>
         <Button onClick={() => setAdding(true)}>
           <Plus className="size-4" />
-          New customer
+          {t("New customer")}
         </Button>
       </PageHeader>
 
@@ -115,11 +116,11 @@ export function CustomersView() {
         <SearchInput
           value={text}
           onChange={setText}
-          placeholder="Name, phone number, company or ID"
-          label="Search customers"
+          placeholder={t("Name, phone number, company or ID")}
+          label={t("Search customers")}
           suggest="customers"
         />
-        <FilterTabs value={filter} onChange={setFilter} options={FILTERS} label="Filter customers" />
+        <FilterTabs value={filter} onChange={setFilter} options={FILTERS} label={t("Filter customers")} />
       </Toolbar>
 
       {isError ? (
@@ -128,16 +129,16 @@ export function CustomersView() {
         <TableSkeleton rows={6} columns={4} />
       ) : data && data.results.length === 0 ? (
         <EmptyState
-          title={search ? `Nobody matches “${search}”` : "No customers yet"}
+          title={search ? t("Nobody matches “{search}”", { search }) : t("No customers yet")}
           description={
-            search ? "Try a different name or number." : "Add a customer, or add one while renting something out."
+            search ? t("Try a different name or number.") : t("Add a customer, or add one while renting something out.")
           }
-          action={<Button onClick={() => setAdding(true)}>Add a customer</Button>}
+          action={<Button onClick={() => setAdding(true)}>{t("Add a customer")}</Button>}
         />
       ) : (
         <>
           <DataView
-            label="Customers"
+            label={t("Customers")}
             rows={data?.results ?? []}
             columns={columns}
             getKey={(customer) => customer.id}

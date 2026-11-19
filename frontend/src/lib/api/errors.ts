@@ -1,5 +1,8 @@
 // Turns a Django REST Framework error body into one readable sentence.
-// Shared by the server and browser API clients.
+// Shared by the server and browser API clients. The messages stay English here and are
+// translated where they are shown, since this also runs on the server (see lib/i18n).
+
+import { msg } from "@/lib/i18n"
 
 export class ApiError extends Error {
   constructor(
@@ -24,13 +27,13 @@ export function errorMessage(data: unknown, status: number): string {
   }
   const message = first(data)
   if (message) return message
-  if (status === 401) return "Your session has ended. Please log in again."
-  if (status === 403) return "You don't have permission to do that."
-  if (status === 404) return "Not found. It may have been deleted."
-  if (status === 409) return "That conflicts with something already saved. Reload and try again."
-  if (status === 429) return "Too many attempts. Wait a minute and try again."
-  if (status >= 500) return "The server ran into a problem. Please try again."
-  return "Something went wrong."
+  if (status === 401) return msg("Your session has ended. Please log in again.")
+  if (status === 403) return msg("You don't have permission to do that.")
+  if (status === 404) return msg("Not found. It may have been deleted.")
+  if (status === 409) return msg("That conflicts with something already saved. Reload and try again.")
+  if (status === 429) return msg("Too many attempts. Wait a minute and try again.")
+  if (status >= 500) return msg("The server ran into a problem. Please try again.")
+  return msg("Something went wrong.")
 }
 
 /** How long the Next.js server waits for Django before giving up. */
@@ -39,6 +42,6 @@ export const SERVER_TIMEOUT_MS = 15_000
 /** A call that never got an answer: offline, the server is down, or it took too long. */
 export function unreachable(err: unknown): ApiError {
   return err instanceof DOMException && err.name === "TimeoutError"
-    ? new ApiError(504, "The server took too long to answer. Please try again.")
-    : new ApiError(503, "Couldn't reach the server. Check your connection and try again.")
+    ? new ApiError(504, msg("The server took too long to answer. Please try again."))
+    : new ApiError(503, msg("Couldn't reach the server. Check your connection and try again."))
 }

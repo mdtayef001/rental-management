@@ -1,6 +1,8 @@
-import { addMonths, addYears, endOfMonth, endOfYear, format, startOfMonth, startOfYear } from "date-fns"
+import { addMonths, addYears, endOfMonth, endOfYear, startOfMonth, startOfYear } from "date-fns"
+import { format } from "@/lib/format"
 import { iso } from "@/lib/reports"
 import type { BillKind, ReportRange } from "@/lib/types"
+import { msg } from "@/lib/i18n"
 
 /**
  * The period a bill covers.
@@ -46,7 +48,7 @@ export function periodName(range: ReportRange) {
   return `${format(start, "d MMM yyyy")} – ${format(parse(range.to), "d MMM yyyy")}`
 }
 
-export const BILL_TITLE: Record<BillKind, string> = { month: "Monthly bill", year: "Yearly bill", custom: "Bill" }
+export const BILL_TITLE: Record<BillKind, string> = { month: msg("Monthly bill"), year: msg("Yearly bill"), custom: msg("Bill") }
 
 /** A range from `?from=&to=`, falling back to this month when the link carries none. */
 export function rangeFromParams(params: { get(name: string): string | null }): ReportRange {

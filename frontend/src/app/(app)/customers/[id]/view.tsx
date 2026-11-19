@@ -15,6 +15,7 @@ import { useDeleteCustomer } from "@/lib/data/mutations"
 import { useCustomer, usePaging, useRentals } from "@/lib/data/queries"
 import { count, date, dueLabel, money, plural, whatsappLink } from "@/lib/format"
 import { StatusBadge } from "../../rentals/view"
+import { t } from "@/lib/i18n"
 
 /**
  * One customer: their details, what they have out, and everything they have ever rented.
@@ -39,7 +40,7 @@ export function CustomerDetailView({ id }: { id: string }) {
   if (isError) return <ErrorState error={error} onRetry={() => refetch()} />
   if (isLoading || !customer) return <TableSkeleton rows={5} columns={4} />
 
-  const share = whatsappLink(customer.phone, `Hello ${customer.name},`)
+  const share = whatsappLink(customer.phone, t("Hello {name},", { name: customer.name }))
 
   return (
     <div className="space-y-6">
@@ -49,12 +50,12 @@ export function CustomerDetailView({ id }: { id: string }) {
           customer.archivedAt ? (
             <Pill>
               <Archive className="size-3" />
-              Removed
+              {t("Removed")}
             </Pill>
           ) : undefined
         }
         description={customer.company || undefined}
-        back={{ href: "/customers", label: "Customers" }}
+        back={{ href: "/customers", label: t("Customers") }}
       >
         {customer.phone && (
           <Button variant="outline" render={<a href={`tel:${customer.phone}`} />}>
@@ -65,19 +66,19 @@ export function CustomerDetailView({ id }: { id: string }) {
         {share && (
           <Button variant="outline" render={<a href={share} target="_blank" rel="noreferrer" />}>
             <MessageCircle className="size-4" />
-            WhatsApp
+            {t("WhatsApp")}
           </Button>
         )}
         {user.role !== "staff" && (
           <Button variant="outline" onClick={() => setEditing(true)}>
             <Pencil className="size-4" />
-            Edit
+            {t("Edit")}
           </Button>
         )}
         {user.role !== "staff" && (
           <ButtonLink href={`/bills/${id}`} variant="outline">
             <FileText className="size-4" />
-            Monthly bill
+            {t("Monthly bill")}
           </ButtonLink>
         )}
         {canRemove && !customer.archivedAt && (
@@ -85,18 +86,14 @@ export function CustomerDetailView({ id }: { id: string }) {
             trigger={
               <Button variant="outline">
                 <Trash2 className="size-4" />
-                Delete
+                {t("Delete")}
               </Button>
             }
-            title={`Delete ${customer.name}?`}
-            description={
-              <>
-                They come off the customer list and can&apos;t be rented to. Their past rentals, receipts and bills
-                keep their name, so nothing in your records changes. Someone who has never rented is removed
-                completely. Not possible while they still have something out.
-              </>
-            }
-            confirmLabel="Delete"
+            title={t("Delete {name}?", { name: customer.name })}
+            description={t(
+              "They come off the customer list and can't be rented to. Their past rentals, receipts and bills keep their name, so nothing in your records changes. Someone who has never rented is removed completely. Not possible while they still have something out.",
+            )}
+            confirmLabel={t("Delete")}
             destructive
             onConfirm={async () => {
               const { archived } = await remove.mutateAsync(id)
@@ -105,15 +102,14 @@ export function CustomerDetailView({ id }: { id: string }) {
             }}
           />
         )}
-        {!customer.archivedAt && <ButtonLink href="/rent-out">Rent to them</ButtonLink>}
+        {!customer.archivedAt && <ButtonLink href="/rent-out">{t("Rent to them")}</ButtonLink>}
       </PageHeader>
 
       {customer.archivedAt && (
         <div className="flex items-start gap-2 rounded-lg border p-3 text-sm text-muted-foreground">
           <Archive className="mt-0.5 size-4 shrink-0" />
           <span>
-            This customer was removed from your list on {date(customer.archivedAt)}. Their rentals, receipts and bills
-            are kept here for your records.
+            {t("This customer was removed from your list on {date}. Their rentals, receipts and bills are kept here for your records.", { date: date(customer.archivedAt) })}
           </span>
         </div>
       )}
@@ -122,7 +118,7 @@ export function CustomerDetailView({ id }: { id: string }) {
         <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive-soft/50 p-3 text-sm">
           <UserX className="mt-0.5 size-4 shrink-0 text-destructive" />
           <span>
-            <strong>Blocked from renting.</strong> {customer.blockedReason || "No reason given."}
+            <strong>{t("Blocked from renting.")}</strong> {customer.blockedReason || t("No reason given.")}
           </span>
         </div>
       )}
@@ -130,8 +126,8 @@ export function CustomerDetailView({ id }: { id: string }) {
       <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Rentals and receipts</CardTitle>
-            <p className="text-sm text-muted-foreground">Each rental has its own receipt. Newest first.</p>
+            <CardTitle className="text-base">{t("Rentals and receipts")}</CardTitle>
+            <p className="text-sm text-muted-foreground">{t("Each rental has its own receipt. Newest first.")}</p>
           </CardHeader>
           <CardContent className="p-0">
             {rentals.isLoading ? (
@@ -139,11 +135,11 @@ export function CustomerDetailView({ id }: { id: string }) {
                 <TableSkeleton rows={3} columns={4} />
               </div>
             ) : rentals.data?.results.length === 0 ? (
-              <EmptyState title="Nothing rented yet" description="This customer has no rental history." />
+              <EmptyState title={t("Nothing rented yet")} description={t("This customer has no rental history.")} />
             ) : (
               <div className="px-3 pb-3 md:px-0 md:pb-0">
                 <DataView
-                  label={`Rentals by ${customer.name}`}
+                  label={t("Rentals by {name}", { name: customer.name })}
                   className="md:rounded-none md:border-0"
                   rows={rentals.data?.results ?? []}
                   getKey={(rental) => rental.id}
@@ -151,7 +147,7 @@ export function CustomerDetailView({ id }: { id: string }) {
                   columns={[
                     {
                       id: "rental",
-                      header: "Rental",
+                      header: t("Rental"),
                       role: "title",
                       cell: (rental) => (
                         <Primary sub={<Code>{rental.code}</Code>}>{date(rental.startedAt)}</Primary>
@@ -159,13 +155,13 @@ export function CustomerDetailView({ id }: { id: string }) {
                     },
                     {
                       id: "status",
-                      header: "Status",
+                      header: t("Status"),
                       role: "status",
                       cell: (rental) => <StatusBadge status={rental.status} overdue={rental.isOverdue} />,
                     },
                     {
                       id: "units",
-                      header: "Still out",
+                      header: t("Still out"),
                       align: "end",
                       cell: (rental) =>
                         rental.unitsOut > 0 ? (
@@ -183,7 +179,7 @@ export function CustomerDetailView({ id }: { id: string }) {
                     },
                     {
                       id: "charged",
-                      header: "Charged",
+                      header: t("Charged"),
                       align: "end",
                       cell: (rental) =>
                         rental.charges > 0 ? (
@@ -194,13 +190,13 @@ export function CustomerDetailView({ id }: { id: string }) {
                     },
                     {
                       id: "owed",
-                      header: "Owed",
+                      header: t("Owed"),
                       align: "end",
                       cell: (rental) =>
                         rental.balance > 0 ? (
                           <span className="font-medium">{money(rental.balance, currency)}</span>
                         ) : rental.balance < 0 ? (
-                          <span className="text-muted-foreground">{money(-rental.balance, currency)} ahead</span>
+                          <span className="text-muted-foreground">{t("{amount} ahead", { amount: money(-rental.balance, currency) })}</span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         ),
@@ -209,7 +205,7 @@ export function CustomerDetailView({ id }: { id: string }) {
                   actions={(rental) => (
                     <ButtonLink href={`/rentals/${rental.id}/receipt`} variant="outline" size="sm">
                       <ReceiptText className="size-4" />
-                      Receipt
+                      {t("Receipt")}
                     </ButtonLink>
                   )}
                 />
@@ -221,17 +217,17 @@ export function CustomerDetailView({ id }: { id: string }) {
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Summary</CardTitle>
+              <CardTitle className="text-base">{t("Summary")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
-              <Row label="Rentals in total" value={count(customer.rentalCount ?? 0)} />
-              <Row label="Out right now" value={plural(customer.openRentalCount ?? 0, "rental")} />
+              <Row label={t("Rentals in total")} value={count(customer.rentalCount ?? 0)} />
+              <Row label={t("Out right now")} value={plural(customer.openRentalCount ?? 0, "rental")} />
               {(customer.balanceDue ?? 0) < 0 ? (
                 // More paid than charged so far: an advance waiting for the rent.
-                <Row label="Paid ahead" value={money(-(customer.balanceDue ?? 0), currency)} />
+                <Row label={t("Paid ahead")} value={money(-(customer.balanceDue ?? 0), currency)} />
               ) : (
                 <Row
-                  label="Still owes"
+                  label={t("Still owes")}
                   value={money(customer.balanceDue ?? 0, currency)}
                   warn={(customer.balanceDue ?? 0) > 0}
                 />
@@ -243,17 +239,17 @@ export function CustomerDetailView({ id }: { id: string }) {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Details</CardTitle>
+              <CardTitle className="text-base">{t("Details")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
-              {customer.phone && <Row label="Phone" value={customer.phone} />}
-              {customer.email && <Row label="Email" value={customer.email} />}
-              {customer.address && <Row label="Address" value={customer.address} />}
-              {customer.idNumber && <Row label={customer.idType || "ID"} value={customer.idNumber} />}
-              <Row label="Added" value={date(customer.createdAt)} />
+              {customer.phone && <Row label={t("Phone")} value={customer.phone} />}
+              {customer.email && <Row label={t("Email")} value={customer.email} />}
+              {customer.address && <Row label={t("Address")} value={customer.address} />}
+              {customer.idNumber && <Row label={customer.idType || t("ID")} value={customer.idNumber} />}
+              <Row label={t("Added")} value={date(customer.createdAt)} />
               {customer.notes && (
                 <div className="border-t pt-2">
-                  <div className="text-muted-foreground">Notes</div>
+                  <div className="text-muted-foreground">{t("Notes")}</div>
                   <p className="mt-1 whitespace-pre-wrap">{customer.notes}</p>
                 </div>
               )}

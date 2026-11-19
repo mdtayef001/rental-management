@@ -1,7 +1,9 @@
-import type { Metadata } from "next"
+import { DevixCredit } from "@/components/devix"
+import { LanguageToggle } from "@/components/i18n"
+import { getT, pageTitle } from "@/lib/i18n/server"
 import { LoginForm } from "./form"
 
-export const metadata: Metadata = { title: "Log in" }
+export const generateMetadata = () => pageTitle("Log in")
 
 /**
  * The way in.
@@ -12,16 +14,18 @@ export const metadata: Metadata = { title: "Log in" }
  */
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   const { next } = await searchParams
+  const t = await getT()
   return (
     <main className="flex min-h-full flex-1 items-center justify-center bg-muted/40 p-4 sm:p-6">
+      <LanguageToggle className="fixed top-3 right-3" />
       <div className="w-full max-w-sm space-y-6">
         <div className="space-y-3 text-center">
           <div className="mx-auto flex size-11 items-center justify-center rounded-xl bg-primary font-heading font-semibold text-primary-foreground">
             RM
           </div>
           <div className="space-y-1">
-            <h1 className="font-heading text-2xl font-semibold tracking-tight">Rental Manager</h1>
-            <p className="text-sm text-muted-foreground">Log in to rent out stock and take it back.</p>
+            <h1 className="font-heading text-2xl font-semibold tracking-tight">{t("Rental Manager")}</h1>
+            <p className="text-sm text-muted-foreground">{t("Log in to rent out stock and take it back.")}</p>
           </div>
         </div>
 
@@ -30,8 +34,12 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
         </div>
 
         <p className="text-center text-xs text-pretty text-muted-foreground">
-          Accounts are created by the owner. If you can&apos;t get in, ask them to reset your password.
+          {t("Accounts are created by the owner. If you can't get in, ask them to reset your password.")}
         </p>
+
+        <div className="flex justify-center">
+          <DevixCredit label={t("Technology partner")} />
+        </div>
       </div>
     </main>
   )

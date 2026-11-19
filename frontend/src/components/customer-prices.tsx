@@ -15,8 +15,9 @@ import { useCustomerRates } from "@/lib/data/queries"
 import { money } from "@/lib/format"
 import { PLAN_LABEL, availablePlans, rateFor } from "@/lib/rental"
 import type { ProductLookup, RentalPlan } from "@/lib/types"
+import { msg, t } from "@/lib/i18n"
 
-const PER: Record<RentalPlan, string> = { daily: "a day", weekly: "a week", monthly: "a month", fixed: "fixed" }
+const PER: Record<RentalPlan, string> = { daily: msg("a day"), weekly: msg("a week"), monthly: msg("a month"), fixed: msg("fixed") }
 
 /**
  * The prices agreed with one customer.
@@ -46,7 +47,7 @@ export function CustomerPrices({ customerId, customerName, canEdit }: { customer
     try {
       start(await request<ProductLookup>(`products/lookup/?code=${encodeURIComponent(code)}&rentableOnly=1`))
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Couldn't find that code.")
+      toast.error(err instanceof ApiError ? t(err.message) : t("Couldn't find that code."))
     } finally {
       setFinding(false)
     }
@@ -60,11 +61,11 @@ export function CustomerPrices({ customerId, customerName, canEdit }: { customer
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Their prices</CardTitle>
+        <CardTitle className="text-base">{t("Their prices")}</CardTitle>
         <CardDescription>
           {rates.length === 0
-            ? `${customerName} pays the usual price for everything.`
-            : "Used automatically when renting to them. Everything else is the usual price."}
+            ? t("{name} pays the usual price for everything.", { name: customerName })
+            : t("Used automatically when renting to them. Everything else is the usual price.")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -75,14 +76,14 @@ export function CustomerPrices({ customerId, customerName, canEdit }: { customer
                 <div className="min-w-0 flex-1">
                   <p className="font-medium [overflow-wrap:anywhere]">{rate.productName}</p>
                   <p className="text-xs text-muted-foreground">
-                    {rate.defaultRate != null ? `Usual ${money(rate.defaultRate, currency)} ${PER[rate.plan]}` : PLAN_LABEL[rate.plan]}
+                    {rate.defaultRate != null ? t("Usual {amount} {per}", { amount: money(rate.defaultRate, currency), per: t(PER[rate.plan]) }) : t(PLAN_LABEL[rate.plan])}
                   </p>
                 </div>
                 {canEdit ? (
                   <PriceBox
                     key={rate.rate}
                     value={rate.rate}
-                    label={`${rate.productName} price ${PER[rate.plan]}`}
+                    label={t("{product} price {per}", { product: rate.productName, per: t(PER[rate.plan]) })}
                     onSave={(value) => save.mutate({ product: rate.productId, plan: rate.plan, rate: value })}
                   />
                 ) : (
@@ -92,7 +93,7 @@ export function CustomerPrices({ customerId, customerName, canEdit }: { customer
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    aria-label={`Go back to the usual price for ${rate.productName}`}
+                    aria-label={t("Go back to the usual price for {product}", { product: rate.productName })}
                     disabled={save.isPending}
                     onClick={() => save.mutate({ product: rate.productId, plan: rate.plan, rate: null })}
                   >
@@ -107,7 +108,7 @@ export function CustomerPrices({ customerId, customerName, canEdit }: { customer
         {canEdit && !adding && (
           <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
             <Plus className="size-4" />
-            Set a price for a product
+            {t("Set a price for a product")}
           </Button>
         )}
 
@@ -115,7 +116,7 @@ export function CustomerPrices({ customerId, customerName, canEdit }: { customer
           <div className="space-y-2">
             <ProductFinder onCode={lookUp} onPick={start} busy={finding} autoFocus compact />
             <Button variant="ghost" size="sm" onClick={close}>
-              Cancel
+              {t("Cancel")}
             </Button>
           </div>
         )}
@@ -140,30 +141,30 @@ export function CustomerPrices({ customerId, customerName, canEdit }: { customer
                 value={draft.rate}
                 onChange={(e) => setDraft({ ...draft, rate: e.target.value })}
                 className="h-9 w-28 tabular-nums"
-                aria-label="Price"
+                aria-label={t("Price")}
               />
               <select
                 value={draft.plan}
                 onChange={(e) => setDraft({ ...draft, plan: e.target.value as RentalPlan })}
                 className="h-9 rounded-md border bg-card px-2 text-sm"
-                aria-label="Charged"
+                aria-label={t("Charged")}
               >
                 {availablePlans(draft.product).map((plan) => (
                   <option key={plan} value={plan}>
-                    {PLAN_LABEL[plan]}
+                    {t(PLAN_LABEL[plan])}
                   </option>
                 ))}
               </select>
               <Button type="submit" size="sm" disabled={save.isPending || draft.rate === ""}>
-                Save
+                {t("Save")}
               </Button>
               <Button type="button" variant="ghost" size="sm" onClick={close}>
-                Cancel
+                {t("Cancel")}
               </Button>
             </div>
             {rateFor(draft.product, draft.plan) != null && (
               <p className="text-xs text-muted-foreground">
-                The usual price is {money(rateFor(draft.product, draft.plan), currency)} {PER[draft.plan]}.
+                {t("The usual price is {amount} {per}.", { amount: money(rateFor(draft.product, draft.plan), currency), per: t(PER[draft.plan]) })}
               </p>
             )}
           </form>

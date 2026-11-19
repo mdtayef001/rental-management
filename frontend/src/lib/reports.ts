@@ -1,5 +1,7 @@
-import { format, startOfMonth, startOfYear, subDays, subMonths } from "date-fns"
+import { format as isoFormat, startOfMonth, startOfYear, subDays, subMonths } from "date-fns"
+import { format } from "@/lib/format"
 import type { ReportRange } from "@/lib/types"
+import { msg } from "@/lib/i18n"
 
 /**
  * The date ranges a report can cover.
@@ -9,7 +11,7 @@ import type { ReportRange } from "@/lib/types"
  * a report "for October" means the same thing on the owner's phone as on the counter PC.
  */
 
-export const iso = (day: Date) => format(day, "yyyy-MM-dd")
+export const iso = (day: Date) => isoFormat(day, "yyyy-MM-dd")
 
 export interface Preset {
   id: string
@@ -21,12 +23,12 @@ export interface Preset {
 export const PRESETS: Preset[] = [
   {
     id: "month",
-    label: "This month",
+    label: msg("This month"),
     range: () => ({ from: iso(startOfMonth(new Date())), to: iso(new Date()) }),
   },
   {
     id: "last-month",
-    label: "Last month",
+    label: msg("Last month"),
     range: () => {
       const start = startOfMonth(subMonths(new Date(), 1))
       return { from: iso(start), to: iso(subDays(startOfMonth(new Date()), 1)) }
@@ -34,17 +36,17 @@ export const PRESETS: Preset[] = [
   },
   {
     id: "7d",
-    label: "Last 7 days",
+    label: msg("Last 7 days"),
     range: () => ({ from: iso(subDays(new Date(), 6)), to: iso(new Date()) }),
   },
   {
     id: "90d",
-    label: "Last 90 days",
+    label: msg("Last 90 days"),
     range: () => ({ from: iso(subDays(new Date(), 89)), to: iso(new Date()) }),
   },
   {
     id: "year",
-    label: "This year",
+    label: msg("This year"),
     range: () => ({ from: iso(startOfYear(new Date())), to: iso(new Date()) }),
   },
 ]

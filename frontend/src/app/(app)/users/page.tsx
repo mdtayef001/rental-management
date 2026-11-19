@@ -1,8 +1,8 @@
-import type { Metadata } from "next"
 import { requireAccess } from "@/lib/auth/dal"
 import { UsersView } from "./view"
+import { pageTitle } from "@/lib/i18n/server"
 
-export const metadata: Metadata = { title: "Team" }
+export const generateMetadata = () => pageTitle("Team")
 
 export default async function UsersPage() {
   await requireAccess("/users")

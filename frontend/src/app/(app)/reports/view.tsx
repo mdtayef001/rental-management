@@ -20,6 +20,7 @@ import {
 import { logoUrl } from "@/lib/logo"
 import { DEFAULT_PRESET, PRESETS, presetFor, rangeLabel } from "@/lib/reports"
 import type { ReportExport, ReportRange } from "@/lib/types"
+import { msg, t } from "@/lib/i18n"
 
 /**
  * The owner's end-of-month screen.
@@ -50,13 +51,13 @@ export function ReportsView() {
     <div className="mx-auto w-full max-w-4xl space-y-5">
       <div className="space-y-4 print:hidden">
         <PageHeader
-          title="Reports"
-          description={rangeLabel(range) + (busy ? " · updating…" : "")}
+          title={t("Reports")}
+          description={rangeLabel(range) + (busy ? ` · ${t("updating…")}` : "")}
         >
           <PrintButton />
           <Button render={<a href={reportPdfUrl(range)} download />}>
             <Download className="size-4" />
-            Download PDF
+            {t("Download PDF")}
           </Button>
         </PageHeader>
         <RangePicker range={range} onChange={setRange} />
@@ -77,7 +78,7 @@ export function ReportsView() {
             customers: customers.data.results,
             debtors: debtors.data.results,
           }}
-          business={{ name: business?.name ?? "Report", address: business?.address, phone: business?.phone }}
+          business={{ name: business?.name ?? t("Report"), address: business?.address, phone: business?.phone }}
           logo={logoUrl(business?.logoVersion)}
           currency={currency}
         />
@@ -102,7 +103,7 @@ function RangePicker({ range, onChange }: { range: ReportRange; onChange: (r: Re
             variant={active === preset.id ? "default" : "outline"}
             onClick={() => onChange(preset.range())}
           >
-            {preset.label}
+            {t(preset.label)}
           </Button>
         ))}
       </div>
@@ -113,16 +114,16 @@ function RangePicker({ range, onChange }: { range: ReportRange; onChange: (r: Re
           max={range.to}
           onChange={(e) => e.target.value && onChange({ ...range, from: e.target.value })}
           className="h-9 w-auto flex-1 sm:flex-none"
-          aria-label="From"
+          aria-label={t("From")}
         />
-        <span className="text-muted-foreground">to</span>
+        <span className="text-muted-foreground">{t("to")}</span>
         <Input
           type="date"
           value={range.to}
           min={range.from}
           onChange={(e) => e.target.value && onChange({ ...range, to: e.target.value })}
           className="h-9 w-auto flex-1 sm:flex-none"
-          aria-label="To"
+          aria-label={t("To")}
         />
       </div>
     </div>
@@ -130,13 +131,13 @@ function RangePicker({ range, onChange }: { range: ReportRange; onChange: (r: Re
 }
 
 const FILES: { report: ReportExport; title: string; description: string }[] = [
-  { report: "rentals", title: "Rentals", description: "Every rental started in this period, with its charges and balance." },
-  { report: "returns", title: "Returns", description: "Every item taken back, with the days billed and what it cost." },
-  { report: "payments", title: "Payments", description: "Money in and out against rentals, to reconcile the till." },
-  { report: "revenue", title: "Earnings by date", description: "The earned-per-day table above, in full." },
-  { report: "products", title: "Products", description: "Every product that earned something, not just the top ten." },
-  { report: "customers", title: "Customers", description: "Every customer who returned something, with what they owe." },
-  { report: "debtors", title: "Who owes", description: "Everyone with an unpaid balance today." },
+  { report: "rentals", title: msg("Rentals"), description: msg("Every rental started in this period, with its charges and balance.") },
+  { report: "returns", title: msg("Returns"), description: msg("Every item taken back, with the days billed and what it cost.") },
+  { report: "payments", title: msg("Payments"), description: msg("Money in and out against rentals, to reconcile the till.") },
+  { report: "revenue", title: msg("Earnings by date"), description: msg("The earned-per-day table above, in full.") },
+  { report: "products", title: msg("Products"), description: msg("Every product that earned something, not just the top ten.") },
+  { report: "customers", title: msg("Customers"), description: msg("Every customer who returned something, with what they owe.") },
+  { report: "debtors", title: msg("Who owes"), description: msg("Everyone with an unpaid balance today.") },
 ]
 
 /**
@@ -147,24 +148,24 @@ function Records({ range }: { range: ReportRange }) {
   return (
     <section className="space-y-3 border-t pt-6 print:hidden">
       <div>
-        <h2 className="text-sm font-medium">Spreadsheet files</h2>
-        <p className="text-sm text-muted-foreground">The records behind the report, for the same dates. They open in Excel.</p>
+        <h2 className="text-sm font-medium">{t("Spreadsheet files")}</h2>
+        <p className="text-sm text-muted-foreground">{t("The records behind the report, for the same dates. They open in Excel.")}</p>
       </div>
       <ul className="divide-y overflow-hidden rounded-lg border bg-card">
         {FILES.map((file) => (
           <li key={file.report} className="flex items-center justify-between gap-3 px-4 py-3">
             <div className="min-w-0">
-              <div className="text-sm font-medium">{file.title}</div>
-              <p className="text-sm text-muted-foreground">{file.description}</p>
+              <div className="text-sm font-medium">{t(file.title)}</div>
+              <p className="text-sm text-muted-foreground">{t(file.description)}</p>
             </div>
             <Button
               variant="outline"
               size="sm"
               className="shrink-0"
-              render={<a href={exportUrl(file.report, range)} download aria-label={`Download ${file.title} as a spreadsheet`} />}
+              render={<a href={exportUrl(file.report, range)} download aria-label={t("Download {file} as a spreadsheet", { file: t(file.title) })} />}
             >
               <Download className="size-4" />
-              CSV
+              {t("CSV")}
             </Button>
           </li>
         ))}

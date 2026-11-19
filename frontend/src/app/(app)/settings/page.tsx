@@ -1,8 +1,8 @@
-import type { Metadata } from "next"
 import { requireAccess } from "@/lib/auth/dal"
 import { SettingsView } from "./view"
+import { pageTitle } from "@/lib/i18n/server"
 
-export const metadata: Metadata = { title: "Settings" }
+export const generateMetadata = () => pageTitle("Settings")
 
 export default async function SettingsPage() {
   // Owners only — the route rules enforce this, and so does Django.

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next"
-import { Archivo, IBM_Plex_Mono } from "next/font/google"
+import { Archivo, IBM_Plex_Mono, Noto_Sans_Bengali } from "next/font/google"
 import { Providers } from "@/components/providers"
+import { getRequestLang, getT } from "@/lib/i18n/server"
 import "./globals.css"
 
 // Archivo for everything in the interface: a grotesque with a tall x-height and slightly
@@ -23,13 +24,25 @@ const plexMono = IBM_Plex_Mono({
   display: "swap",
 })
 
-export const metadata: Metadata = {
-  title: { default: "Rental Manager", template: "%s · Rental Manager" },
-  description: "Rent out stock, take it back by scanning, and keep the books straight.",
-  appleWebApp: { capable: true, statusBarStyle: "default", title: "Rental Manager" },
-  // iOS ignores the manifest's icons and uses this for "Add to Home Screen".
-  icons: { apple: "/icons/apple-touch-icon.png" },
-  robots: { index: false, follow: false },
+// Bangla, for when the app is switched to বাংলা. Archivo is listed first everywhere, so this
+// only ever draws the Bangla letters; Latin text, digits and codes stay in Archivo.
+const bangla = Noto_Sans_Bengali({
+  variable: "--font-bangla",
+  subsets: ["bengali"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+})
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT()
+  return {
+    title: { default: t("Rental Manager"), template: `%s · ${t("Rental Manager")}` },
+    description: t("Rent out stock, take it back by scanning, and keep the books straight."),
+    appleWebApp: { capable: true, statusBarStyle: "default", title: "Rental Manager" },
+    // iOS ignores the manifest's icons and uses this for "Add to Home Screen".
+    icons: { apple: "/icons/apple-touch-icon.png" },
+    robots: { index: false, follow: false },
+  }
 }
 
 export const viewport: Viewport = {
@@ -45,15 +58,16 @@ export const viewport: Viewport = {
   ],
 }
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const lang = await getRequestLang()
   return (
     <html
-      lang="en"
-      className={`${archivo.variable} ${plexMono.variable} h-full antialiased`}
+      lang={lang}
+      className={`${archivo.variable} ${plexMono.variable} ${bangla.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <body className="flex min-h-full flex-col">
-        <Providers>{children}</Providers>
+        <Providers lang={lang}>{children}</Providers>
       </body>
     </html>
   )

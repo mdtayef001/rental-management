@@ -22,12 +22,13 @@ import { useDisableUser, useSaveUser, useSetUserPassword } from "@/lib/data/muta
 import { usePaging, useUsers } from "@/lib/data/queries"
 import { date } from "@/lib/format"
 import type { RightId, SessionUser, TenantRole } from "@/lib/types"
+import { msg, t } from "@/lib/i18n"
 
 /** The per-person rights, in the order they matter at a counter. */
 const RIGHTS: { id: RightId; label: string; hint: string }[] = [
-  { id: "canRent", label: "Rent items out", hint: "Start a new rental." },
-  { id: "canTakeReturns", label: "Take returns", hint: "Accept items back, take the money and give change back." },
-  { id: "canAddStock", label: "Change stock", hint: "Correct shelf counts and record damage." },
+  { id: "canRent", label: msg("Rent items out"), hint: msg("Start a new rental.") },
+  { id: "canTakeReturns", label: msg("Take returns"), hint: msg("Accept items back, take the money and give change back.") },
+  { id: "canAddStock", label: msg("Change stock"), hint: msg("Correct shelf counts and record damage.") },
 ]
 
 /**
@@ -51,57 +52,57 @@ export function UsersView() {
   const columns: Column<SessionUser>[] = [
     {
       id: "name",
-      header: "Name",
+      header: t("Name"),
       role: "title",
       cell: (person) => (
         <Primary sub={person.email}>
           <span className={person.isActive ? undefined : "line-through decoration-muted-foreground"}>
             {person.name}
           </span>
-          {person.id === me.id && <span className="ml-2 text-xs font-normal text-muted-foreground">(you)</span>}
+          {person.id === me.id && <span className="ml-2 text-xs font-normal text-muted-foreground">({t("you")})</span>}
         </Primary>
       ),
     },
     {
       id: "role",
-      header: "Role",
+      header: t("Role"),
       role: "status",
       cell: (person) => (
         <div className="flex flex-wrap items-center gap-1">
           <Badge variant={person.role === "owner" ? "default" : "secondary"}>{roleLabel(person)}</Badge>
-          {!person.isActive && <Badge variant="outline">Disabled</Badge>}
+          {!person.isActive && <Badge variant="outline">{t("Disabled")}</Badge>}
         </div>
       ),
     },
     {
       id: "can",
-      header: "Can",
+      header: t("Can"),
       cell: (person) => (
         <span className="text-sm text-muted-foreground">
           {person.role === "staff"
             ? RIGHTS.filter((r) => person[r.id])
-                .map((r) => r.label)
-                .join(", ") || "Nothing yet"
-            : "Everything in their role"}
+                .map((r) => t(r.label))
+                .join(", ") || t("Nothing yet")
+            : t("Everything in their role")}
         </span>
       ),
     },
     {
       id: "seen",
-      header: "Last logged in",
+      header: t("Last logged in"),
       cell: (person) => (
-        <span className="text-sm text-muted-foreground">{person.lastLogin ? date(person.lastLogin) : "Never"}</span>
+        <span className="text-sm text-muted-foreground">{person.lastLogin ? date(person.lastLogin) : t("Never")}</span>
       ),
     },
   ]
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Team" description="Who works here, and what each of them is allowed to do.">
+      <PageHeader title={t("Team")} description={t("Who works here, and what each of them is allowed to do.")}>
         {roles.length > 0 && (
           <Button onClick={() => setAdding(true)}>
             <Plus className="size-4" />
-            Add someone
+            {t("Add someone")}
           </Button>
         )}
       </PageHeader>
@@ -111,11 +112,11 @@ export function UsersView() {
       ) : isLoading ? (
         <TableSkeleton rows={4} columns={4} />
       ) : data && data.results.length === 0 ? (
-        <EmptyState title="Nobody else yet" description="Add a manager or counter staff to share the work." />
+        <EmptyState title={t("Nobody else yet")} description={t("Add a manager or counter staff to share the work.")} />
       ) : (
         <>
           <DataView
-            label="Team"
+            label={t("Team")}
             rows={data?.results ?? []}
             columns={columns}
             getKey={(person) => person.id}
@@ -123,11 +124,11 @@ export function UsersView() {
               canManageUser(me, person) ? (
                 <>
                   <Button variant="outline" size="sm" onClick={() => setEditing(person)}>
-                    Edit
+                    {t("Edit")}
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => setResetting(person)}>
                     <KeyRound className="size-4" />
-                    <span className="md:sr-only">Reset password</span>
+                    <span className="md:sr-only">{t("Reset password")}</span>
                   </Button>
                 </>
               ) : null
@@ -187,18 +188,18 @@ function UserDialog({ roles, user, onClose }: { roles: TenantRole[]; user?: Sess
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{user ? `Edit ${user.name}` : "Add someone to the team"}</DialogTitle>
+          <DialogTitle>{user ? t("Edit {name}", { name: user.name }) : t("Add someone to the team")}</DialogTitle>
           <DialogDescription>
             {user
-              ? "Their email can't be changed here — reset the password instead if they're locked out."
-              : "They log in with this email and password. Tell them to change it after their first login."}
+              ? t("Their email can't be changed here — reset the password instead if they're locked out.")
+              : t("They log in with this email and password. Tell them to change it after their first login.")}
           </DialogDescription>
         </DialogHeader>
 
         <form id="user-form" className="space-y-4" onSubmit={submit}>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="u-name">Name</Label>
+              <Label htmlFor="u-name">{t("Name")}</Label>
               <Input
                 id="u-name"
                 value={form.name}
@@ -208,7 +209,7 @@ function UserDialog({ roles, user, onClose }: { roles: TenantRole[]; user?: Sess
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="u-phone">Phone</Label>
+              <Label htmlFor="u-phone">{t("Phone")}</Label>
               <Input
                 id="u-phone"
                 value={form.phone}
@@ -219,7 +220,7 @@ function UserDialog({ roles, user, onClose }: { roles: TenantRole[]; user?: Sess
             {!user && (
               <>
                 <div className="space-y-2">
-                  <Label htmlFor="u-email">Email</Label>
+                  <Label htmlFor="u-email">{t("Email")}</Label>
                   <Input
                     id="u-email"
                     type="email"
@@ -229,7 +230,7 @@ function UserDialog({ roles, user, onClose }: { roles: TenantRole[]; user?: Sess
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="u-password">Password</Label>
+                  <Label htmlFor="u-password">{t("Password")}</Label>
                   <Input
                     id="u-password"
                     type="password"
@@ -238,12 +239,12 @@ function UserDialog({ roles, user, onClose }: { roles: TenantRole[]; user?: Sess
                     required
                     minLength={10}
                   />
-                  <p className="text-xs text-muted-foreground">At least 10 characters.</p>
+                  <p className="text-xs text-muted-foreground">{t("At least 10 characters.")}</p>
                 </div>
               </>
             )}
             <div className="space-y-2">
-              <Label htmlFor="u-role">Role</Label>
+              <Label htmlFor="u-role">{t("Role")}</Label>
               <select
                 id="u-role"
                 value={form.role}
@@ -252,7 +253,7 @@ function UserDialog({ roles, user, onClose }: { roles: TenantRole[]; user?: Sess
               >
                 {roles.map((role) => (
                   <option key={role} value={role}>
-                    {role === "owner" ? "Admin (owner level)" : role === "manager" ? "Manager" : "Staff"}
+                    {role === "owner" ? t("Admin (owner level)") : role === "manager" ? t("Manager") : t("Staff")}
                   </option>
                 ))}
               </select>
@@ -261,9 +262,9 @@ function UserDialog({ roles, user, onClose }: { roles: TenantRole[]; user?: Sess
 
           {form.role === "staff" && (
             <fieldset className="space-y-2 rounded-lg border p-3">
-              <legend className="px-1 text-sm font-medium">What they can do</legend>
+              <legend className="px-1 text-sm font-medium">{t("What they can do")}</legend>
               <p className="text-xs text-muted-foreground">
-                Managers and admins can always do all of these. These switches only apply to staff.
+                {t("Managers and admins can always do all of these. These switches only apply to staff.")}
               </p>
               {RIGHTS.map((right) => (
                 <label key={right.id} className="flex items-start gap-2 text-sm">
@@ -274,8 +275,8 @@ function UserDialog({ roles, user, onClose }: { roles: TenantRole[]; user?: Sess
                     onChange={(e) => setForm((f) => ({ ...f, [right.id]: e.target.checked }))}
                   />
                   <span>
-                    {right.label}
-                    <span className="block text-xs text-muted-foreground">{right.hint}</span>
+                    {t(right.label)}
+                    <span className="block text-xs text-muted-foreground">{t(right.hint)}</span>
                   </span>
                 </label>
               ))}
@@ -292,15 +293,15 @@ function UserDialog({ roles, user, onClose }: { roles: TenantRole[]; user?: Sess
               onClick={() => disable.mutate(user.id, { onSuccess: onClose })}
             >
               <UserMinus className="size-4" />
-              Disable account
+              {t("Disable account")}
             </Button>
           )}
           <Button variant="outline" onClick={onClose}>
-            Cancel
+            {t("Cancel")}
           </Button>
           <Button type="submit" form="user-form" disabled={save.isPending}>
             {save.isPending && <Spinner />}
-            {user ? "Save" : "Create account"}
+            {user ? t("Save") : t("Create account")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -316,11 +317,11 @@ function PasswordDialog({ user, onClose }: { user: SessionUser; onClose: () => v
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>Reset {user.name}&apos;s password</DialogTitle>
-          <DialogDescription>They will need the new password to log in. Tell it to them directly.</DialogDescription>
+          <DialogTitle>{t("Reset {name}'s password", { name: user.name })}</DialogTitle>
+          <DialogDescription>{t("They will need the new password to log in. Tell it to them directly.")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-1.5">
-          <Label htmlFor="new-password">New password</Label>
+          <Label htmlFor="new-password">{t("New password")}</Label>
           <Input
             id="new-password"
             type="password"
@@ -329,18 +330,18 @@ function PasswordDialog({ user, onClose }: { user: SessionUser; onClose: () => v
             minLength={10}
             autoFocus
           />
-          <p className="text-xs text-muted-foreground">At least 10 characters.</p>
+          <p className="text-xs text-muted-foreground">{t("At least 10 characters.")}</p>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
-            Cancel
+            {t("Cancel")}
           </Button>
           <Button
             disabled={set.isPending || password.length < 10}
             onClick={() => set.mutate({ id: user.id, password }, { onSuccess: onClose })}
           >
             {set.isPending && <Spinner />}
-            Set password
+            {t("Set password")}
           </Button>
         </DialogFooter>
       </DialogContent>

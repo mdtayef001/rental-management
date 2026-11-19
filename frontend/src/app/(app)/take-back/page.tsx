@@ -1,8 +1,8 @@
-import type { Metadata } from "next"
 import { requireAccess } from "@/lib/auth/dal"
 import { TakeBackView } from "./view"
+import { pageTitle } from "@/lib/i18n/server"
 
-export const metadata: Metadata = { title: "Take back" }
+export const generateMetadata = () => pageTitle("Take back")
 
 export default async function TakeBackPage() {
   // Checks the role, the rentals module and the staff member's canTakeReturns right.

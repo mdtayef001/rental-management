@@ -6,11 +6,13 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { ErrorState, PageHeader, TableSkeleton } from "@/components/common"
 import { PrintButton } from "@/components/paper"
+import { SlipSettings } from "@/components/receipt-paper"
 import { ReceiptDocument } from "@/components/receipt"
 import { useSession } from "@/components/session"
 import { useRental } from "@/lib/data/queries"
 import { whatsappLink } from "@/lib/format"
 import { fromRental } from "@/lib/receipt"
+import { t } from "@/lib/i18n"
 
 /**
  * One rental's receipt, on its own page.
@@ -32,16 +34,16 @@ export function ReceiptView({ id }: { id: string }) {
   const receipt = fromRental(rental, business, window.location.origin)
   const share = whatsappLink(
     rental.customerPhone,
-    `Hello ${rental.customerName}, here is your receipt ${rental.code} from ${business?.name ?? "us"}: ${receipt.link ?? ""}`,
+    t("Hello {name}, here is your receipt {code} from {business}: {link}", { name: rental.customerName, code: rental.code, business: business?.name ?? t("us"), link: receipt.link ?? "" }),
   )
 
   async function copy() {
     if (!receipt.link) return
     try {
       await navigator.clipboard.writeText(receipt.link)
-      toast.success("Receipt link copied. Paste it to the customer.")
+      toast.success(t("Receipt link copied. Paste it to the customer."))
     } catch {
-      toast.error("Couldn't copy. Select the link and copy it by hand.")
+      toast.error(t("Couldn't copy. Select the link and copy it by hand."))
     }
   }
 
@@ -49,13 +51,17 @@ export function ReceiptView({ id }: { id: string }) {
     <div className="mx-auto w-full max-w-3xl space-y-5">
       <div className="print:hidden">
         <PageHeader
-          title={`Receipt ${rental.code}`}
+          title={`${t("Receipt")} ${rental.code}`}
           description={rental.customerName}
           back={{ href: `/rentals/${id}`, label: rental.code }}
         >
-          <PrintButton label="Till slip" before={() => setPaper("slip")} />
-          <PrintButton label="Print" variant="default" before={() => setPaper("sheet")} />
+          <PrintButton label={t("Till slip")} before={() => setPaper("slip")} />
+          <PrintButton label={t("Print")} variant="default" before={() => setPaper("sheet")} />
         </PageHeader>
+        {/* This counter's slip printer. Remembered on this device, since the printer is. */}
+        <div className="mt-3">
+          <SlipSettings />
+        </div>
       </div>
 
       <ReceiptDocument receipt={receipt} paper={paper} />
@@ -63,21 +69,21 @@ export function ReceiptView({ id }: { id: string }) {
       {receipt.link && (
         <div className="space-y-3 rounded-xl border p-4 print:hidden">
           <div>
-            <h2 className="text-sm font-medium">Send it to the customer</h2>
+            <h2 className="text-sm font-medium">{t("Send it to the customer")}</h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              They open it on their phone — no login — and can print it or save it as a PDF from there.
+              {t("They open it on their phone — no login — and can print it or save it as a PDF from there.")}
             </p>
           </div>
           <p className="rounded-md bg-muted px-2.5 py-1.5 font-mono text-xs break-all select-all">{receipt.link}</p>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" onClick={copy}>
               <Copy className="size-4" />
-              Copy link
+              {t("Copy link")}
             </Button>
             {share && (
               <Button variant="outline" size="sm" render={<a href={share} target="_blank" rel="noreferrer" />}>
                 <MessageCircle className="size-4" />
-                WhatsApp
+                {t("WhatsApp")}
               </Button>
             )}
           </div>

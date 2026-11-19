@@ -5,6 +5,7 @@ import { Camera, CameraOff, Keyboard, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { t } from "@/lib/i18n"
 
 type Html5QrcodeType = import("html5-qrcode").Html5Qrcode
 
@@ -78,10 +79,10 @@ export function CameraScanner({ onDetected, active = true }: { onDetected: (code
         // "type the code instead", because the shop can't stop serving customers.
         setError(
           /permission|notallowed/i.test(message)
-            ? "Camera permission was denied. Allow camera access in your browser settings, or type the code instead."
+            ? t("Camera permission was denied. Allow camera access in your browser settings, or type the code instead.")
             : /notfound|no camera|requested device/i.test(message)
-              ? "No camera was found on this device. Type the code, or use a USB scanner."
-              : "The camera couldn't start. Check no other app is using it, or type the code instead.",
+              ? t("No camera was found on this device. Type the code, or use a USB scanner.")
+              : t("The camera couldn't start. Check no other app is using it, or type the code instead."),
         )
       }
     })()
@@ -105,7 +106,7 @@ export function CameraScanner({ onDetected, active = true }: { onDetected: (code
       {status === "starting" && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-white/80">
           <Loader2 className="size-6 animate-spin" />
-          Starting camera…
+          {t("Starting camera…")}
         </div>
       )}
       {status === "error" && (
@@ -116,7 +117,7 @@ export function CameraScanner({ onDetected, active = true }: { onDetected: (code
       )}
       {status === "running" && (
         <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 text-center text-xs text-white">
-          Point the camera at a barcode or QR code
+          {t("Point the camera at a barcode or QR code")}
         </div>
       )}
     </div>
@@ -135,7 +136,7 @@ export function CodeInput({
   value: controlled,
   onSubmit,
   onChange,
-  placeholder = "Scan or type a barcode / SKU, then press Enter",
+  placeholder = t("Scan or type a barcode / SKU, then press Enter"),
   autoFocus,
   busy,
   children,
@@ -195,11 +196,11 @@ export function CodeInput({
           autoComplete="off"
           autoCapitalize="off"
           spellCheck={false}
-          aria-label="Barcode or SKU"
+          aria-label={t("Barcode or SKU")}
         />
       </div>
       <Button type="submit" className="h-11" disabled={busy || !value.trim()}>
-        Look up
+        {t("Look up")}
       </Button>
       {children}
     </form>
@@ -209,7 +210,7 @@ export function CodeInput({
 /** A camera button that opens a scanner and hands back the first code it reads. */
 export function ScanButton({
   onScan,
-  label = "Scan",
+  label = t("Scan"),
   variant = "outline",
 }: {
   onScan: (code: string) => void
@@ -226,8 +227,8 @@ export function ScanButton({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Scan a code</DialogTitle>
-            <DialogDescription>Hold the barcode or QR code inside the frame.</DialogDescription>
+            <DialogTitle>{t("Scan a code")}</DialogTitle>
+            <DialogDescription>{t("Hold the barcode or QR code inside the frame.")}</DialogDescription>
           </DialogHeader>
           {/* Mounted only while open, so the camera is released when it closes. */}
           {open && (

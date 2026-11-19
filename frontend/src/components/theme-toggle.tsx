@@ -3,6 +3,7 @@
 import { Moon, Sun } from "lucide-react"
 import { useTheme } from "next-themes"
 import { Button } from "@/components/ui/button"
+import { t } from "@/lib/i18n"
 
 /**
  * Light and dark, as one icon button.
@@ -19,7 +20,7 @@ export function ThemeToggle() {
       variant="ghost"
       size="icon-sm"
       onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-      aria-label="Switch between light and dark mode"
+      aria-label={t("Switch between light and dark mode")}
     >
       <Moon className="size-4 dark:hidden" />
       <Sun className="hidden size-4 dark:block" />

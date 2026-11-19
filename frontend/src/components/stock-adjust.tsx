@@ -9,11 +9,12 @@ import { Spinner } from "@/components/common"
 import { useAdjustStock } from "@/lib/data/mutations"
 import { count } from "@/lib/format"
 import type { Product } from "@/lib/types"
+import { msg, t } from "@/lib/i18n"
 
 const REASONS = [
-  { value: "adjustment", label: "Correcting a miscount", hint: "The shelf never matched the system." },
-  { value: "damage", label: "Damaged or written off", hint: "Broken beyond use." },
-  { value: "lost", label: "Lost or stolen", hint: "Gone, and not coming back." },
+  { value: "adjustment", label: msg("Correcting a miscount"), hint: msg("The shelf never matched the system.") },
+  { value: "damage", label: msg("Damaged or written off"), hint: msg("Broken beyond use.") },
+  { value: "lost", label: msg("Lost or stolen"), hint: msg("Gone, and not coming back.") },
 ] as const
 
 /**
@@ -48,8 +49,8 @@ export function StockAdjustDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Correct the stock of {product.name}</DialogTitle>
-          <DialogDescription>Count the shelf and type what is actually there.</DialogDescription>
+          <DialogTitle>{t("Correct the stock of {product}", { product: product.name })}</DialogTitle>
+          <DialogDescription>{t("Count the shelf and type what is actually there.")}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -80,7 +81,7 @@ export function StockAdjustDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label>Why</Label>
+            <Label>{t("Why")}</Label>
             <div className="space-y-1">
               {REASONS.map((option) => (
                 <button
@@ -91,27 +92,27 @@ export function StockAdjustDialog({
                     reason === option.value ? "border-primary bg-accent" : "hover:bg-accent/60"
                   }`}
                 >
-                  <div className="font-medium">{option.label}</div>
-                  <div className="text-xs text-muted-foreground">{option.hint}</div>
+                  <div className="font-medium">{t(option.label)}</div>
+                  <div className="text-xs text-muted-foreground">{t(option.hint)}</div>
                 </button>
               ))}
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="s-note">Note</Label>
+            <Label htmlFor="s-note">{t("Note")}</Label>
             <Input
               id="s-note"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Monthly stocktake, dropped in transit…"
+              placeholder={t("Monthly stocktake, dropped in transit…")}
             />
           </div>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("Cancel")}
           </Button>
           <Button
             disabled={adjust.isPending || quantity === "" || change === 0}
@@ -129,7 +130,7 @@ export function StockAdjustDialog({
             }
           >
             {adjust.isPending && <Spinner />}
-            {change === 0 ? "No change" : "Record it"}
+            {change === 0 ? t("No change") : t("Record it")}
           </Button>
         </DialogFooter>
       </DialogContent>

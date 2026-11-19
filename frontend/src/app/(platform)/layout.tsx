@@ -4,6 +4,7 @@ import { SessionProvider } from "@/components/session"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { getContext } from "@/lib/auth/dal"
 import { ROLE_HOME } from "@/lib/auth/roles"
+import { t } from "@/lib/i18n"
 
 /**
  * The super admin's shell.
@@ -26,15 +27,15 @@ export default async function PlatformLayout({ children }: LayoutProps<"/">) {
               RM
             </div>
             <div>
-              <div className="text-sm font-semibold">Rental Manager</div>
-              <div className="text-xs text-muted-foreground">Platform administration</div>
+              <div className="text-sm font-semibold">{t("Rental Manager")}</div>
+              <div className="text-xs text-muted-foreground">{t("Platform administration")}</div>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <div className="hidden text-sm text-muted-foreground sm:block">{ctx.user.email}</div>
             <ThemeToggle />
             <Button variant="outline" size="sm" render={<a href="/logout" />}>
-              Log out
+              {t("Log out")}
             </Button>
           </div>
         </header>

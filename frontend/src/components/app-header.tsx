@@ -4,6 +4,8 @@ import { usePathname } from "next/navigation"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { CommandMenu } from "@/components/command-menu"
+import { LanguageToggle } from "@/components/i18n"
+import { msg, t } from "@/lib/i18n"
 
 /**
  * Which screen you are on, and the way to any other one.
@@ -13,19 +15,19 @@ import { CommandMenu } from "@/components/command-menu"
  * scroll away and nothing on screen says where you are.
  */
 const TITLES: Record<string, string> = {
-  dashboard: "Dashboard",
-  scan: "Scan",
-  "rent-out": "Rent out",
-  "take-back": "Take back",
-  rentals: "Rentals",
-  returns: "Returns",
-  customers: "Customers",
-  bills: "Bills",
-  products: "Products",
-  reports: "Reports",
-  users: "Team",
-  activity: "Activity",
-  settings: "Settings",
+  dashboard: msg("Dashboard"),
+  scan: msg("Scan"),
+  "rent-out": msg("Rent out"),
+  "take-back": msg("Take back"),
+  rentals: msg("Rentals"),
+  returns: msg("Returns"),
+  customers: msg("Customers"),
+  bills: msg("Bills"),
+  products: msg("Products"),
+  reports: msg("Reports"),
+  users: msg("Team"),
+  activity: msg("Activity"),
+  settings: msg("Settings"),
 }
 
 export function AppHeader() {
@@ -35,8 +37,9 @@ export function AppHeader() {
     <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b bg-background/80 px-3 backdrop-blur-sm sm:px-4">
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="mr-1 h-4!" />
-      <span className="truncate text-sm font-medium">{section}</span>
+      <span className="truncate text-sm font-medium">{section && t(section)}</span>
       <div className="ml-auto flex items-center gap-2">
+        <LanguageToggle />
         <CommandMenu />
       </div>
     </header>

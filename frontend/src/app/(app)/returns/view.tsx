@@ -18,6 +18,7 @@ import { useCurrency } from "@/components/session"
 import { useDebounced, usePaging, useReturns } from "@/lib/data/queries"
 import { count, friendlyDateTime, money, plural } from "@/lib/format"
 import type { RentalReturn } from "@/lib/types"
+import { t } from "@/lib/i18n"
 
 /** Everything that has come back, newest first. The counterpart to the rentals list. */
 export function ReturnsView() {
@@ -31,7 +32,7 @@ export function ReturnsView() {
   const columns: Column<RentalReturn>[] = [
     {
       id: "customer",
-      header: "Customer",
+      header: t("Customer"),
       role: "title",
       cell: (taken) => (
         <Primary
@@ -47,7 +48,7 @@ export function ReturnsView() {
     },
     {
       id: "condition",
-      header: "Condition",
+      header: t("Condition"),
       role: "status",
       cell: (taken) => {
         const bad = taken.lines.filter((line) => line.condition !== "good")
@@ -55,37 +56,37 @@ export function ReturnsView() {
         return bad.length > 0 ? (
           <Badge variant="destructive">{count(units)} not good</Badge>
         ) : (
-          <Badge variant="success">All good</Badge>
+          <Badge variant="success">{t("All good")}</Badge>
         )
       },
     },
     {
       id: "what",
-      header: "Came back",
+      header: t("Came back"),
       cell: (taken) => {
         const units = taken.lines.reduce((n, line) => n + line.quantity, 0)
-        return `${plural(units, "unit")} over ${plural(taken.lines.length, "line")}`
+        return t("{units} over {lines}", { units: plural(units, "unit"), lines: plural(taken.lines.length, "line") })
       },
     },
     {
       id: "charged",
-      header: "Charged",
+      header: t("Charged"),
       align: "end",
       cell: (taken) => (
         <>
           {money(taken.charges, currency)}
           {taken.lateFee > 0 && (
             <div className="text-xs text-warning-soft-foreground dark:text-warning">
-              inc. {money(taken.lateFee, currency)} late
+              {t("inc. {amount} late", { amount: money(taken.lateFee, currency) })}
             </div>
           )}
         </>
       ),
     },
-    { id: "paid", header: "Paid", align: "end", cell: (taken) => money(taken.paidAmount, currency) },
+    { id: "paid", header: t("Paid"), align: "end", cell: (taken) => money(taken.paidAmount, currency) },
     {
       id: "by",
-      header: "Taken by",
+      header: t("Taken by"),
       role: "hidden",
       cell: (taken) => <span className="text-muted-foreground">{taken.byName || "—"}</span>,
     },
@@ -93,15 +94,15 @@ export function ReturnsView() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Returns" description="Every time items have come back, and what each one charged.">
+      <PageHeader title={t("Returns")} description={t("Every time items have come back, and what each one charged.")}>
         <ButtonLink href="/take-back">
           <Undo2 className="size-4" />
-          Take back
+          {t("Take back")}
         </ButtonLink>
       </PageHeader>
 
       <Toolbar>
-        <SearchInput value={text} onChange={setText} placeholder="Customer or product" label="Search returns" suggest="rentals" />
+        <SearchInput value={text} onChange={setText} placeholder={t("Customer or product")} label={t("Search returns")} suggest="rentals" />
       </Toolbar>
 
       {isError ? (
@@ -110,14 +111,14 @@ export function ReturnsView() {
         <TableSkeleton rows={6} columns={5} />
       ) : data && data.results.length === 0 ? (
         <EmptyState
-          title={search ? `Nothing matches “${search}”` : "Nothing has come back yet"}
-          description={search ? "Try a different name." : "Returns will appear here as items come in."}
+          title={search ? t("Nothing matches “{search}”", { search }) : t("Nothing has come back yet")}
+          description={search ? t("Try a different name.") : t("Returns will appear here as items come in.")}
           icon={Undo2}
         />
       ) : (
         <>
           <DataView
-            label="Returns"
+            label={t("Returns")}
             rows={data?.results ?? []}
             columns={columns}
             getKey={(taken) => taken.id}

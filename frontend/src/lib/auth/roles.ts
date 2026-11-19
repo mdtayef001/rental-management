@@ -4,18 +4,19 @@
 // set of rules. The same rules exist in backend/apps/accounts/permissions.py: a route
 // hidden here is also refused there, because hiding a link is not a security control.
 
+import { msg, t } from "@/lib/i18n"
 import type { BusinessSettings, PermissionId, RightId, Role, SessionUser, TenantRole } from "@/lib/types"
 
 export const ROLE_LABEL: Record<Role, string> = {
-  superadmin: "Super admin",
-  owner: "Owner",
-  manager: "Manager",
-  staff: "Staff",
+  superadmin: msg("Super admin"),
+  owner: msg("Owner"),
+  manager: msg("Manager"),
+  staff: msg("Staff"),
 }
 
 /** "Owner" for the business's first owner, "Admin" for any later owner-level account. */
 export function roleLabel(user: Pick<SessionUser, "role" | "isMainOwner">) {
-  return user.role === "owner" && !user.isMainOwner ? "Admin" : ROLE_LABEL[user.role]
+  return t(user.role === "owner" && !user.isMainOwner ? msg("Admin") : ROLE_LABEL[user.role])
 }
 
 /** Where each role lands after logging in. Staff go straight to the scan screen. */

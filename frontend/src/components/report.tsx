@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Caption, Paper, PaperHeader, SheetPage, Sum, SumTotal, Sums } from "@/components/paper"
+import { Caption, Paper, PaperHeader, SheetCard, SheetCards, SheetPage, Sum, SumTotal, Sums, TABLE_ONLY } from "@/components/paper"
 import { count, date, money } from "@/lib/format"
 import { periodLabel, rangeLabel } from "@/lib/reports"
 import type {
@@ -13,6 +13,7 @@ import type {
   ReportSummary,
   RevenueRow,
 } from "@/lib/types"
+import { msg, t } from "@/lib/i18n"
 
 export interface ReportData {
   range: ReportRange
@@ -50,55 +51,55 @@ export function ReportDocument({
 }) {
   const cash = (value: number) => money(value, currency)
   const s = report.summary
-  const groupName = { day: "Day", week: "Week starting", month: "Month" }[report.group]
+  const groupName = { day: t("Day"), week: t("Week starting"), month: t("Month") }[report.group]
 
   return (
     <>
       <SheetPage />
       <Paper>
-        <PaperHeader business={business} logo={logo} title="Business report">
+        <PaperHeader business={business} logo={logo} title={t("Business report")}>
           <p className="font-semibold">{rangeLabel(report.range)}</p>
-          <p>Printed {date(new Date())}</p>
+          <p>{t("Printed {date}", { date: date(new Date()) })}</p>
         </PaperHeader>
 
         {/* The four figures an owner asks for first, ruled as one table. */}
         <section className="mt-5 grid grid-cols-2 border-t border-l border-(--sheet-line) sm:grid-cols-4 print:grid-cols-4">
-          <Figure label="Earned" value={cash(s.revenue)} />
-          <Figure label="Money received" value={cash(s.collected - s.refunded)} />
-          <Figure label="Owed by customers" value={cash(s.outstanding)} />
+          <Figure label={t("Earned")} value={cash(s.revenue)} />
+          <Figure label={t("Money received")} value={cash(s.collected - s.refunded)} />
+          <Figure label={t("Owed by customers")} value={cash(s.outstanding)} />
           <Figure
-            label="Out on rent"
-            value={`${count(s.unitsOut)} units`}
-            note={`${count(s.openRentals)} rentals, ${count(s.overdue)} overdue`}
+            label={t("Out on rent")}
+            value={t("{count} units", { count: count(s.unitsOut) })}
+            note={t("{rentals} rentals, {overdue} overdue", { rentals: count(s.openRentals), overdue: count(s.overdue) })}
           />
         </section>
 
         <section className="bill-block mt-5 grid items-start gap-5 sm:grid-cols-2 print:grid-cols-2">
           <div>
-            <Caption className="pb-1">Earned</Caption>
+            <Caption className="pb-1">{t("Earned")}</Caption>
             <Sums>
-              <Sum label="Rent" value={cash(s.rent)} />
-              {s.lateFees > 0 && <Sum label="Late fees" value={cash(s.lateFees)} />}
-              {s.damageFees > 0 && <Sum label="Damage and loss" value={cash(s.damageFees)} />}
-              {s.discounts > 0 && <Sum label="Discounts given" value={cash(-s.discounts)} />}
-              <SumTotal label="Total earned" value={cash(s.revenue)} />
+              <Sum label={t("Rent")} value={cash(s.rent)} />
+              {s.lateFees > 0 && <Sum label={t("Late fees")} value={cash(s.lateFees)} />}
+              {s.damageFees > 0 && <Sum label={t("Damage and loss")} value={cash(s.damageFees)} />}
+              {s.discounts > 0 && <Sum label={t("Discounts given")} value={cash(-s.discounts)} />}
+              <SumTotal label={t("Total earned")} value={cash(s.revenue)} />
             </Sums>
             {s.advancesHeld > 0 && (
               <Sums className="mt-2">
-                <Sum label="Advances held, not yet earned" value={cash(s.advancesHeld)} />
+                <Sum label={t("Advances held, not yet earned")} value={cash(s.advancesHeld)} />
               </Sums>
             )}
           </div>
           <div>
-            <Caption className="pb-1">Activity</Caption>
+            <Caption className="pb-1">{t("Activity")}</Caption>
             <Sums>
-              <Sum label="Rentals started" value={count(s.rentals)} />
-              <Sum label="Units sent out" value={count(s.unitsRented)} />
-              <Sum label="Units returned" value={count(s.unitsReturned)} />
-              <Sum label="Returns taken" value={count(s.returns)} />
-              <Sum label="New customers" value={count(s.newCustomers)} />
-              {s.unitsDamaged > 0 && <Sum label="Returned damaged" value={count(s.unitsDamaged)} />}
-              {s.unitsLost > 0 && <Sum label="Never returned" value={count(s.unitsLost)} />}
+              <Sum label={t("Rentals started")} value={count(s.rentals)} />
+              <Sum label={t("Units sent out")} value={count(s.unitsRented)} />
+              <Sum label={t("Units returned")} value={count(s.unitsReturned)} />
+              <Sum label={t("Returns taken")} value={count(s.returns)} />
+              <Sum label={t("New customers")} value={count(s.newCustomers)} />
+              {s.unitsDamaged > 0 && <Sum label={t("Returned damaged")} value={count(s.unitsDamaged)} />}
+              {s.unitsLost > 0 && <Sum label={t("Never returned")} value={count(s.unitsLost)} />}
             </Sums>
           </div>
         </section>
@@ -106,9 +107,9 @@ export function ReportDocument({
         {/* One row for each thing that came back: the day, who brought it, and which
             product, so any figure here can be traced to a rental. */}
         <Listing
-          title={`Earned per ${report.group}`}
-          empty="Nothing was earned in this period."
-          head={[groupName, "Customer", "Product", "SKU / barcode", "Units", "Earned"]}
+          title={t({ day: msg("Earned per day"), week: msg("Earned per week"), month: msg("Earned per month") }[report.group])}
+          empty={t("Nothing was earned in this period.")}
+          head={[groupName, t("Customer"), t("Product"), t("SKU / barcode"), t("Units"), t("Earned")]}
           widths={["w-[13%]", "w-[22%]", "", "w-[17%]", "w-[9%]", "w-[16%]"]}
           figuresFrom={4}
           rows={report.revenue.flatMap((row) => [
@@ -123,10 +124,10 @@ export function ReportDocument({
               count(line.units),
               cash(line.amount),
             ]),
-            ...(row.discounts > 0 ? [["", "Discount", "", "", "", cash(-row.discounts)]] : []),
+            ...(row.discounts > 0 ? [["", t("Discount"), "", "", "", cash(-row.discounts)]] : []),
           ])}
           total={[
-            "Total",
+            t("Total"),
             "",
             "",
             "",
@@ -136,9 +137,9 @@ export function ReportDocument({
         />
 
         <Listing
-          title="Top products"
-          empty="No items came back in this period."
-          head={["Product", "Rentals", "Units", "Earned"]}
+          title={t("Top products")}
+          empty={t("No items came back in this period.")}
+          head={[t("Product"), t("Rentals"), t("Units"), t("Earned")]}
           widths={["", "w-[14%]", "w-[14%]", "w-[22%]"]}
           figuresFrom={1}
           rows={report.products.slice(0, 10).map((row) => [
@@ -150,9 +151,9 @@ export function ReportDocument({
         />
 
         <Listing
-          title="Top customers"
-          empty="Nobody returned anything in this period."
-          head={["Customer", "Rentals", "Spent", "Still owes"]}
+          title={t("Top customers")}
+          empty={t("Nobody returned anything in this period.")}
+          head={[t("Customer"), t("Rentals"), t("Spent"), t("Still owes")]}
           widths={["", "w-[14%]", "w-[22%]", "w-[22%]"]}
           figuresFrom={1}
           rows={report.customers.slice(0, 10).map((row) => [
@@ -164,9 +165,9 @@ export function ReportDocument({
         />
 
         <Listing
-          title="Who owes you"
-          empty="Nobody owes anything."
-          head={["Customer", "Phone", "Still out", "Owes"]}
+          title={t("Who owes you")}
+          empty={t("Nobody owes anything.")}
+          head={[t("Customer"), t("Phone"), t("Still out"), t("Owes")]}
           widths={["", "w-[24%]", "w-[14%]", "w-[22%]"]}
           figuresFrom={2}
           rows={report.debtors.map((row) => [
@@ -228,7 +229,33 @@ function Listing({
       {rows.length === 0 ? (
         <p className="border border-(--sheet-rule) px-2.5 py-2">{empty}</p>
       ) : (
-        <div className="overflow-x-auto print:overflow-visible">
+        <>
+          {/* On a phone each row is a card: the first column names it, the last is its
+              figure, and the columns between are labelled underneath. */}
+          <SheetCards>
+            {rows.map((row, r) => {
+              // A row that runs on from the one above has no first cell: its second names it.
+              const from = row[0] ? 1 : 2
+              const last = row[row.length - 1]
+              return (
+                <SheetCard
+                  key={r}
+                  title={row[0] || row[1]}
+                  amount={last === "—" ? undefined : last}
+                  fields={row
+                    .slice(from, -1)
+                    .map((value, index) => ({ label: head[index + from], value }))
+                    .filter((field) => field.value !== "" && field.value !== "—")}
+                />
+              )
+            })}
+            {total && (
+              <Sums>
+                <SumTotal label={String(total[0])} value={String(total[total.length - 1])} />
+              </Sums>
+            )}
+          </SheetCards>
+        <div className={`${TABLE_ONLY} overflow-x-auto print:overflow-visible`}>
           <table className="sheet-table min-w-[30rem] table-fixed print:min-w-0">
             <colgroup>
               {widths.map((width, index) => (
@@ -268,6 +295,7 @@ function Listing({
             )}
           </table>
         </div>
+        </>
       )}
     </section>
   )

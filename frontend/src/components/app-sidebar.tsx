@@ -50,6 +50,7 @@ import { logoUrl } from "@/lib/logo"
 import { useCanAccess, useSession } from "@/components/session"
 import { ROLE_HOME, canAccess, roleLabel } from "@/lib/auth/roles"
 import { useRentalSummary } from "@/lib/data/queries"
+import { msg, t } from "@/lib/i18n"
 
 interface Item {
   href: string
@@ -71,36 +72,36 @@ interface Item {
  */
 const GROUPS: { label: string; items: Item[] }[] = [
   {
-    label: "Today",
+    label: msg("Today"),
     items: [
-      { href: "/dashboard", label: "Dashboard", icon: ChartColumn },
-      { href: "/rent-out", label: "Rent out", icon: PackagePlus },
-      { href: "/take-back", label: "Take back", icon: Undo2 },
-      { href: "/scan", label: "Scan", icon: ScanLine },
+      { href: "/dashboard", label: msg("Dashboard"), icon: ChartColumn },
+      { href: "/rent-out", label: msg("Rent out"), icon: PackagePlus },
+      { href: "/take-back", label: msg("Take back"), icon: Undo2 },
+      { href: "/scan", label: msg("Scan"), icon: ScanLine },
     ],
   },
   {
-    label: "Hire",
+    label: msg("Hire"),
     items: [
-      { href: "/rentals", label: "Rentals", icon: Boxes, badge: "overdue" },
-      { href: "/returns", label: "Returns", icon: History },
-      { href: "/customers", label: "Customers", icon: Users },
-      { href: "/bills", label: "Bills", icon: ReceiptText },
+      { href: "/rentals", label: msg("Rentals"), icon: Boxes, badge: "overdue" },
+      { href: "/returns", label: msg("Returns"), icon: History },
+      { href: "/customers", label: msg("Customers"), icon: Users },
+      { href: "/bills", label: msg("Bills"), icon: ReceiptText },
     ],
   },
   {
-    label: "Stock",
+    label: msg("Stock"),
     items: [
-      { href: "/products", label: "Products", icon: Package },
+      { href: "/products", label: msg("Products"), icon: Package },
     ],
   },
   {
-    label: "Business",
+    label: msg("Business"),
     items: [
-      { href: "/reports", label: "Reports", icon: FileSpreadsheet },
-      { href: "/users", label: "Team", icon: Users },
-      { href: "/activity", label: "Activity", icon: ActivityIcon },
-      { href: "/settings", label: "Settings", icon: Settings },
+      { href: "/reports", label: msg("Reports"), icon: FileSpreadsheet },
+      { href: "/users", label: msg("Team"), icon: Users },
+      { href: "/activity", label: msg("Activity"), icon: ActivityIcon },
+      { href: "/settings", label: msg("Settings"), icon: Settings },
     ],
   },
 ]
@@ -120,7 +121,7 @@ export function AppSidebar() {
         {/* The business's name is the way home, as a logo is on any site. */}
         <Link
           href={home}
-          aria-label={`${business?.name ?? "Rental Manager"}, go to the dashboard`}
+          aria-label={t("{name}, go to the dashboard", { name: business?.name ?? t("Rental Manager") })}
           className="flex items-center gap-2.5 rounded-md px-1 py-1.5 outline-none transition-colors group-data-[collapsible=icon]:px-0 hover:bg-sidebar-accent focus-visible:ring-[3px] focus-visible:ring-sidebar-ring/50"
         >
           {logoUrl(business?.logoVersion) ? (
@@ -137,8 +138,8 @@ export function AppSidebar() {
             </div>
           )}
           <div className="min-w-0 group-data-[collapsible=icon]:hidden">
-            <div className="truncate text-sm font-semibold">{business?.name ?? "Rental Manager"}</div>
-            <div className="truncate text-xs text-muted-foreground">Rental Manager</div>
+            <div className="truncate text-sm font-semibold">{business?.name ?? t("Rental Manager")}</div>
+            <div className="truncate text-xs text-muted-foreground">{t("Rental Manager")}</div>
           </div>
         </Link>
       </SidebarHeader>
@@ -173,7 +174,7 @@ function NavGroup({ group, path, overdue }: { group: (typeof GROUPS)[number]; pa
 
   return (
     <SidebarGroup>
-      <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+      <SidebarGroupLabel>{t(group.label)}</SidebarGroupLabel>
       <SidebarGroupContent>
         <SidebarMenu>
           {items.map((item) => {
@@ -183,13 +184,13 @@ function NavGroup({ group, path, overdue }: { group: (typeof GROUPS)[number]; pa
               <SidebarMenuItem key={item.href}>
                 <SidebarMenuButton
                   isActive={active}
-                  tooltip={item.label}
+                  tooltip={t(item.label)}
                   // The signal colour means "you are here": the one place it tints a row.
                   className="h-9 data-active:bg-primary/12 data-active:text-primary dark:data-active:bg-primary/15"
                   render={<Link href={item.href} aria-current={active ? "page" : undefined} />}
                 >
                   <Icon className="size-4" />
-                  <span>{item.label}</span>
+                  <span>{t(item.label)}</span>
                 </SidebarMenuButton>
                 {item.badge === "overdue" && overdue > 0 && (
                   <SidebarMenuBadge className="group-data-[collapsible=icon]:hidden">
@@ -252,15 +253,15 @@ function UserMenu() {
                   browser will resolve to, so branching here would mismatch on hydration. */}
               <Moon className="size-4 dark:hidden" />
               <Palette className="hidden size-4 dark:block" />
-              <span className="dark:hidden">Dark mode</span>
-              <span className="hidden dark:inline">Light mode</span>
+              <span className="dark:hidden">{t("Dark mode")}</span>
+              <span className="hidden dark:inline">{t("Light mode")}</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             {/* A plain anchor on purpose: a full page load lets /logout clear the cookies
                 and drops the whole query cache with it. */}
             <DropdownMenuItem render={<a href="/logout" />}>
               <LogOut className="size-4" />
-              Log out
+              {t("Log out")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

@@ -12,6 +12,7 @@ import { useCurrency } from "@/components/session"
 import { useSaveProduct } from "@/lib/data/mutations"
 import { useCategories, useUnits } from "@/lib/data/queries"
 import type { Product } from "@/lib/types"
+import { t } from "@/lib/i18n"
 
 /**
  * Add or edit a product.
@@ -71,9 +72,9 @@ export function ProductDialog({
     stock: !product && form.openingStock === "",
   }
   const errors = {
-    name: touched.name && missing.name ? "Enter the product's name." : undefined,
-    rates: touched.rates && missing.rates ? "Enter at least one rent price." : undefined,
-    stock: touched.stock && missing.stock ? "Enter how many you have. Use 0 if none yet." : undefined,
+    name: touched.name && missing.name ? t("Enter the product's name.") : undefined,
+    rates: touched.rates && missing.rates ? t("Enter at least one rent price.") : undefined,
+    stock: touched.stock && missing.stock ? t("Enter how many you have. Use 0 if none yet.") : undefined,
   }
 
   function submit(e: React.FormEvent) {
@@ -110,9 +111,9 @@ export function ProductDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{product ? `Edit ${product.name}` : "New product"}</DialogTitle>
+          <DialogTitle>{product ? t("Edit {name}", { name: product.name }) : t("New product")}</DialogTitle>
           <DialogDescription>
-            Fields marked <span className="text-destructive">*</span> are required.
+            {t("Fields marked * are required.")}
           </DialogDescription>
         </DialogHeader>
 
@@ -126,7 +127,7 @@ export function ProductDialog({
                 id="p-name"
                 value={form.name}
                 onChange={text("name")}
-                onBlur={() => setTouched((t) => ({ ...t, name: true }))}
+                onBlur={() => setTouched((was) => ({ ...was, name: true }))}
                 aria-required
                 aria-invalid={!!errors.name}
                 aria-describedby={errors.name ? "p-name-error" : undefined}
@@ -135,47 +136,47 @@ export function ProductDialog({
               <FieldError id="p-name-error" message={errors.name} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="p-sku">SKU</Label>
+              <Label htmlFor="p-sku">{t("SKU")}</Label>
               <Input
                 id="p-sku"
                 value={form.sku}
                 onChange={text("sku")}
                 className="font-mono"
-                placeholder={product ? undefined : "Numbered for you if left empty"}
+                placeholder={product ? undefined : t("Numbered for you if left empty")}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="p-barcode">Barcode</Label>
+              <Label htmlFor="p-barcode">{t("Barcode")}</Label>
               <div className="flex gap-2">
                 <Input
                   id="p-barcode"
                   value={form.barcode}
                   onChange={text("barcode")}
                   className="font-mono"
-                  placeholder="Scan or type"
+                  placeholder={t("Scan or type")}
                 />
                 <ScanButton onScan={(code) => setForm((f) => ({ ...f, barcode: code }))} label="" />
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="p-category">Category</Label>
+              <Label htmlFor="p-category">{t("Category")}</Label>
               <ChoiceInput
                 id="p-category"
                 value={form.category}
                 onChange={(category) => setForm((f) => ({ ...f, category }))}
                 options={categories}
-                placeholder="Choose or type a new one"
+                placeholder={t("Choose or type a new one")}
                 noun="category"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="p-unit">Unit</Label>
+              <Label htmlFor="p-unit">{t("Unit")}</Label>
               <ChoiceInput
                 id="p-unit"
                 value={form.unit}
                 onChange={(unit) => setForm((f) => ({ ...f, unit }))}
                 options={units}
-                placeholder="pcs, set, kg…"
+                placeholder={t("pcs, set, kg…")}
                 noun="unit"
               />
             </div>
@@ -190,30 +191,30 @@ export function ProductDialog({
               // Leaving the group, not one box: tabbing from "per day" to "per week" is not
               // yet a decision to leave them all empty.
               onBlur={(e) => {
-                if (!e.currentTarget.contains(e.relatedTarget)) setTouched((t) => ({ ...t, rates: true }))
+                if (!e.currentTarget.contains(e.relatedTarget)) setTouched((was) => ({ ...was, rates: true }))
               }}
             >
-              <Money id="p-daily" label="Per day" value={form.rentDaily} onChange={num("rentDaily")} invalid={!!errors.rates} />
-              <Money id="p-weekly" label="Per week" value={form.rentWeekly} onChange={num("rentWeekly")} invalid={!!errors.rates} />
-              <Money id="p-monthly" label="Per month" value={form.rentMonthly} onChange={num("rentMonthly")} invalid={!!errors.rates} />
+              <Money id="p-daily" label={t("Per day")} value={form.rentDaily} onChange={num("rentDaily")} invalid={!!errors.rates} />
+              <Money id="p-weekly" label={t("Per week")} value={form.rentWeekly} onChange={num("rentWeekly")} invalid={!!errors.rates} />
+              <Money id="p-monthly" label={t("Per month")} value={form.rentMonthly} onChange={num("rentMonthly")} invalid={!!errors.rates} />
             </div>
             {errors.rates ? (
               <FieldError id="p-rates-error" message={errors.rates} />
             ) : (
-              <p className="text-xs text-muted-foreground">At least one. Fill in only the ones you rent by.</p>
+              <p className="text-xs text-muted-foreground">{t("At least one. Fill in only the ones you rent by.")}</p>
             )}
             <Money
               id="p-replacement"
-              label="Replacement cost, each"
+              label={t("Replacement cost, each")}
               value={form.replacementCost}
               onChange={num("replacementCost")}
-              hint="Charged when one comes back broken or not at all."
+              hint={t("Charged when one comes back broken or not at all.")}
               className="sm:max-w-xs"
             />
           </fieldset>
 
           <fieldset className="space-y-4 rounded-lg border p-4">
-            <legend className="px-1 text-sm font-medium">Stock</legend>
+            <legend className="px-1 text-sm font-medium">{t("Stock")}</legend>
             <div className="grid gap-4 sm:grid-cols-2">
               {!product && (
                 <div className="space-y-2">
@@ -227,7 +228,7 @@ export function ProductDialog({
                     step={1}
                     value={form.openingStock}
                     onChange={whole("openingStock")}
-                    onBlur={() => setTouched((t) => ({ ...t, stock: true }))}
+                    onBlur={() => setTouched((was) => ({ ...was, stock: true }))}
                     aria-required
                     aria-invalid={!!errors.stock}
                     aria-describedby={errors.stock ? "p-stock-error" : undefined}
@@ -238,7 +239,7 @@ export function ProductDialog({
                 </div>
               )}
               <div className="space-y-2">
-                <Label htmlFor="p-low">Warn when stock drops to</Label>
+                <Label htmlFor="p-low">{t("Warn when stock drops to")}</Label>
                 <Input
                   id="p-low"
                   type="number"
@@ -246,7 +247,7 @@ export function ProductDialog({
                   step={1}
                   value={form.lowStockThreshold}
                   onChange={whole("lowStockThreshold")}
-                  placeholder="Use the business default"
+                  placeholder={t("Use the business default")}
                   className="tabular-nums"
                 />
               </div>
@@ -254,18 +255,18 @@ export function ProductDialog({
           </fieldset>
 
           <div className="space-y-2">
-            <Label htmlFor="p-description">Description</Label>
+            <Label htmlFor="p-description">{t("Description")}</Label>
             <Textarea id="p-description" value={form.description} onChange={text("description")} rows={2} />
           </div>
         </form>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("Cancel")}
           </Button>
           <Button type="submit" form="product-form" disabled={save.isPending}>
             {save.isPending && <Spinner />}
-            {product ? "Save" : "Add product"}
+            {product ? t("Save") : t("Add product")}
           </Button>
         </DialogFooter>
       </DialogContent>

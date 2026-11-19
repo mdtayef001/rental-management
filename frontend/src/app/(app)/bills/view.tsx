@@ -18,10 +18,11 @@ import {
 import { DataView, Primary, type Column } from "@/components/data-view"
 import { PeriodPicker, PrintBill } from "@/components/bill"
 import { useCurrency } from "@/components/session"
-import { rangeFromParams, rangeQuery } from "@/lib/bills"
+import { periodName, rangeFromParams, rangeQuery } from "@/lib/bills"
 import { billPdfUrl, useBills, useDebounced, usePaging } from "@/lib/data/queries"
 import { count, money } from "@/lib/format"
 import type { BillRow, ReportRange } from "@/lib/types"
+import { t } from "@/lib/i18n"
 
 /**
  * The period lives in the address bar, so a bill's link can be sent to a colleague and
@@ -56,21 +57,21 @@ export function BillsView() {
   const columns: Column<BillRow>[] = [
     {
       id: "customer",
-      header: "Customer",
+      header: t("Customer"),
       role: "title",
       cell: (row) => <Primary sub={row.company || row.phone || undefined}>{row.customerName}</Primary>,
     },
-    { id: "rentals", header: "Rentals", align: "end", cell: (row) => count(row.rentals) },
-    { id: "out", header: "Still out", align: "end", cell: (row) => count(row.unitsOut) },
+    { id: "rentals", header: t("Rentals"), align: "end", cell: (row) => count(row.rentals) },
+    { id: "out", header: t("Still out"), align: "end", cell: (row) => count(row.unitsOut) },
     {
       id: "paid",
-      header: "Paid",
+      header: t("Paid"),
       align: "end",
       cell: (row) => (row.paid ? money(row.paid, currency) : <span className="text-muted-foreground">—</span>),
     },
     {
       id: "charges",
-      header: "Billed",
+      header: t("Billed"),
       align: "end",
       cell: (row) => <span className="font-medium">{money(row.charges, currency)}</span>,
     },
@@ -84,8 +85,8 @@ export function BillsView() {
     <div className="space-y-6 print:hidden">
       <div className="space-y-4">
         <PageHeader
-          title="Bills"
-          description="What each customer owes for a month or a year. Print a bill or save it as a PDF from here, or open it to take a payment."
+          title={t("Bills")}
+          description={t("What each customer owes for a month or a year. Print a bill or save it as a PDF from here, or open it to take a payment.")}
         />
         <PeriodPicker range={range} onChange={setRange} />
       </div>
@@ -95,30 +96,30 @@ export function BillsView() {
       ) : (
         <>
           <StatGrid>
-            <StatCard label="Billed" value={money(data?.totals.charges ?? 0, currency)} loading={!data} hint={data?.label} />
-            <StatCard label="Paid in the period" value={money(data?.totals.paid ?? 0, currency)} loading={!data} />
-            <StatCard label="Customers to bill" value={count(data?.totals.customers ?? 0)} loading={!data} />
-            <StatCard label="Units still out" value={count(data?.totals.unitsOut ?? 0)} loading={!data} />
+            <StatCard label={t("Billed")} value={money(data?.totals.charges ?? 0, currency)} loading={!data} hint={periodName(range)} />
+            <StatCard label={t("Paid in the period")} value={money(data?.totals.paid ?? 0, currency)} loading={!data} />
+            <StatCard label={t("Customers to bill")} value={count(data?.totals.customers ?? 0)} loading={!data} />
+            <StatCard label={t("Units still out")} value={count(data?.totals.unitsOut ?? 0)} loading={!data} />
           </StatGrid>
 
           <Toolbar>
-            <SearchInput value={text} onChange={setText} label="Search bills" placeholder="Search by name, company or phone" suggest="customer-names" />
+            <SearchInput value={text} onChange={setText} label={t("Search bills")} placeholder={t("Search by name, company or phone")} suggest="customer-names" />
           </Toolbar>
 
           {isLoading ? (
             <TableSkeleton rows={6} columns={5} />
           ) : data?.results.length === 0 ? (
             <EmptyState
-              title={search ? "No bills match" : "Nothing to bill"}
+              title={search ? t("No bills match") : t("Nothing to bill")}
               description={
                 search
-                  ? "Try a different name, or clear the search."
-                  : "No customer had anything out on rent, or paid anything, in this period."
+                  ? t("Try a different name, or clear the search.")
+                  : t("No customer had anything out on rent, or paid anything, in this period.")
               }
             />
           ) : (
             <DataView
-              label="Bills"
+              label={t("Bills")}
               rows={data?.results ?? []}
               columns={columns}
               getKey={(row) => row.customerId}
@@ -130,18 +131,18 @@ export function BillsView() {
                     size="sm"
                     disabled={printing !== null}
                     onClick={() => setPrinting(row.customerId)}
-                    aria-label={`Print ${row.customerName}'s bill`}
+                    aria-label={t("Print {name}'s bill", { name: row.customerName })}
                   >
                     <Printer className="size-4" />
-                    {printing === row.customerId ? "Preparing…" : "Print"}
+                    {printing === row.customerId ? t("Preparing…") : t("Print")}
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
-                    render={<a href={billPdfUrl(row.customerId, range)} download aria-label={`Download ${row.customerName}'s bill as a PDF`} />}
+                    render={<a href={billPdfUrl(row.customerId, range)} download aria-label={t("Download {name}'s bill as a PDF", { name: row.customerName })} />}
                   >
                     <Download className="size-4" />
-                    PDF
+                    {t("PDF")}
                   </Button>
                 </div>
               )}

@@ -1,4 +1,5 @@
 import type { PaymentMethod, RentalPlan } from "@/lib/types"
+import { msg, t } from "@/lib/i18n"
 
 // The price arithmetic, duplicated from backend/apps/rentals/models.py (RentalItem.quote).
 //
@@ -9,24 +10,24 @@ import type { PaymentMethod, RentalPlan } from "@/lib/types"
 
 /** How a customer can pay, in the order every payment form offers them. */
 export const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
-  { value: "cash", label: "Cash" },
-  { value: "mobile", label: "Mobile banking" },
-  { value: "card", label: "Card" },
-  { value: "bank", label: "Bank transfer" },
+  { value: "cash", label: msg("Cash") },
+  { value: "mobile", label: msg("Mobile banking") },
+  { value: "card", label: msg("Card") },
+  { value: "bank", label: msg("Bank transfer") },
 ]
 
 export const PLAN_LABEL: Record<RentalPlan, string> = {
-  daily: "Per day",
-  weekly: "Per week",
-  monthly: "Per month",
-  fixed: "Fixed price",
+  daily: msg("Per day"),
+  weekly: msg("Per week"),
+  monthly: msg("Per month"),
+  fixed: msg("Fixed price"),
 }
 
 const PLAN_DAYS: Record<Exclude<RentalPlan, "fixed">, number> = { daily: 1, weekly: 7, monthly: 30 }
 const PLAN_UNIT: Record<Exclude<RentalPlan, "fixed">, [string, string]> = {
-  daily: ["day", "days"],
-  weekly: ["week", "weeks"],
-  monthly: ["month", "months"],
+  daily: [msg("day"), msg("days")],
+  weekly: [msg("week"), msg("weeks")],
+  monthly: [msg("month"), msg("months")],
 }
 
 export interface RentalQuote {
@@ -53,24 +54,24 @@ export function quoteRental(plan: RentalPlan, rate: number, days: number, quanti
   if (plan === "fixed") {
     return {
       periods: 1,
-      periodLabel: `${safeDays} day${safeDays === 1 ? "" : "s"}`,
+      periodLabel: `${safeDays} ${t(safeDays === 1 ? "day" : "days")}`,
       subtotal: safeRate,
       total: safeRate * qty,
-      breakdown: qty > 1 ? `${qty} × fixed price` : "Fixed price",
+      breakdown: qty > 1 ? `${qty} × ${t("fixed price")}` : t("Fixed price"),
     }
   }
 
   const off = plan === "daily" ? Math.min(Math.max(0, Math.floor(holidays || 0)), safeDays) : 0
   const periods = plan === "daily" ? safeDays - off : Math.ceil(safeDays / PLAN_DAYS[plan])
   const [one, many] = PLAN_UNIT[plan]
-  const periodLabel = `${periods} ${periods === 1 ? one : many}`
+  const periodLabel = `${periods} ${t(periods === 1 ? one : many)}`
   const subtotal = periods * safeRate
   return {
     periods,
     periodLabel,
     subtotal,
     total: subtotal * qty,
-    breakdown: `${periodLabel} × rate${qty > 1 ? ` × ${qty} units` : ""}${off ? ` (${off} free)` : ""}`,
+    breakdown: `${periodLabel} × ${t("rate")}${qty > 1 ? ` × ${t("{count} units", { count: qty })}` : ""}${off ? ` (${t("{count} free", { count: off })})` : ""}`,
   }
 }
 

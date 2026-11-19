@@ -8,6 +8,7 @@ import { CameraScanner, CodeInput } from "@/components/scanner"
 import { useProductSearch } from "@/lib/data/queries"
 import { count } from "@/lib/format"
 import type { ProductLookup } from "@/lib/types"
+import { t } from "@/lib/i18n"
 
 /**
  * One box for finding a product, however the person at the counter has it.
@@ -24,7 +25,7 @@ export function ProductFinder({
   autoFocus,
   rentableOnly = true,
   compact = false,
-  placeholder = compact ? "Name, SKU or scan" : "Scan a QR / barcode, or type a name or SKU",
+  placeholder = compact ? t("Name, SKU or scan") : t("Scan a QR / barcode, or type a name or SKU"),
 }: {
   onCode: (code: string) => void
   onPick: (product: ProductLookup) => void
@@ -65,17 +66,17 @@ export function ProductFinder({
           variant="outline"
           onClick={() => setCamera((on) => !on)}
           aria-pressed={camera}
-          aria-label={camera ? "Close camera" : "Scan with the camera"}
+          aria-label={camera ? t("Close camera") : t("Scan with the camera")}
           className="h-11 shrink-0"
         >
           {camera ? <CameraOff className="size-4" /> : <Camera className="size-4" />}
-          {!compact && <span className="hidden sm:inline">{camera ? "Close camera" : "Camera"}</span>}
+          {!compact && <span className="hidden sm:inline">{camera ? t("Close camera") : t("Camera")}</span>}
         </Button>
       </CodeInput>
 
       {searching &&
         (results.length > 0 ? (
-          <ul className="divide-y overflow-hidden rounded-lg border bg-card" aria-label="Matching products">
+          <ul className="divide-y overflow-hidden rounded-lg border bg-card" aria-label={t("Matching products")}>
             {results.map((product) => (
               <li key={product.id}>
                 <button
@@ -91,7 +92,7 @@ export function ProductFinder({
                     <span className="block truncate font-mono text-xs text-muted-foreground">{product.sku}</span>
                   </span>
                   <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                    {count(product.onHand)} on the shelf
+                    {t("{count} on the shelf", { count: count(product.onHand) })}
                   </span>
                 </button>
               </li>
@@ -99,7 +100,7 @@ export function ProductFinder({
           </ul>
         ) : matches.isFetching ? (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Spinner /> Searching…
+            <Spinner /> {t("Searching…")}
           </p>
         ) : (
           <p className="text-sm text-muted-foreground">

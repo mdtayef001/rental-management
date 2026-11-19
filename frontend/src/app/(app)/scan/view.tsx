@@ -25,6 +25,7 @@ import { useCurrency } from "@/components/session"
 import { useLookup, useProductSearch, useRentalSummary } from "@/lib/data/queries"
 import { count, money, plural } from "@/lib/format"
 import type { ProductLookup } from "@/lib/types"
+import { t } from "@/lib/i18n"
 
 /**
  * The counter screen: find an item, then decide what to do with it.
@@ -55,17 +56,17 @@ export function ScanView({ canRent, canTakeReturns }: { canRent: boolean; canTak
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-5">
-      <PageHeader title="Scan" description="Find an item to rent out or take back. A USB scanner works here too.">
+      <PageHeader title={t("Scan")} description={t("Find an item to rent out or take back. A USB scanner works here too.")}>
         {canTakeReturns && (
           <ButtonLink href="/take-back" variant="outline">
             <Undo2 className="size-4" />
-            Take back
+            {t("Take back")}
           </ButtonLink>
         )}
         {canRent && (
           <ButtonLink href="/rent-out">
             <Package className="size-4" />
-            Rent out
+            {t("Rent out")}
           </ButtonLink>
         )}
       </PageHeader>
@@ -74,15 +75,15 @@ export function ScanView({ canRent, canTakeReturns }: { canRent: boolean; canTak
         <TabsList className="grid h-auto w-full grid-cols-3">
           <TabsTrigger value="type" className="py-2">
             <Keyboard className="size-4" />
-            <span className="hidden sm:inline">Type or</span> scan
+            <span className="hidden sm:inline">{t("Type or")}</span> {t("scan")}
           </TabsTrigger>
           <TabsTrigger value="camera" className="py-2">
             <Camera className="size-4" />
-            Camera
+            {t("Camera")}
           </TabsTrigger>
           <TabsTrigger value="name" className="py-2">
             <Type className="size-4" />
-            By name
+            {t("By name")}
           </TabsTrigger>
         </TabsList>
 
@@ -91,7 +92,7 @@ export function ScanView({ canRent, canTakeReturns }: { canRent: boolean; canTak
             onSubmit={setCode}
             autoFocus
             busy={lookup.isFetching}
-            placeholder="Scan or type a barcode / SKU, then press Enter"
+            placeholder={t("Scan or type a barcode / SKU, then press Enter")}
           />
         </TabsContent>
 
@@ -114,18 +115,18 @@ export function ScanView({ canRent, canTakeReturns }: { canRent: boolean; canTak
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Part of the product name, e.g. “sewing”"
-            aria-label="Search products by name"
+            placeholder={t("Part of the product name, e.g. “sewing”")}
+            aria-label={t("Search products by name")}
             autoFocus
           />
           {name.trim().length > 1 &&
             (suggestions.isFetching && (suggestions.data?.length ?? 0) === 0 ? (
               <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Spinner /> Searching for “{name.trim()}”…
+                <Spinner /> {t("Searching for “{name}”…", { name: name.trim() })}
               </p>
             ) : (suggestions.data?.length ?? 0) === 0 ? (
               <p className="rounded-lg border border-dashed bg-card/40 p-5 text-sm text-muted-foreground">
-                No product matches “{name.trim()}”. Check the spelling, or scan the label.
+                {t("No product matches “{name}”. Check the spelling, or scan the label.", { name: name.trim() })}
               </p>
             ) : (
               <ul className="divide-y overflow-hidden rounded-lg border bg-card">
@@ -151,24 +152,24 @@ export function ScanView({ canRent, canTakeReturns }: { canRent: boolean; canTak
 
       {lookup.isFetching ? (
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Spinner /> Looking up {code}…
+          <Spinner /> {t("Looking up {code}…", { code })}
         </p>
       ) : lookup.isError ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-8 text-center">
             <SearchX className="size-9 text-warning" />
             <p className="font-medium">
-              No product uses <code className="font-mono">{code}</code>
+              {t("No product uses {code}", { code })}
             </p>
             <p className="max-w-sm text-sm text-muted-foreground">
-              Try the name instead, or{" "}
+              {t("Try the name instead, or")}{" "}
               <Link href="/products" className="underline underline-offset-4">
-                open the products list
+                {t("open the products list")}
               </Link>
               .
             </p>
             <Button variant="outline" onClick={() => setCode("")}>
-              Scan something else
+              {t("Scan something else")}
             </Button>
           </CardContent>
         </Card>
@@ -184,23 +185,23 @@ export function ScanView({ canRent, canTakeReturns }: { canRent: boolean; canTak
       {/* Context, not the task: last, and still one glance. */}
       <div className="grid gap-3 sm:grid-cols-3">
         <StatCard
-          label="Out on rent"
+          label={t("Out on rent")}
           value={count(summary?.unitsOut ?? 0)}
           hint={summary ? plural(summary.open, "rental") : undefined}
           icon={Package}
           href="/rentals"
         />
         <StatCard
-          label="Due back today"
+          label={t("Due back today")}
           value={count(summary?.dueToday ?? 0)}
           icon={CalendarClock}
           tone={summary?.dueToday ? "warning" : "default"}
           href="/rentals?status=due_today"
         />
         <StatCard
-          label="Overdue"
+          label={t("Overdue")}
           value={count(summary?.overdue ?? 0)}
-          hint={summary?.overdue ? "Chase these up" : "Nothing late"}
+          hint={summary?.overdue ? t("Chase these up") : t("Nothing late")}
           icon={AlertTriangle}
           tone={summary?.overdue ? "danger" : "good"}
           href="/rentals?status=overdue"
@@ -234,11 +235,11 @@ function Found({
             {product.sku}
           </Badge>
           {product.category && <span>{product.category}</span>}
-          {!product.rentable && <Badge variant="secondary">Not for rent</Badge>}
+          {!product.rentable && <Badge variant="secondary">{t("Not for rent")}</Badge>}
         </CardDescription>
         <div className="col-start-2 row-span-2 row-start-1 self-center text-right">
           <div className="font-heading text-[1.75rem] leading-tight font-semibold tabular-nums">{count(onHand)}</div>
-          <div className="text-xs text-muted-foreground">on the shelf</div>
+          <div className="text-xs text-muted-foreground">{t("on the shelf")}</div>
         </div>
       </CardHeader>
 
@@ -267,24 +268,24 @@ function Found({
           {canRent && product.rentable && (
             <ButtonLink href={`/rent-out?code=${code}`} disabled={onHand === 0}>
               <Package className="size-4" />
-              Rent this out
+              {t("Rent this out")}
               <ArrowRight className="size-4" />
             </ButtonLink>
           )}
           {canTakeReturns && (
             <ButtonLink href={`/take-back?code=${code}`} variant="outline">
               <Undo2 className="size-4" />
-              Take one back
+              {t("Take one back")}
             </ButtonLink>
           )}
           <ButtonLink href={`/products/${product.id}`} variant="ghost">
-            Product details
+            {t("Product details")}
           </ButtonLink>
         </div>
 
         {onHand === 0 && product.rentable && (
           <p className="text-sm text-warning-soft-foreground dark:text-warning">
-            None on the shelf — they may all be out on rent.
+            {t("None on the shelf — they may all be out on rent.")}
           </p>
         )}
       </CardContent>

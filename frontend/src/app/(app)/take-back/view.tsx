@@ -34,6 +34,7 @@ import { count, dateTime, dueLabel, money, plural, round2 } from "@/lib/format"
 import { PAYMENT_METHODS, dailyValue, quoteRental } from "@/lib/rental"
 import { cn } from "@/lib/utils"
 import type { ResolveReturnResult, ReturnCondition, ReturnMatch } from "@/lib/types"
+import { t } from "@/lib/i18n"
 
 /** Rentals shown at once under "Out on rent now". */
 const OUT_PAGE_SIZE = 10
@@ -107,7 +108,7 @@ export function TakeBackView() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Take back" />
+      <PageHeader title={t("Take back")} />
       <Steps
         step={step}
         hadChoice={hadChoice}
@@ -167,12 +168,12 @@ function Steps({
   const order: Step[] = ["find", "choose", "settle", "done"]
   const at = order.indexOf(step)
   const items: { id: Step; label: string; onClick?: () => void }[] = [
-    { id: "find", label: "Find", onClick: step === "find" ? undefined : onFind },
-    { id: "choose", label: "Choose", onClick: onChoose },
-    { id: "settle", label: "Settle" },
+    { id: "find", label: t("Find"), onClick: step === "find" ? undefined : onFind },
+    { id: "choose", label: t("Choose"), onClick: onChoose },
+    { id: "settle", label: t("Settle") },
   ]
   return (
-    <ol className="flex items-center gap-1 text-sm" aria-label="Steps">
+    <ol className="flex items-center gap-1 text-sm" aria-label={t("Steps")}>
       {items.map((item, index) => {
         const here = item.id === step
         const passed = order.indexOf(item.id) < at
@@ -191,7 +192,7 @@ function Steps({
               {passed ? <Check className="size-3.5" /> : index + 1}
             </span>
             <span className={cn(here ? "font-semibold" : "text-muted-foreground", skipped && "line-through")}>
-              {item.label}
+              {t(item.label)}
             </span>
           </>
         )
@@ -256,18 +257,18 @@ function FindPanel({ onLookup, busy }: { onLookup: (input: Lookup) => void; busy
             }}
             busy={busy}
             autoFocus
-            placeholder="Scan a code, or type a customer or product name"
+            placeholder={t("Scan a code, or type a customer or product name")}
           >
             <Button
               type="button"
               variant="outline"
               onClick={() => setCamera((on) => !on)}
               aria-pressed={camera}
-              aria-label={camera ? "Close camera" : "Scan with the camera"}
+              aria-label={camera ? t("Close camera") : t("Scan with the camera")}
               className="h-11 shrink-0"
             >
               {camera ? <CameraOff className="size-4" /> : <Camera className="size-4" />}
-              <span className="hidden sm:inline">{camera ? "Close camera" : "Camera"}</span>
+              <span className="hidden sm:inline">{camera ? t("Close camera") : t("Camera")}</span>
             </Button>
           </CodeInput>
 
@@ -283,19 +284,19 @@ function FindPanel({ onLookup, busy }: { onLookup: (input: Lookup) => void; busy
 
           {busy && (
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Spinner /> Looking that up…
+              <Spinner /> {t("Looking that up…")}
             </p>
           )}
 
           {typed && (people.length > 0 || items.length > 0) && (
-            <ul className="divide-y overflow-hidden rounded-lg border" aria-label="Matches">
+            <ul className="divide-y overflow-hidden rounded-lg border" aria-label={t("Matches")}>
               {people.map((customer) => (
                 <Suggestion
                   key={customer.id}
                   icon={User}
                   title={customer.name}
                   sub={customer.phone || customer.company}
-                  end={`${plural(customer.openRentalCount ?? 0, "rental")} out`}
+                  end={t("{rentals} out", { rentals: plural(customer.openRentalCount ?? 0, "rental") })}
                   disabled={busy}
                   onClick={() => onLookup({ customer: customer.id })}
                 />
@@ -306,7 +307,7 @@ function FindPanel({ onLookup, busy }: { onLookup: (input: Lookup) => void; busy
                   icon={Package}
                   title={product.name}
                   sub={product.sku}
-                  end="Product"
+                  end={t("Product")}
                   disabled={busy}
                   onClick={() => onLookup({ code: product.sku })}
                 />
@@ -314,7 +315,7 @@ function FindPanel({ onLookup, busy }: { onLookup: (input: Lookup) => void; busy
             </ul>
           )}
           {typed && !searching && people.length === 0 && items.length === 0 && (
-            <p className="text-sm text-muted-foreground">No name matches “{typed}”. Press Enter to look it up as a code.</p>
+            <p className="text-sm text-muted-foreground">{t("No name matches “{name}”. Press Enter to look it up as a code.", { name: typed })}</p>
           )}
         </CardContent>
       </Card>
@@ -381,26 +382,26 @@ function OutNow({ onPick, busy }: { onPick: (rentalId: string) => void; busy: bo
     <section className="space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-heading font-semibold">
-          Out on rent now
+          {t("Out on rent now")}
           {data && <span className="ml-2 font-normal text-muted-foreground tabular-nums">{count(data.count)}</span>}
         </h2>
         <div className="flex gap-1">
           <Button size="sm" variant={onlyLate ? "outline" : "default"} onClick={() => show(false)}>
-            All
+            {t("All")}
           </Button>
           <Button size="sm" variant={onlyLate ? "default" : "outline"} onClick={() => show(true)}>
-            Overdue
+            {t("Overdue")}
           </Button>
         </div>
       </div>
 
       {isLoading ? (
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Spinner /> Loading…
+          <Spinner /> {t("Loading…")}
         </p>
       ) : rentals.length === 0 ? (
         <p className="rounded-lg border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
-          {onlyLate ? "Nothing is overdue." : "Nothing is out on rent."}
+          {onlyLate ? t("Nothing is overdue.") : t("Nothing is out on rent.")}
         </p>
       ) : (
         <ul className={cn("divide-y rounded-lg border bg-card", isFetching && "opacity-70")}>
@@ -421,7 +422,7 @@ function OutNow({ onPick, busy }: { onPick: (rentalId: string) => void; busy: bo
                 {rental.isOverdue ? (
                   <Pill tone="danger">
                     <AlertTriangle className="size-3" />
-                    {plural(rental.daysLate, "day")} overdue
+                    {t("{days} overdue", { days: plural(rental.daysLate, "day") })}
                   </Pill>
                 ) : (
                   <span className="shrink-0 text-xs text-muted-foreground">{dueLabel(rental.dueAt)}</span>
@@ -468,11 +469,11 @@ function Outcome({
     if (result.matchedBy === "customer") {
       return (
         <EmptyState
-          title="Nothing out with this customer"
-          description="They have no items on rent at the moment, so there's nothing to take back."
+          title={t("Nothing out with this customer")}
+          description={t("They have no items on rent at the moment, so there's nothing to take back.")}
           action={
             <Button variant="outline" onClick={onReset}>
-              Find someone else
+              {t("Find someone else")}
             </Button>
           }
           icon={User}
@@ -490,12 +491,12 @@ function Outcome({
           {result.matchedBy === "product" && <Package className="size-3.5" />}
           {result.matchedBy === "rental" && <Receipt className="size-3.5" />}
           {result.matchedBy === "customer" && <User className="size-3.5" />}
-          {result.matchedBy === "product" && `Product: ${result.product?.name}`}
-          {result.matchedBy === "rental" && `Rental ${result.rental?.code}`}
-          {result.matchedBy === "customer" && `Customer: ${result.matches[0]?.customerName}`}
+          {result.matchedBy === "product" && `${t("Product")}: ${result.product?.name}`}
+          {result.matchedBy === "rental" && `${t("Rental")} ${result.rental?.code}`}
+          {result.matchedBy === "customer" && `${t("Customer")}: ${result.matches[0]?.customerName}`}
         </Badge>
         <Button variant="ghost" size="sm" onClick={onReset}>
-          Start over
+          {t("Start over")}
         </Button>
       </div>
 
@@ -558,19 +559,19 @@ function SettleReturn({
         <CardContent className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <Button variant="outline" size="sm" onClick={onBack}>
             <ArrowLeft className="size-4" />
-            Back
+            {t("Back")}
           </Button>
           <div className="min-w-0 flex-1">
             <p className="truncate font-heading text-lg font-semibold">{match.productName}</p>
             <p className="truncate text-sm text-muted-foreground">
-              {match.customerName} · <span className="font-mono">{match.rentalCode}</span> · out{" "}
-              {plural(match.daysOut, "day")}
+              {match.customerName} · <span className="font-mono">{match.rentalCode}</span> ·{" "}
+              {t("{days} out", { days: plural(match.daysOut, "day") })}
             </p>
           </div>
           {match.isOverdue && (
             <Pill tone="danger">
               <AlertTriangle className="size-3" />
-              {plural(match.overdueDays, "day")} overdue
+              {t("{days} overdue", { days: plural(match.overdueDays, "day") })}
             </Pill>
           )}
         </CardContent>
@@ -582,11 +583,10 @@ function SettleReturn({
         <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-destructive/40 bg-destructive-soft p-3 text-sm text-destructive-soft-foreground">
           <AlertTriangle className="size-4 shrink-0" />
           <p className="min-w-0 flex-1">
-            <strong>Nothing was recorded.</strong> {take.error instanceof Error ? take.error.message : ""} This rental
-            may have changed on another till.
+            <strong>{t("Nothing was recorded.")}</strong> {take.error instanceof Error ? t(take.error.message) : ""} {t("This rental may have changed on another till.")}
           </p>
           <Button variant="outline" size="sm" onClick={onRecheck}>
-            Check again
+            {t("Check again")}
           </Button>
         </div>
       )}
@@ -594,18 +594,18 @@ function SettleReturn({
       <div className="grid items-start gap-4 lg:grid-cols-[1fr_22rem]">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">What came back</CardTitle>
+            <CardTitle className="text-base">{t("What came back")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="quantity">How many, of the {count(match.quantityOut)} out</Label>
+              <Label htmlFor="quantity">{t("How many, of the {count} out", { count: count(match.quantityOut) })}</Label>
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   type="button"
                   variant="outline"
                   size="icon"
                   className="size-11"
-                  aria-label="One fewer"
+                  aria-label={t("One fewer")}
                   disabled={qty <= 1}
                   onClick={() => setQuantity(qty - 1)}
                 >
@@ -628,7 +628,7 @@ function SettleReturn({
                   variant="outline"
                   size="icon"
                   className="size-11"
-                  aria-label="One more"
+                  aria-label={t("One more")}
                   disabled={qty >= match.quantityOut}
                   onClick={() => setQuantity(qty + 1)}
                 >
@@ -653,13 +653,13 @@ function SettleReturn({
             </div>
 
             <div className="space-y-2">
-              <Label>Condition</Label>
+              <Label>{t("Condition")}</Label>
               <div className="grid grid-cols-3 gap-2">
                 {(
                   [
-                    { value: "good", label: "Good" },
-                    { value: "damaged", label: "Damaged" },
-                    { value: "lost", label: "Not returned" },
+                    { value: "good", label: t("Good") },
+                    { value: "damaged", label: t("Damaged") },
+                    { value: "lost", label: t("Not returned") },
                   ] as const
                 ).map((option) => (
                   <button
@@ -677,7 +677,7 @@ function SettleReturn({
                     )}
                   >
                     {condition === option.value && <Check className="size-3.5" />}
-                    {option.label}
+                    {t(option.label)}
                   </button>
                 ))}
               </div>
@@ -696,14 +696,14 @@ function SettleReturn({
                 aria-expanded={extras}
                 className="flex min-h-11 w-full items-center justify-between gap-3 px-3 text-left text-sm font-medium"
               >
-                Days off, discount or a note
+                {t("Days off, discount or a note")}
                 <ChevronDown className={cn("size-4 shrink-0 transition-transform", extras && "rotate-180")} />
               </button>
               {extras && (
                 <div className="grid gap-4 border-t p-3 sm:grid-cols-2">
                   {match.plan === "daily" && (
                     <div className="space-y-2">
-                      <Label htmlFor="holidays">Days not charged</Label>
+                      <Label htmlFor="holidays">{t("Days not charged")}</Label>
                       <Input
                         id="holidays"
                         type="number"
@@ -718,7 +718,7 @@ function SettleReturn({
                     </div>
                   )}
                   <div className="space-y-2">
-                    <Label htmlFor="discount">Discount ({currency})</Label>
+                    <Label htmlFor="discount">{t("Discount")} ({currency})</Label>
                     <Input
                       id="discount"
                       type="number"
@@ -732,7 +732,7 @@ function SettleReturn({
                     />
                   </div>
                   <div className="space-y-2 sm:col-span-2">
-                    <Label htmlFor="note">Note</Label>
+                    <Label htmlFor="note">{t("Note")}</Label>
                     <Textarea id="note" value={note} onChange={(e) => setNote(e.target.value)} rows={2} />
                   </div>
                 </div>
@@ -743,27 +743,27 @@ function SettleReturn({
 
         <Card className="lg:sticky lg:top-20">
           <CardHeader>
-            <CardTitle className="text-base">Payment</CardTitle>
+            <CardTitle className="text-base">{t("Payment")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 text-sm">
             <div className="space-y-2">
-              <Row label={`Rent · ${rent.breakdown}`} value={money(rent.total, currency)} />
+              <Row label={`${t("Rent")} · ${rent.breakdown}`} value={money(rent.total, currency)} />
               {lateFee > 0 && (
-                <Row label={`Late fee · ${plural(match.overdueDays, "day")}`} value={money(lateFee, currency)} warn />
+                <Row label={`${t("Late fee")} · ${plural(match.overdueDays, "day")}`} value={money(lateFee, currency)} warn />
               )}
               {damage > 0 && (
-                <Row label={condition === "lost" ? "Not returned" : "Damage"} value={money(damage, currency)} warn />
+                <Row label={condition === "lost" ? t("Not returned") : t("Damage")} value={money(damage, currency)} warn />
               )}
-              {discount > 0 && <Row label="Discount" value={`− ${money(discount, currency)}`} />}
-              {credit > 0 && <Row label="Paid in advance" value={`− ${money(fromAdvance, currency)}`} />}
+              {discount > 0 && <Row label={t("Discount")} value={`− ${money(discount, currency)}`} />}
+              {credit > 0 && <Row label={t("Paid in advance")} value={`− ${money(fromAdvance, currency)}`} />}
               <div className="flex items-baseline justify-between border-t pt-2 font-semibold">
-                <span>To pay now</span>
+                <span>{t("To pay now")}</span>
                 <span className="font-heading text-2xl tabular-nums">{money(toPay, currency)}</span>
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="paid">Taken now ({currency})</Label>
+              <Label htmlFor="paid">{t("Taken now")} ({currency})</Label>
               <div className="flex gap-2">
                 <Input
                   id="paid"
@@ -782,7 +782,7 @@ function SettleReturn({
                   onClick={() => setPaid(toPay)}
                   disabled={toPay === 0}
                 >
-                  Full
+                  {t("Full")}
                 </Button>
               </div>
               {toPay > 0 && (paid === "" ? 0 : paid) < toPay && (
@@ -794,7 +794,7 @@ function SettleReturn({
 
             {leftOver > 0 && (
               <div className="space-y-2">
-                <Label htmlFor="given-back">Given back from their advance</Label>
+                <Label htmlFor="given-back">{t("Given back from their advance")}</Label>
                 <div className="flex gap-2">
                   <Input
                     id="given-back"
@@ -817,7 +817,7 @@ function SettleReturn({
             )}
 
             <div className="space-y-2">
-              <Label>Paid by</Label>
+              <Label>{t("Paid by")}</Label>
               <div className="grid grid-cols-2 gap-2">
                 {PAYMENT_METHODS.map((option) => (
                   <button
@@ -830,7 +830,7 @@ function SettleReturn({
                       method === option.value ? "border-primary bg-primary/10 text-primary" : "hover:bg-accent/60",
                     )}
                   >
-                    {option.label}
+                    {t(option.label)}
                   </button>
                 ))}
               </div>
@@ -858,13 +858,13 @@ function SettleReturn({
               }
             >
               {take.isPending ? <Spinner /> : <Check className="size-4" />}
-              {take.isPending ? "Recording…" : `Take back ${count(qty)}`}
+              {take.isPending ? t("Recording…") : t("Take back {count}", { count: count(qty) })}
             </Button>
 
             <p className="text-center text-xs text-muted-foreground">
               Out {dateTime(match.startedAt)} ·{" "}
               <Link href={`/rentals/${match.rentalId}`} className="underline">
-                See the rental
+                {t("See the rental")}
               </Link>
             </p>
           </CardContent>
@@ -892,26 +892,26 @@ function DonePanel({
         <CircleCheck className="size-12 text-success" />
         <div className="space-y-1">
           <h2 className="font-heading text-lg font-semibold">
-            {count(done.quantity)} × {done.match.productName} taken back
+            {t("{count} × {product} taken back", { count: count(done.quantity), product: done.match.productName })}
           </h2>
           <p className="text-sm text-muted-foreground">
-            From {done.match.customerName} · <span className="font-mono">{done.code}</span>
-            {done.stillOut > 0 && ` · ${plural(done.stillOut, "unit")} still out on this rental`}
+            {t("From {name}", { name: done.match.customerName })} · <span className="font-mono">{done.code}</span>
+            {done.stillOut > 0 && ` · ${t("{units} still out on this rental", { units: plural(done.stillOut, "unit") })}`}
           </p>
         </div>
         <div className="flex w-full max-w-md flex-col gap-2 sm:flex-row sm:justify-center">
           <Button className="h-11" onClick={onAgain} autoFocus>
-            Take back another
+            {t("Take back another")}
           </Button>
           {onSameCustomer && (
             <Button variant="outline" className="h-11" onClick={onSameCustomer} disabled={busy}>
               {busy ? <Spinner /> : <User className="size-4" />}
-              More from this customer
+              {t("More from this customer")}
             </Button>
           )}
           <ButtonLink variant="outline" className="h-11" href={`/rentals/${done.match.rentalId}/receipt`}>
             <Receipt className="size-4" />
-            Receipt
+            {t("Receipt")}
           </ButtonLink>
         </div>
       </CardContent>

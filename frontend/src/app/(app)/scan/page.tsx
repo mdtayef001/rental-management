@@ -1,8 +1,8 @@
-import type { Metadata } from "next"
 import { requireAccess } from "@/lib/auth/dal"
 import { ScanView } from "./view"
+import { pageTitle } from "@/lib/i18n/server"
 
-export const metadata: Metadata = { title: "Scan" }
+export const generateMetadata = () => pageTitle("Scan")
 
 export default async function ScanPage() {
   const { user } = await requireAccess("/scan")

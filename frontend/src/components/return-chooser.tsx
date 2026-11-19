@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { count, dateTime, money, plural } from "@/lib/format"
 import type { ReturnMatch } from "@/lib/types"
+import { t } from "@/lib/i18n"
 
 /**
  * "Which of these is the customer bringing back?"
@@ -43,12 +44,14 @@ export function ReturnChooser({
   return (
     <div className="space-y-3">
       <div>
-        <h2 className="text-base font-semibold">{heading ?? "Which one is coming back?"}</h2>
+        <h2 className="text-base font-semibold">{heading ?? t("Which one is coming back?")}</h2>
         <p className="text-sm text-muted-foreground">
           {sameProduct
-            ? `${plural(matches.length, "rental")} ${matches.length === 1 ? "has" : "have"} this item still out.`
-            : `${plural(matches.length, "item")} still out.`}{" "}
-          Pick the one in front of you.
+            ? t(matches.length === 1 ? "{rentals} has this item still out." : "{rentals} have this item still out.", {
+                rentals: plural(matches.length, "rental"),
+              })
+            : t("{items} still out.", { items: plural(matches.length, "item") })}{" "}
+          {t("Pick the one in front of you.")}
         </p>
       </div>
 
@@ -79,7 +82,7 @@ export function ReturnChooser({
                   {match.isOverdue && (
                     <Badge variant="destructive" className="gap-1">
                       <AlertTriangle className="size-3" />
-                      {plural(match.overdueDays, "day")} overdue
+                      {t("{days} overdue", { days: plural(match.overdueDays, "day") })}
                     </Badge>
                   )}
                 </div>
@@ -88,25 +91,24 @@ export function ReturnChooser({
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
                   <span className="inline-flex items-center gap-1.5">
                     <Package className="size-3.5" />
-                    <strong className="text-foreground">{count(match.quantityOut)}</strong> of {count(match.quantity)}{" "}
-                    still out
+                    {t("{out} of {total} still out", { out: count(match.quantityOut), total: count(match.quantity) })}
                   </span>
                   <span className="inline-flex items-center gap-1.5">
                     <Clock className="size-3.5" />
-                    {plural(match.daysOut, "day")} out
+                    {t("{days} out", { days: plural(match.daysOut, "day") })}
                   </span>
-                  {match.quantityReturned > 0 && <span>{count(match.quantityReturned)} already back</span>}
+                  {match.quantityReturned > 0 && <span>{t("{count} already back", { count: count(match.quantityReturned) })}</span>}
                 </div>
 
                 <div className="text-xs text-muted-foreground">
-                  Out {dateTime(match.startedAt)}
+                  {t("Out {date}", { date: dateTime(match.startedAt) })}
                 </div>
               </div>
 
               {/* What it costs if all of it comes back now, so "how much?" needs no extra tap. */}
               <div className="shrink-0 text-right">
                 <div className="text-sm font-semibold tabular-nums">{money(match.quoteNow, currency)}</div>
-                <div className="text-xs text-muted-foreground">if all back now</div>
+                <div className="text-xs text-muted-foreground">{t("if all back now")}</div>
               </div>
 
               <ArrowRight className="size-4 shrink-0 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-foreground" />
@@ -123,18 +125,18 @@ export function NothingOut({ productName, onReset }: { productName?: string; onR
   return (
     <div className="rounded-lg border border-dashed p-8 text-center">
       <Package className="mx-auto size-8 text-muted-foreground" />
-      <h2 className="mt-3 font-semibold">Nothing out on rent</h2>
+      <h2 className="mt-3 font-semibold">{t("Nothing out on rent")}</h2>
       <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
         {productName ? (
           <>
-            <strong>{productName}</strong> isn&apos;t out with anyone right now, so there&apos;s nothing to take back.
+            {t("{product} isn't out with anyone right now, so there's nothing to take back.", { product: productName })}
           </>
         ) : (
-          <>That item isn&apos;t out with anyone right now.</>
+          <>{t("That item isn't out with anyone right now.")}</>
         )}
       </p>
       <Button variant="outline" className="mt-4" onClick={onReset}>
-        Scan something else
+        {t("Scan something else")}
       </Button>
     </div>
   )
@@ -145,16 +147,15 @@ export function NotRecognised({ code, onReset, onSearch }: { code: string; onRes
   return (
     <div className="rounded-lg border border-dashed p-8 text-center">
       <AlertTriangle className="mx-auto size-8 text-muted-foreground" />
-      <h2 className="mt-3 font-semibold">That code isn&apos;t recognised</h2>
+      <h2 className="mt-3 font-semibold">{t("That code isn't recognised")}</h2>
       <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
-        Nothing matches <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{code}</code>. It may belong
-        to another shop, or the label may be damaged.
+        {t("Nothing matches {code}. It may belong to another shop, or the label may be damaged.", { code })}
       </p>
       <div className="mt-4 flex justify-center gap-2">
         <Button variant="outline" onClick={onReset}>
-          Try again
+          {t("Try again")}
         </Button>
-        {onSearch && <Button onClick={onSearch}>Search by name instead</Button>}
+        {onSearch && <Button onClick={onSearch}>{t("Search by name instead")}</Button>}
       </div>
     </div>
   )

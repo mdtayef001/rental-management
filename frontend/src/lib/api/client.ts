@@ -1,6 +1,7 @@
 "use client"
 
 import { ApiError, errorMessage, unreachable } from "./errors"
+import { msg } from "@/lib/i18n"
 
 // Longer than the Next.js server's own wait for Django, so its clearer error arrives first.
 const TIMEOUT_MS = 20_000
@@ -38,7 +39,7 @@ export async function request<T>(
     // document, so no stale data from the old session survives into the login screen.
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.href = "/logout"
-    throw new ApiError(401, "Your session has ended. Please log in again.")
+    throw new ApiError(401, msg("Your session has ended. Please log in again."))
   }
   if (res.status === 204) return undefined as T
   const data = await res.json().catch(() => null)

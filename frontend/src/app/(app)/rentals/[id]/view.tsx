@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import { ErrorState, PageHeader, Spinner, TableSkeleton } from "@/components/common"
 import { Code, DataView, Primary } from "@/components/data-view"
@@ -27,6 +26,7 @@ import { useRental } from "@/lib/data/queries"
 import { count, dateTime, dueLabel, friendlyDateTime, money, plural, whatsappLink } from "@/lib/format"
 import { PAYMENT_METHODS, PLAN_LABEL } from "@/lib/rental"
 import { StatusBadge } from "../view"
+import { msg, t } from "@/lib/i18n"
 
 /**
  * One rental in full: what went out, what has come back, and every payment.
@@ -62,30 +62,30 @@ export function RentalDetailView({ id }: { id: string }) {
     <div className="space-y-6">
       <PageHeader
         title={rental.code}
-        description={`${rental.customerName} · out ${dateTime(rental.startedAt)}`}
-        back={{ href: "/rentals", label: "Rentals" }}
+        description={`${rental.customerName} · ${t("Out {date}", { date: dateTime(rental.startedAt) })}`}
+        back={{ href: "/rentals", label: t("Rentals") }}
       >
         <StatusBadge status={rental.status} overdue={rental.isOverdue} />
         {rental.status !== "cancelled" && rental.status !== "returned" && user.canTakeReturns && (
           <ButtonLink href={`/take-back?rental=${rental.id}`}>
             <Undo2 className="size-4" />
-            Take back
+            {t("Take back")}
           </ButtonLink>
         )}
         <ButtonLink href={`/rentals/${rental.id}/receipt`} variant="outline">
           <ReceiptText className="size-4" />
-          Receipt
+          {t("Receipt")}
         </ButtonLink>
         {rental.customerId && user.role !== "staff" && (
           <ButtonLink href={`/bills/${rental.customerId}`} variant="outline">
             <FileText className="size-4" />
-            Monthly bill
+            {t("Monthly bill")}
           </ButtonLink>
         )}
         {share && (
           <Button variant="outline" render={<a href={share} target="_blank" rel="noreferrer" />}>
             <MessageCircle className="size-4" />
-            WhatsApp
+            {t("WhatsApp")}
           </Button>
         )}
       </PageHeader>
@@ -102,37 +102,37 @@ export function RentalDetailView({ id }: { id: string }) {
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Items</CardTitle>
+              <CardTitle className="text-base">{t("Items")}</CardTitle>
             </CardHeader>
             <CardContent className="p-0 max-md:px-3 max-md:pb-3">
               <DataView
-                label="Items on this rental"
+                label={t("Items on this rental")}
                 className="md:rounded-none md:border-0"
                 rows={rental.items ?? []}
                 getKey={(item) => item.id}
                 columns={[
                   {
                     id: "product",
-                    header: "Product",
+                    header: t("Product"),
                     role: "title",
                     cell: (item) => <Primary sub={item.productSku && <Code>{item.productSku}</Code>}>{item.productName}</Primary>,
                   },
                   {
                     id: "still",
-                    header: "Still out",
+                    header: t("Still out"),
                     role: "status",
                     align: "end",
                     cell: (item) =>
                       item.quantityOut > 0 ? (
                         <Badge variant="info">{count(item.quantityOut)} out</Badge>
                       ) : (
-                        <Badge variant="success">All back</Badge>
+                        <Badge variant="success">{t("All back")}</Badge>
                       ),
                   },
-                  { id: "out", header: "Out", align: "end", cell: (item) => count(item.quantity) },
+                  { id: "out", header: t("Out"), align: "end", cell: (item) => count(item.quantity) },
                   {
                     id: "back",
-                    header: "Back",
+                    header: t("Back"),
                     align: "end",
                     cell: (item) => (
                       <>
@@ -145,17 +145,17 @@ export function RentalDetailView({ id }: { id: string }) {
                   },
                   {
                     id: "plan",
-                    header: "Plan",
+                    header: t("Plan"),
                     cell: (item) => (
                       <>
-                        {PLAN_LABEL[item.plan]}
+                        {t(PLAN_LABEL[item.plan])}
                         <div className="text-xs text-muted-foreground">{money(item.rate, currency)}</div>
                       </>
                     ),
                   },
                   {
                     id: "charged",
-                    header: "Charged",
+                    header: t("Charged"),
                     align: "end",
                     cell: (item) => money(item.lineTotal, currency),
                   },
@@ -167,7 +167,7 @@ export function RentalDetailView({ id }: { id: string }) {
           {(rental.returns?.length ?? 0) > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Returns</CardTitle>
+                <CardTitle className="text-base">{t("Returns")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {rental.returns?.map((taken) => (
@@ -188,7 +188,7 @@ export function RentalDetailView({ id }: { id: string }) {
                             {count(line.quantity)} × {line.productName}
                             {line.condition !== "good" && (
                               <Badge variant="destructive" className="ml-2">
-                                {line.condition === "lost" ? "Not returned" : "Damaged"}
+                                {line.condition === "lost" ? t("Not returned") : t("Damaged")}
                               </Badge>
                             )}
                             <span className="ml-2 text-xs">({plural(line.daysOut, "day")})</span>
@@ -197,7 +197,7 @@ export function RentalDetailView({ id }: { id: string }) {
                         </li>
                       ))}
                     </ul>
-                    {taken.byName && <div className="mt-2 text-xs text-muted-foreground">Taken by {taken.byName}</div>}
+                    {taken.byName && <div className="mt-2 text-xs text-muted-foreground">{t("Taken by {name}", { name: taken.byName })}</div>}
                   </div>
                 ))}
               </CardContent>
@@ -207,21 +207,25 @@ export function RentalDetailView({ id }: { id: string }) {
           {(rental.payments?.length ?? 0) > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Payments</CardTitle>
+                <CardTitle className="text-base">{t("Payments")}</CardTitle>
               </CardHeader>
-              <CardContent className="p-0">
-                <Table>
-                  <TableBody>
-                    {rental.payments?.map((payment) => (
-                      <TableRow key={payment.id}>
-                        <TableCell className="text-sm">{friendlyDateTime(payment.at)}</TableCell>
-                        <TableCell className="text-sm">{PAYMENT_KIND[payment.kind] ?? payment.kind}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{payment.method}</TableCell>
-                        <TableCell className="text-right tabular-nums">{money(payment.amount, currency)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+              <CardContent>
+                {/* A list rather than a table: four short facts read fine stacked on a
+                    phone and in one line on the counter laptop. */}
+                <ul className="divide-y text-sm">
+                  {rental.payments?.map((payment) => (
+                    <li key={payment.id} className="flex items-start justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+                      <div className="min-w-0">
+                        <div className="font-medium">{t(PAYMENT_KIND[payment.kind] ?? payment.kind)}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {friendlyDateTime(payment.at)}
+                          {payment.method && ` · ${t(PAYMENT_METHODS.find((m) => m.value === payment.method)?.label ?? payment.method)}`}
+                        </div>
+                      </div>
+                      <span className="shrink-0 font-medium tabular-nums">{money(payment.amount, currency)}</span>
+                    </li>
+                  ))}
+                </ul>
               </CardContent>
             </Card>
           )}
@@ -229,7 +233,7 @@ export function RentalDetailView({ id }: { id: string }) {
           {rental.notes && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Notes</CardTitle>
+                <CardTitle className="text-base">{t("Notes")}</CardTitle>
               </CardHeader>
               <CardContent className="text-sm whitespace-pre-wrap">{rental.notes}</CardContent>
             </Card>
@@ -239,22 +243,22 @@ export function RentalDetailView({ id }: { id: string }) {
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Money</CardTitle>
+              <CardTitle className="text-base">{t("Money")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
-              <Line label="Rent charged" value={money(rental.rentTotal, currency)} />
-              {rental.lateFee > 0 && <Line label="Late fee" value={money(rental.lateFee, currency)} warn />}
-              {rental.damageFee > 0 && <Line label="Damage" value={money(rental.damageFee, currency)} warn />}
-              {rental.discount > 0 && <Line label="Discount" value={`− ${money(rental.discount, currency)}`} />}
-              {advance > 0 && <Line label="Paid in advance" value={money(advance, currency)} />}
-              <Line label={advance > 0 ? "Paid in total" : "Paid"} value={money(rental.paidAmount, currency)} />
+              <Line label={t("Rent charged")} value={money(rental.rentTotal, currency)} />
+              {rental.lateFee > 0 && <Line label={t("Late fee")} value={money(rental.lateFee, currency)} warn />}
+              {rental.damageFee > 0 && <Line label={t("Damage")} value={money(rental.damageFee, currency)} warn />}
+              {rental.discount > 0 && <Line label={t("Discount")} value={`− ${money(rental.discount, currency)}`} />}
+              {advance > 0 && <Line label={t("Paid in advance")} value={money(advance, currency)} />}
+              <Line label={advance > 0 ? t("Paid in total") : t("Paid")} value={money(rental.paidAmount, currency)} />
               <div className="flex items-baseline justify-between border-t pt-2 font-semibold">
-                <span>{rental.balance >= 0 ? "Balance due" : open ? "In credit" : "To give back"}</span>
+                <span>{rental.balance >= 0 ? t("Balance due") : open ? t("In credit") : t("To give back")}</span>
                 <span className="tabular-nums">{money(Math.abs(rental.balance), currency)}</span>
               </div>
               {credit > 0 && open && (
                 <p className="text-xs text-muted-foreground">
-                  Paid ahead. The rent comes off this when the items come back.
+                  {t("Paid ahead. The rent comes off this when the items come back.")}
                 </p>
               )}
 
@@ -262,12 +266,12 @@ export function RentalDetailView({ id }: { id: string }) {
                 {rental.status !== "cancelled" && (
                   <Button size="sm" variant={rental.balance > 0 ? "default" : "outline"} onClick={() => setPaying(true)}>
                     <Wallet className="size-4" />
-                    Take payment
+                    {t("Take payment")}
                   </Button>
                 )}
                 {credit > 0 && user.canTakeReturns && (
                   <Button size="sm" variant="outline" onClick={() => setRefunding(true)}>
-                    Give money back
+                    {t("Give money back")}
                   </Button>
                 )}
               </div>
@@ -276,22 +280,22 @@ export function RentalDetailView({ id }: { id: string }) {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Details</CardTitle>
+              <CardTitle className="text-base">{t("Details")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
-              <Line label="Customer" value={rental.customerName} />
-              {rental.customerPhone && <Line label="Phone" value={rental.customerPhone} />}
-              <Line label="Out" value={dateTime(rental.startedAt)} />
-              <Line label="Due" value={rental.dueAt ? dateTime(rental.dueAt) : "Open-ended"} />
-              {rental.returnedAt && <Line label="All back" value={dateTime(rental.returnedAt)} />}
-              {rental.createdByName && <Line label="Rented out by" value={rental.createdByName} />}
+              <Line label={t("Customer")} value={rental.customerName} />
+              {rental.customerPhone && <Line label={t("Phone")} value={rental.customerPhone} />}
+              <Line label={t("Out")} value={dateTime(rental.startedAt)} />
+              <Line label={t("Due")} value={rental.dueAt ? dateTime(rental.dueAt) : t("Open-ended")} />
+              {rental.returnedAt && <Line label={t("All back")} value={dateTime(rental.returnedAt)} />}
+              {rental.createdByName && <Line label={t("Rented out by")} value={rental.createdByName} />}
             </CardContent>
           </Card>
 
           {user.role !== "staff" && rental.status !== "cancelled" && (rental.returns?.length ?? 0) === 0 && (
             <Button variant="destructive" className="w-full" onClick={() => setCancelling(true)}>
               <Ban className="size-4" />
-              Cancel this rental
+              {t("Cancel this rental")}
             </Button>
           )}
         </div>
@@ -305,9 +309,9 @@ export function RentalDetailView({ id }: { id: string }) {
 }
 
 const PAYMENT_KIND: Record<string, string> = {
-  advance: "Paid in advance",
-  rent: "Payment",
-  refund: "Given back",
+  advance: msg("Paid in advance"),
+  rent: msg("Payment"),
+  refund: msg("Given back"),
 }
 
 function Line({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
@@ -338,16 +342,16 @@ function PaymentDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>Take a payment</DialogTitle>
+          <DialogTitle>{t("Take a payment")}</DialogTitle>
           <DialogDescription>
             {rental.balance > 0
-              ? `${money(rental.balance, currency)} is outstanding.`
-              : "Nothing is owed yet. Money taken now is kept on this rental as an advance."}
+              ? t("{amount} is outstanding.", { amount: money(rental.balance, currency) })
+              : t("Nothing is owed yet. Money taken now is kept on this rental as an advance.")}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <Label htmlFor="p-amount">Amount</Label>
+            <Label htmlFor="p-amount">{t("Amount")}</Label>
             <Input
               id="p-amount"
               type="number"
@@ -359,7 +363,7 @@ function PaymentDialog({
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="p-method">How</Label>
+            <Label htmlFor="p-method">{t("How")}</Label>
             <select
               id="p-method"
               value={method}
@@ -368,21 +372,21 @@ function PaymentDialog({
             >
               {PAYMENT_METHODS.map((option) => (
                 <option key={option.value} value={option.value}>
-                  {option.label}
+                  {t(option.label)}
                 </option>
               ))}
             </select>
           </div>
           {method === "mobile" && (
             <div className="space-y-1.5">
-              <Label htmlFor="p-ref">Transaction ID</Label>
+              <Label htmlFor="p-ref">{t("Transaction ID")}</Label>
               <Input id="p-ref" value={reference} onChange={(e) => setReference(e.target.value)} />
             </div>
           )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("Cancel")}
           </Button>
           <Button
             disabled={pay.isPending || !amount}
@@ -394,7 +398,7 @@ function PaymentDialog({
             }
           >
             {pay.isPending && <Spinner />}
-            Record payment
+            {t("Record payment")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -419,13 +423,13 @@ function RefundDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>Give money back</DialogTitle>
+          <DialogTitle>{t("Give money back")}</DialogTitle>
           <DialogDescription>
             {money(credit, currency)} has been paid beyond what this rental has been charged.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-1.5">
-          <Label htmlFor="d-amount">Amount to give back</Label>
+          <Label htmlFor="d-amount">{t("Amount to give back")}</Label>
           <Input
             id="d-amount"
             type="number"
@@ -439,7 +443,7 @@ function RefundDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
-            Cancel
+            {t("Cancel")}
           </Button>
           <Button
             disabled={refund.isPending || !amount || Number(amount) > credit}
@@ -448,7 +452,7 @@ function RefundDialog({
             }
           >
             {refund.isPending && <Spinner />}
-            Give it back
+            {t("Give it back")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -474,25 +478,24 @@ function CancelDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>Cancel {code}?</DialogTitle>
+          <DialogTitle>{t("Cancel {code}?", { code })}</DialogTitle>
           <DialogDescription>
-            Everything on it goes straight back on the shelf. Only possible because nothing has been
-            returned or paid yet.
+            {t("Everything on it goes straight back on the shelf. Only possible because nothing has been returned or paid yet.")}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-1.5">
-          <Label htmlFor="cancel-reason">Why (optional)</Label>
+          <Label htmlFor="cancel-reason">{t("Why (optional)")}</Label>
           <Textarea
             id="cancel-reason"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             rows={2}
-            placeholder="Entered twice, customer changed their mind…"
+            placeholder={t("Entered twice, customer changed their mind…")}
           />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Keep it
+            {t("Keep it")}
           </Button>
           <Button
             variant="destructive"
@@ -500,7 +503,7 @@ function CancelDialog({
             onClick={() => cancel.mutate({ rentalId, reason }, { onSuccess: () => onOpenChange(false) })}
           >
             {cancel.isPending && <Spinner />}
-            Cancel the rental
+            {t("Cancel the rental")}
           </Button>
         </DialogFooter>
       </DialogContent>

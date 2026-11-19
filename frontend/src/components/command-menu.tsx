@@ -31,21 +31,22 @@ import { Button } from "@/components/ui/button"
 import { useSession } from "@/components/session"
 import { canAccess } from "@/lib/auth/roles"
 import { useCustomers, useDebounced, useProductSearch } from "@/lib/data/queries"
+import { msg, t } from "@/lib/i18n"
 
 const PAGES = [
-  { href: "/scan", label: "Scan", icon: ScanLine },
-  { href: "/rent-out", label: "Rent out", icon: Package },
-  { href: "/take-back", label: "Take back", icon: Undo2 },
-  { href: "/dashboard", label: "Dashboard", icon: ChartColumn },
-  { href: "/rentals", label: "Rentals", icon: Boxes },
-  { href: "/returns", label: "Returns", icon: Undo2 },
-  { href: "/customers", label: "Customers", icon: Users },
-  { href: "/bills", label: "Bills", icon: ReceiptText },
-  { href: "/products", label: "Products", icon: Package },
-  { href: "/reports", label: "Reports", icon: FileSpreadsheet },
-  { href: "/users", label: "Team", icon: Users },
-  { href: "/activity", label: "Activity", icon: ActivityIcon },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/scan", label: msg("Scan"), icon: ScanLine },
+  { href: "/rent-out", label: msg("Rent out"), icon: Package },
+  { href: "/take-back", label: msg("Take back"), icon: Undo2 },
+  { href: "/dashboard", label: msg("Dashboard"), icon: ChartColumn },
+  { href: "/rentals", label: msg("Rentals"), icon: Boxes },
+  { href: "/returns", label: msg("Returns"), icon: Undo2 },
+  { href: "/customers", label: msg("Customers"), icon: Users },
+  { href: "/bills", label: msg("Bills"), icon: ReceiptText },
+  { href: "/products", label: msg("Products"), icon: Package },
+  { href: "/reports", label: msg("Reports"), icon: FileSpreadsheet },
+  { href: "/users", label: msg("Team"), icon: Users },
+  { href: "/activity", label: msg("Activity"), icon: ActivityIcon },
+  { href: "/settings", label: msg("Settings"), icon: Settings },
 ]
 
 /**
@@ -97,7 +98,7 @@ export function CommandMenu() {
   // nothing to do with what they typed while the server search is still in flight.
   const typed = query.trim().toLowerCase()
   const pages = PAGES.filter(
-    (page) => canAccess(user, page.href, business?.settings) && (!typed || page.label.toLowerCase().includes(typed)),
+    (page) => canAccess(user, page.href, business?.settings) && (!typed || page.label.toLowerCase().includes(typed) || t(page.label).toLowerCase().includes(typed)),
   )
 
   // Which row Enter will take. The results arrive from the server after the typing has
@@ -120,11 +121,11 @@ export function CommandMenu() {
         className="h-9 justify-start gap-2 px-2.5 text-muted-foreground sm:w-60"
       >
         <Search className="size-4" />
-        <span className="hidden truncate sm:inline">Search or jump to…</span>
+        <span className="hidden truncate sm:inline">{t("Search or jump to…")}</span>
         <kbd className="ml-auto hidden rounded border bg-muted px-1.5 font-mono text-[10px] sm:inline">Ctrl K</kbd>
       </Button>
 
-      <CommandDialog open={open} onOpenChange={setOpen} title="Search" description="Jump to a screen, a customer or a machine">
+      <CommandDialog open={open} onOpenChange={setOpen} title={t("Search")} description={t("Jump to a screen, a customer or a machine")}>
         {/* People and products are searched by Django, so cmdk's own filter would only
             throw those results away again; the page list is filtered above instead. */}
         <Command shouldFilter={false} value={highlighted} onValueChange={setSelected}>
@@ -132,17 +133,17 @@ export function CommandMenu() {
               without this the first keystrokes after Ctrl-K land there instead. */}
           <CommandInput
             autoFocus
-            placeholder="Type a name, a code, or a screen…"
+            placeholder={t("Type a name, a code, or a screen…")}
             value={query}
             onValueChange={setQuery}
           />
           <CommandList>
             {pages.length === 0 && people.length === 0 && machines.length === 0 && (
-              <CommandEmpty>{searching ? "Searching…" : `Nothing matches “${query.trim()}”.`}</CommandEmpty>
+              <CommandEmpty>{searching ? t("Searching…") : t("Nothing matches “{query}”.", { query: query.trim() })}</CommandEmpty>
             )}
 
             {people.length > 0 && (
-              <CommandGroup heading="Customers">
+              <CommandGroup heading={t("Customers")}>
                 {people.slice(0, 5).map((customer) => (
                   <CommandItem key={customer.id} value={`c-${customer.id}`} onSelect={() => go(`/customers/${customer.id}`)}>
                     <User className="size-4" />
@@ -154,7 +155,7 @@ export function CommandMenu() {
             )}
 
             {machines.length > 0 && (
-              <CommandGroup heading="Products">
+              <CommandGroup heading={t("Products")}>
                 {machines.slice(0, 5).map((product) => (
                   <CommandItem key={product.id} value={`p-${product.id}`} onSelect={() => go(`/products/${product.id}`)}>
                     <Package className="size-4" />
@@ -168,13 +169,13 @@ export function CommandMenu() {
             {(people.length > 0 || machines.length > 0) && pages.length > 0 && <CommandSeparator />}
 
             {pages.length > 0 && (
-              <CommandGroup heading="Go to">
+              <CommandGroup heading={t("Go to")}>
                 {pages.map((page) => {
                   const Icon = page.icon
                   return (
                     <CommandItem key={page.href} value={page.href} onSelect={() => go(page.href)}>
                       <Icon className="size-4" />
-                      {page.label}
+                      {t(page.label)}
                     </CommandItem>
                   )
                 })}

@@ -18,10 +18,11 @@ import { request } from "@/lib/api/client"
 import { ApiError } from "@/lib/api/errors"
 import { type RentalLineInput, useRentOut } from "@/lib/data/mutations"
 import { useCustomerRates } from "@/lib/data/queries"
-import { count, money, plural } from "@/lib/format"
+import { count, date, money, plural } from "@/lib/format"
 import { PAYMENT_METHODS, PLAN_LABEL, availablePlans, quoteRental, rateFor } from "@/lib/rental"
 import type { Customer, CustomerRate, ProductLookup, RentalPlan } from "@/lib/types"
 import { toast } from "sonner"
+import { t } from "@/lib/i18n"
 
 /** A product in the cart, with the terms staff chose for it. */
 interface Line {
@@ -51,8 +52,8 @@ function wholeAndPositive(value: number) {
 /** What is wrong with a line's quantity or rate, in words for the person typing. */
 function lineProblems(line: Line) {
   return {
-    quantity: wholeAndPositive(line.quantity) ? null : "Enter a whole number, 1 or more.",
-    rate: line.rate > 0 ? null : "Enter a rate above 0.",
+    quantity: wholeAndPositive(line.quantity) ? null : t("Enter a whole number, 1 or more."),
+    rate: line.rate > 0 ? null : t("Enter a rate above 0."),
   }
 }
 
@@ -116,14 +117,14 @@ export function RentOutView() {
           const next = [...current]
           const line = next[existing]
           if (line.quantity >= max) {
-            toast.warning(`Only ${max} ${product.name} are on the shelf.`)
+            toast.warning(t("Only {count} {product} are on the shelf.", { count: max, product: product.name }))
             return current
           }
           next[existing] = { ...line, quantity: line.quantity + 1 }
           return next
         }
         if (max <= 0) {
-          toast.warning(`No ${product.name} are on the shelf.`)
+          toast.warning(t("No {product} are on the shelf.", { product: product.name }))
           return current
         }
         const plan = (availablePlans(product).includes(settings.rentals.defaultPlan)
@@ -150,7 +151,7 @@ export function RentOutView() {
       try {
         addProduct(await request<ProductLookup>(`products/lookup/?code=${encodeURIComponent(code)}&rentableOnly=1`))
       } catch (err) {
-        toast.error(err instanceof ApiError ? err.message : "Couldn't find that code.")
+        toast.error(err instanceof ApiError ? t(err.message) : t("Couldn't find that code."))
       } finally {
         setAdding(false)
       }
@@ -231,13 +232,13 @@ export function RentOutView() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Rent out" description="Scan everything going out, then pick the customer." />
+      <PageHeader title={t("Rent out")} description={t("Scan everything going out, then pick the customer.")} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Add items</CardTitle>
+              <CardTitle className="text-base">{t("Add items")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <ProductFinder onCode={addCode} onPick={addProduct} autoFocus busy={adding} />
@@ -246,8 +247,8 @@ export function RentOutView() {
 
           {lines.length === 0 ? (
             <EmptyState
-              title="Nothing in the rental yet"
-              description="Scan an item's QR code, or type its name or SKU above."
+              title={t("Nothing in the rental yet")}
+              description={t("Scan an item's QR code, or type its name or SKU above.")}
               icon={Package}
             />
           ) : (
@@ -279,7 +280,7 @@ export function RentOutView() {
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Customer</CardTitle>
+              <CardTitle className="text-base">{t("Customer")}</CardTitle>
             </CardHeader>
             <CardContent>
               <CustomerPicker value={customer} onChange={setCustomer} />
@@ -292,16 +293,18 @@ export function RentOutView() {
                     onChange={(e) => setRemember(e.target.checked)}
                   />
                   <span>
-                    Remember {newPrices.length === 1 ? "this price" : "these prices"} for {customer?.name}
+                    {t(newPrices.length === 1 ? "Remember this price for {name}" : "Remember these prices for {name}", {
+                      name: customer?.name ?? "",
+                    })}
                     <span className="block text-xs text-muted-foreground">
-                      Their next rental will start from {newPrices.length === 1 ? "it" : "them"}.
+                      {t(newPrices.length === 1 ? "Their next rental will start from it." : "Their next rental will start from them.")}
                     </span>
                   </span>
                 </label>
               )}
               {needsCustomer && (
                 <p className="mt-2 text-sm text-warning-soft-foreground dark:text-warning">
-                  Every rental needs a customer. Search for them, or press New to add them.
+                  {t("Every rental needs a customer. Search for them, or press New to add them.")}
                 </p>
               )}
             </CardContent>
@@ -311,13 +314,13 @@ export function RentOutView() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <CalendarClock className="size-4" />
-                Due back
+                {t("Due back")}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex items-center gap-2">
                 {openEnded ? (
-                  <Input disabled value="" className="h-10 w-24" aria-label="Days" readOnly />
+                  <Input disabled value="" className="h-10 w-24" aria-label={t("Days")} readOnly />
                 ) : (
                   <NumberField
                     value={days}
@@ -326,41 +329,41 @@ export function RentOutView() {
                     step={1}
                     invalid={!daysOk}
                     className="h-10 w-24"
-                    aria-label="Days"
+                    aria-label={t("Days")}
                   />
                 )}
-                <span className="text-sm text-muted-foreground">days from now</span>
+                <span className="text-sm text-muted-foreground">{t("days from now")}</span>
               </div>
               {settings.rentals.allowOpenEnded && (
                 <label className="flex items-center gap-2 text-sm">
                   <input type="checkbox" checked={openEnded} onChange={(e) => setOpenEnded(e.target.checked)} />
-                  No agreed return date
+                  {t("No agreed return date")}
                 </label>
               )}
-              {!daysOk && <p className="text-xs text-destructive">Enter a whole number of days, 1 or more.</p>}
+              {!daysOk && <p className="text-xs text-destructive">{t("Enter a whole number of days, 1 or more.")}</p>}
               <p className="text-xs text-muted-foreground">
                 {openEnded
-                  ? "Charged for however long it is actually out, with no overdue date."
-                  : `Due ${new Date(openedAt + billedDays * 86_400_000).toLocaleDateString()}. The final price is worked out from the real days out.`}
+                  ? t("Charged for however long it is actually out, with no overdue date.")
+                  : t("Due {date}. The final price is worked out from the real days out.", { date: date(new Date(openedAt + billedDays * 86_400_000)) })}
               </p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Money</CardTitle>
+              <CardTitle className="text-base">{t("Money")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <div className="flex items-baseline justify-between">
                 <span className="text-muted-foreground">
-                  Estimate{openEnded ? " (1 day)" : ` (${plural(billedDays, "day")})`}
+                  {t("Estimate")} ({plural(openEnded ? 1 : billedDays, "day")})
                 </span>
                 <span className="font-semibold tabular-nums">{money(estimate, currency)}</span>
               </div>
 
               <div className="space-y-1.5 border-t pt-3">
                 <Label htmlFor="paid" className="text-xs">
-                  Paid in advance
+                  {t("Paid in advance")}
                 </Label>
                 <div className="flex gap-2">
                   <Input
@@ -380,10 +383,9 @@ export function RentOutView() {
                     </Button>
                   )}
                 </div>
-                {!paidOk && <p className="text-xs text-destructive">An advance can&apos;t be less than 0.</p>}
+                {!paidOk && <p className="text-xs text-destructive">{t("An advance can't be less than 0.")}</p>}
                 <p className="text-xs text-muted-foreground">
-                  Optional. It is kept on the rental and the rent comes off it when the items come back; anything left
-                  over is given back.
+                  {t("Optional. It is kept on the rental and the rent comes off it when the items come back; anything left over is given back.")}
                 </p>
               </div>
 
@@ -391,7 +393,7 @@ export function RentOutView() {
                 <>
                   <div className="space-y-1.5">
                     <Label htmlFor="method" className="text-xs">
-                      How
+                      {t("How")}
                     </Label>
                     <select
                       id="method"
@@ -401,7 +403,7 @@ export function RentOutView() {
                     >
                       {PAYMENT_METHODS.map((option) => (
                         <option key={option.value} value={option.value}>
-                          {option.label}
+                          {t(option.label)}
                         </option>
                       ))}
                     </select>
@@ -409,7 +411,7 @@ export function RentOutView() {
                   {method !== "cash" && (
                     <div className="space-y-1.5">
                       <Label htmlFor="reference" className="text-xs">
-                        {method === "bank" ? "Cheque or transfer number" : "Transaction ID"}
+                        {method === "bank" ? t("Cheque or transfer number") : t("Transaction ID")}
                       </Label>
                       <Input
                         id="reference"
@@ -425,14 +427,14 @@ export function RentOutView() {
 
               <div className="space-y-1.5">
                 <Label htmlFor="notes" className="text-xs">
-                  Note
+                  {t("Note")}
                 </Label>
                 <Textarea
                   id="notes"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   rows={2}
-                  placeholder="Anything worth recording"
+                  placeholder={t("Anything worth recording")}
                 />
               </div>
             </CardContent>
@@ -454,8 +456,9 @@ export function RentOutView() {
             >
               <AlertTriangle className="mt-0.5 size-4 shrink-0" />
               <span>
-                Check the quantity and rate for {badLines.map((l) => l.product.name).join(", ")}. Both have to be more
-                than 0 before this can be rented out.
+                {t("Check the quantity and rate for {products}. Both have to be more than 0 before this can be rented out.", {
+                  products: badLines.map((l) => l.product.name).join(", "),
+                })}
               </span>
             </div>
           )}
@@ -463,16 +466,16 @@ export function RentOutView() {
           <Button className="h-12 w-full text-base" disabled={!canSubmit} onClick={submit}>
             {rentOut.isPending && <Spinner />}
             {rentOut.isPending
-              ? "Saving…"
+              ? t("Saving…")
               : lines.length === 0
-                ? "Add something first"
+                ? t("Add something first")
                 : badLines.length > 0
-                  ? "Fix the quantity or rate"
+                  ? t("Fix the quantity or rate")
                   : !daysOk
-                    ? "Set the days"
+                    ? t("Set the days")
                     : needsCustomer
-                      ? "Pick the customer"
-                      : `Rent out ${plural(lines.reduce((n, l) => n + l.quantity, 0), "unit")}`}
+                      ? t("Pick the customer")
+                      : t("Rent out {units}", { units: plural(lines.reduce((n, l) => n + l.quantity, 0), "unit") })}
           </Button>
         </div>
       </div>
@@ -513,11 +516,11 @@ function LineRow({
     line.plan === "fixed"
       ? null
       : agreed !== undefined && line.rate === Number(agreed)
-        ? `${customerName ?? "Customer"}'s price${usual != null ? ` · usual ${money(usual, currency)}` : ""}`
+        ? `${t("{name}'s price", { name: customerName ?? t("Customer") })}${usual != null ? ` · ${t("usual {amount}", { amount: money(usual, currency) })}` : ""}`
         : usual != null && line.rate === Number(usual)
-          ? "Usual price"
+          ? t("Usual price")
           : usual != null
-            ? `Changed · usual ${money(usual, currency)}`
+            ? `${t("Changed")} · ${t("usual {amount}", { amount: money(usual, currency) })}`
             : null
 
   return (
@@ -532,14 +535,14 @@ function LineRow({
             <span>{count(onHand)} on the shelf</span>
           </div>
         </div>
-        <Button variant="ghost" size="icon-sm" onClick={onRemove} aria-label={`Remove ${line.product.name}`}>
+        <Button variant="ghost" size="icon-sm" onClick={onRemove} aria-label={t("Remove {product}", { product: line.product.name })}>
           <Trash2 className="size-4" />
         </Button>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="space-y-1.5">
-          <Label className="text-xs">Quantity</Label>
+          <Label className="text-xs">{t("Quantity")}</Label>
           <NumberField
             value={line.quantity}
             onValue={(quantity) => onChange({ quantity })}
@@ -548,12 +551,12 @@ function LineRow({
             step={1}
             invalid={over || !!problems.quantity}
             className="h-9"
-            aria-label={`Quantity of ${line.product.name}`}
+            aria-label={t("Quantity of {product}", { product: line.product.name })}
           />
           {problems.quantity && <p className="text-xs text-destructive">{problems.quantity}</p>}
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">Plan</Label>
+          <Label className="text-xs">{t("Plan")}</Label>
           <select
             value={line.plan}
             onChange={(e) => {
@@ -565,13 +568,13 @@ function LineRow({
           >
             {plans.map((plan) => (
               <option key={plan} value={plan}>
-                {PLAN_LABEL[plan]}
+                {t(PLAN_LABEL[plan])}
               </option>
             ))}
           </select>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">Rate</Label>
+          <Label className="text-xs">{t("Rate")}</Label>
           <NumberField
             value={line.rate}
             onValue={(rate) => onChange({ rate, rateTyped: true })}
@@ -580,7 +583,7 @@ function LineRow({
             decimal
             invalid={!!problems.rate}
             className="h-9"
-            aria-label={`Rate for ${line.product.name}`}
+            aria-label={t("Rate for {product}", { product: line.product.name })}
           />
           {problems.rate && <p className="text-xs text-destructive">{problems.rate}</p>}
         </div>
@@ -588,7 +591,7 @@ function LineRow({
       {source && <p className="text-xs text-muted-foreground">{source}</p>}
 
       <div className="flex items-baseline justify-between border-t pt-2 text-sm">
-        <span className="text-muted-foreground">{quote ? quote.breakdown : "Fill in the quantity and rate"}</span>
+        <span className="text-muted-foreground">{quote ? quote.breakdown : t("Fill in the quantity and rate")}</span>
         <span className="font-medium tabular-nums">{quote ? money(quote.total, currency) : "—"}</span>
       </div>
 

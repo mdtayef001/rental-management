@@ -16,13 +16,14 @@ import { Label } from "@/components/ui/label"
 import { ErrorState, PageHeader, SimpleSelect, Spinner, TableSkeleton } from "@/components/common"
 import { BillDocument, PeriodPicker } from "@/components/bill"
 import { PrintButton } from "@/components/paper"
-import { BILL_TITLE, rangeQuery } from "@/lib/bills"
+import { BILL_TITLE, periodName, rangeQuery } from "@/lib/bills"
 import { useReceivePayment } from "@/lib/data/mutations"
 import { billPdfUrl, useBill } from "@/lib/data/queries"
 import { money, whatsappLink } from "@/lib/format"
 import { PAYMENT_METHODS } from "@/lib/rental"
 import type { Bill } from "@/lib/types"
 import { usePeriod } from "../view"
+import { t } from "@/lib/i18n"
 
 /**
  * One customer's bill, with everything you do to a bill around it.
@@ -46,24 +47,24 @@ export function BillView({ customerId }: { customerId: string }) {
     <div className="mx-auto w-full max-w-4xl space-y-5">
       <div className="space-y-4 print:hidden">
         <PageHeader
-          title={bill ? `${BILL_TITLE[bill.kind]} · ${bill.customer.company || bill.customer.name}` : "Bill"}
-          description={bill ? bill.label + (isFetching ? " · updating…" : "") : undefined}
-          back={{ href: `/bills?${rangeQuery(range)}`, label: "Bills" }}
+          title={bill ? `${t(BILL_TITLE[bill.kind])} · ${bill.customer.company || bill.customer.name}` : t("Bill")}
+          description={bill ? periodName(bill) + (isFetching ? ` · ${t("updating…")}` : "") : undefined}
+          back={{ href: `/bills?${rangeQuery(range)}`, label: t("Bills") }}
         >
           <Button variant="outline" onClick={() => setPaying(true)} disabled={!bill}>
             <Wallet className="size-4" />
-            Take payment
+            {t("Take payment")}
           </Button>
           {share && (
             <Button variant="outline" render={<a href={share} target="_blank" rel="noreferrer" />}>
               <MessageCircle className="size-4" />
-              WhatsApp
+              {t("WhatsApp")}
             </Button>
           )}
-          <PrintButton label="Print" />
+          <PrintButton label={t("Print")} />
           <Button render={<a href={billPdfUrl(customerId, range)} download />}>
             <Download className="size-4" />
-            Download PDF
+            {t("Download PDF")}
           </Button>
         </PageHeader>
         <PeriodPicker range={range} onChange={setRange} />
@@ -81,10 +82,15 @@ function message(bill: Bill) {
   const cash = (value: number) => money(value, bill.business.currency)
   const due = bill.totals.closingBalance
   return [
-    `Hello ${bill.customer.name},`,
-    `Here is your ${BILL_TITLE[bill.kind].toLowerCase()} from ${bill.business.name} for ${bill.label} (${bill.number}).`,
-    `Charged this period: ${cash(bill.totals.charges)}`,
-    due < 0 ? `You are in credit by ${cash(-due)}.` : `Amount due: ${cash(due)}`,
+    t("Hello {name},", { name: bill.customer.name }),
+    t("Here is your {bill} from {business} for {period} ({number}).", {
+      bill: t(BILL_TITLE[bill.kind]).toLowerCase(),
+      business: bill.business.name,
+      period: periodName(bill),
+      number: bill.number,
+    }),
+    t("Charged this period: {amount}", { amount: cash(bill.totals.charges) }),
+    due < 0 ? t("You are in credit by {amount}.", { amount: cash(-due) }) : t("Amount due: {amount}", { amount: cash(due) }),
   ].join("\n")
 }
 
@@ -105,17 +111,17 @@ function PaymentDialog({ bill, onClose }: { bill: Bill; onClose: () => void }) {
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>Take a payment</DialogTitle>
+          <DialogTitle>{t("Take a payment")}</DialogTitle>
           <DialogDescription>
             {due > 0
-              ? `${money(due, bill.business.currency)} is due on this bill. `
-              : "Nothing is due on this bill. "}
-            It goes against their oldest unpaid rental first.
+              ? `${t("{amount} is due on this bill.", { amount: money(due, bill.business.currency) })} `
+              : `${t("Nothing is due on this bill.")} `}
+            {t("It goes against their oldest unpaid rental first.")}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <Label htmlFor="bill-amount">Amount</Label>
+            <Label htmlFor="bill-amount">{t("Amount")}</Label>
             <Input
               id="bill-amount"
               type="number"
@@ -128,19 +134,19 @@ function PaymentDialog({ bill, onClose }: { bill: Bill; onClose: () => void }) {
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="bill-method">How</Label>
+            <Label htmlFor="bill-method">{t("How")}</Label>
             <SimpleSelect id="bill-method" value={method} onChange={setMethod} options={PAYMENT_METHODS} />
           </div>
           {method !== "cash" && (
             <div className="space-y-1.5">
-              <Label htmlFor="bill-ref">{method === "bank" ? "Cheque or transfer number" : "Transaction ID"}</Label>
+              <Label htmlFor="bill-ref">{method === "bank" ? t("Cheque or transfer number") : t("Transaction ID")}</Label>
               <Input id="bill-ref" value={reference} onChange={(e) => setReference(e.target.value)} maxLength={60} />
             </div>
           )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
-            Cancel
+            {t("Cancel")}
           </Button>
           <Button
             disabled={pay.isPending || !amount}
@@ -152,7 +158,7 @@ function PaymentDialog({ bill, onClose }: { bill: Bill; onClose: () => void }) {
             }
           >
             {pay.isPending && <Spinner />}
-            Record payment
+            {t("Record payment")}
           </Button>
         </DialogFooter>
       </DialogContent>

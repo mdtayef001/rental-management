@@ -33,16 +33,16 @@ import {
   useRevenueReport,
   useStockSummary,
 } from "@/lib/data/queries"
-import { compactMoney, count, friendlyDateTime, money, plural } from "@/lib/format"
+import { compactMoney, count, format, friendlyDateTime, money, plural } from "@/lib/format"
 import { iso } from "@/lib/reports"
 import { cn } from "@/lib/utils"
+import { t } from "@/lib/i18n"
 
 const DAYS = 30
 
 /** Whether the browser has taken over is a fact that never changes again, so it never emits. */
 const subscribeNever = () => () => {}
 
-const chartConfig = { revenue: { label: "Earned", color: "var(--chart-1)" } } satisfies ChartConfig
 
 /**
  * What the owner wants to know on walking in.
@@ -73,13 +73,14 @@ export function DashboardView({ businessName }: { businessName: string }) {
     to: iso(new Date()),
   }))
   const revenue = useRevenueReport(range, "day", canSeeMoney)
+  const chartConfig = { revenue: { label: t("Earned"), color: "var(--chart-1)" } } satisfies ChartConfig
 
   // The hour is the reader's, not the server's. Rendering it during SSR would greet a
   // shop in Dhaka with the time in whatever zone the server happens to run in, and React
   // would tear the text down on hydration; so the greeting waits for the browser.
   const hydrated = useSyncExternalStore(subscribeNever, () => true, () => false)
   const hour = new Date().getHours()
-  const greeting = !hydrated ? null : hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening"
+  const greeting = !hydrated ? null : hour < 12 ? t("Good morning") : hour < 18 ? t("Good afternoon") : t("Good evening")
 
   // The series the server sends has a row only for days something came back, so two
   // returns a month apart would be drawn as one long slope between neighbouring points.
@@ -101,7 +102,7 @@ export function DashboardView({ businessName }: { businessName: string }) {
     attention.push({
       href: "/rentals?status=overdue",
       icon: CalendarClock,
-      label: "Rentals overdue",
+      label: t("Rentals overdue"),
       detail: count(summary.overdue),
       tone: "danger",
     })
@@ -109,7 +110,7 @@ export function DashboardView({ businessName }: { businessName: string }) {
     attention.push({
       href: "/rentals?status=due_today",
       icon: Undo2,
-      label: "Due back today",
+      label: t("Due back today"),
       detail: count(summary.dueToday),
       tone: "warning",
     })
@@ -117,7 +118,7 @@ export function DashboardView({ businessName }: { businessName: string }) {
     attention.push({
       href: "/rentals?status=unpaid",
       icon: Banknote,
-      label: "Unpaid by customers",
+      label: t("Unpaid by customers"),
       detail: money(summary.owed, currency),
       tone: "warning",
     })
@@ -125,7 +126,7 @@ export function DashboardView({ businessName }: { businessName: string }) {
     attention.push({
       href: "/products?filter=lowStock",
       icon: AlertTriangle,
-      label: "Products running low",
+      label: t("Products running low"),
       detail: count(stock.lowStock),
       tone: "warning",
     })
@@ -136,29 +137,33 @@ export function DashboardView({ businessName }: { businessName: string }) {
         title={greeting ? `${greeting}, ${user.name.split(" ")[0]}` : user.name.split(" ")[0]}
         description={
           isLoading
-            ? `Loading today's figures for ${businessName}…`
+            ? t("Loading today's figures for {business}…", { business: businessName })
             : summary?.open
-              ? `${plural(summary.open, "rental")} out at ${businessName}, ${count(summary.unitsOut)} units with customers.`
-              : `Nothing is out on rent at ${businessName} right now.`
+              ? t("{rentals} out at {business}, {units} units with customers.", {
+                  rentals: plural(summary.open, "rental"),
+                  business: businessName,
+                  units: count(summary.unitsOut),
+                })
+              : t("Nothing is out on rent at {business} right now.", { business: businessName })
         }
       >
         <ButtonLink href="/take-back" variant="outline">
           <Undo2 className="size-4" />
-          Take back
+          {t("Take back")}
         </ButtonLink>
         <ButtonLink href="/rent-out">
           <Package className="size-4" />
-          Rent out
+          {t("Rent out")}
         </ButtonLink>
       </PageHeader>
 
       <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <StatCard
-          label="Out on rent"
+          label={t("Out on rent")}
           value={count(summary?.unitsOut ?? 0)}
           hint={
             summary
-              ? `${plural(summary.open, "open rental")}${stock ? ` · ${count(stock.units)} on the shelf` : ""}`
+              ? `${plural(summary.open, "open rental")}${stock ? ` · ${t("{count} on the shelf", { count: count(stock.units) })}` : ""}`
               : undefined
           }
           icon={Package}
@@ -166,9 +171,9 @@ export function DashboardView({ businessName }: { businessName: string }) {
           href="/rentals"
         />
         <StatCard
-          label="Due back today"
+          label={t("Due back today")}
           value={count(summary?.dueToday ?? 0)}
-          hint={summary?.dueToday ? `${plural(summary.dueToday, "rental")} to collect today` : "Nothing is due today"}
+          hint={summary?.dueToday ? t("{rentals} to collect today", { rentals: plural(summary.dueToday, "rental") }) : t("Nothing is due today")}
           icon={CalendarClock}
           tone={summary?.dueToday ? "warning" : "default"}
           loading={isLoading}
@@ -176,12 +181,12 @@ export function DashboardView({ businessName }: { businessName: string }) {
         />
         {/* Units, counted from the take-backs: 60 of 100 back still counts as 60 here. */}
         <StatCard
-          label="Returned today"
+          label={t("Returned today")}
           value={count(summary?.unitsReturnedToday ?? 0)}
           hint={
             summary?.returnsToday
-              ? `${plural(summary.returnsToday, "take-back")} · ${plural(summary.returnedToday, "rental")} closed`
-              : "Nothing has come back yet"
+              ? `${plural(summary.returnsToday, "take-back")} · ${t("{rentals} closed", { rentals: plural(summary.returnedToday, "rental") })}`
+              : t("Nothing has come back yet")
           }
           icon={Undo2}
           tone={summary?.unitsReturnedToday ? "good" : "default"}
@@ -189,18 +194,18 @@ export function DashboardView({ businessName }: { businessName: string }) {
           href="/returns"
         />
         <StatCard
-          label="Overdue"
+          label={t("Overdue")}
           value={count(summary?.overdue ?? 0)}
-          hint={summary?.overdue ? "Chase these up" : "Nothing late"}
+          hint={summary?.overdue ? t("Chase these up") : t("Nothing late")}
           icon={AlertTriangle}
           tone={summary?.overdue ? "danger" : "good"}
           loading={isLoading}
           href="/rentals?status=overdue"
         />
         <StatCard
-          label="Owed by customers"
+          label={t("Owed by customers")}
           value={money(summary?.owed ?? 0, currency)}
-          hint={summary?.advances ? `${money(summary.advances, currency)} paid in advance by others` : "Nothing paid in advance"}
+          hint={summary?.advances ? t("{amount} paid in advance by others", { amount: money(summary.advances, currency) }) : t("Nothing paid in advance")}
           icon={Banknote}
           tone={summary?.owed ? "warning" : "good"}
           loading={isLoading}
@@ -218,7 +223,7 @@ export function DashboardView({ businessName }: { businessName: string }) {
                     number read in passing only has to carry its size — the exact amount is
                     one hover away, and every row of it is in Reports. */}
                 <CardTitle className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
-                  <span>Earned</span>
+                  <span>{t("Earned")}</span>
                   <span className="flex items-baseline gap-1.5">
                   {isLoading ? (
                     <Skeleton className="h-6 w-20" />
@@ -235,16 +240,16 @@ export function DashboardView({ businessName }: { businessName: string }) {
                         {compactMoney(summary?.revenueMonth ?? 0, currency)}
                       </TooltipTrigger>
                       <TooltipContent>
-                        {money(summary?.revenueMonth ?? 0, currency)} earned this month
+                        {t("{amount} earned this month", { amount: money(summary?.revenueMonth ?? 0, currency) })}
                       </TooltipContent>
                     </Tooltip>
                   )}
-                    <span className="text-xs font-normal text-muted-foreground">this month</span>
+                    <span className="text-xs font-normal text-muted-foreground">{t("this month")}</span>
                   </span>
                 </CardTitle>
                 <CardAction>
                   <Button variant="ghost" size="sm" render={<Link href="/reports" />}>
-                    Reports
+                    {t("Reports")}
                     <ArrowRight className="size-4" />
                   </Button>
                 </CardAction>
@@ -256,7 +261,7 @@ export function DashboardView({ businessName }: { businessName: string }) {
                   <ErrorState error={revenue.error} onRetry={() => revenue.refetch()} />
                 ) : series.length === 0 ? (
                   <p className="py-20 text-center text-sm text-muted-foreground">
-                    Nothing has come back in the last {DAYS} days, so nothing has been charged yet.
+                    {t("Nothing has come back in the last {days} days, so nothing has been charged yet.", { days: DAYS })}
                   </p>
                 ) : (
                   <ChartContainer config={chartConfig} className="aspect-auto min-h-56 w-full flex-1">
@@ -277,7 +282,7 @@ export function DashboardView({ businessName }: { businessName: string }) {
                             labelFormatter={(_, payload) => (payload?.[0] ? day(String(payload[0].payload.period)) : "")}
                             formatter={(value) => (
                               <div className="flex w-full items-center justify-between gap-4">
-                                <span className="text-muted-foreground">Earned</span>
+                                <span className="text-muted-foreground">{t("Earned")}</span>
                                 <span className="font-medium tabular-nums">{money(Number(value), currency)}</span>
                               </div>
                             )}
@@ -294,8 +299,8 @@ export function DashboardView({ businessName }: { businessName: string }) {
 
         <Card className="h-full">
           <CardHeader>
-            <CardTitle>Needs attention</CardTitle>
-            <CardDescription>{attention.length ? "Open one to deal with it." : "Nothing is waiting on you."}</CardDescription>
+            <CardTitle>{t("Needs attention")}</CardTitle>
+            <CardDescription>{attention.length ? t("Open one to deal with it.") : t("Nothing is waiting on you.")}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-1 flex-col justify-center gap-0.5">
             {attention.map((item) => (
@@ -322,7 +327,7 @@ export function DashboardView({ businessName }: { businessName: string }) {
             {attention.length === 0 && (
               <p className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
                 <CheckCircle2 className="size-4 text-success" />
-                All caught up.
+                {t("All caught up.")}
               </p>
             )}
           </CardContent>
@@ -334,11 +339,11 @@ export function DashboardView({ businessName }: { businessName: string }) {
       {canSeeActivity && (
         <Card className="mt-12">
               <CardHeader>
-                <CardTitle>Latest activity</CardTitle>
-                <CardDescription>What the team has been doing.</CardDescription>
+                <CardTitle>{t("Latest activity")}</CardTitle>
+                <CardDescription>{t("What the team has been doing.")}</CardDescription>
                 <CardAction>
                   <Button variant="ghost" size="sm" render={<Link href="/activity" />}>
-                    All
+                    {t("All")}
                     <ArrowRight className="size-4" />
                   </Button>
                 </CardAction>
@@ -353,7 +358,7 @@ export function DashboardView({ businessName }: { businessName: string }) {
                 ) : activity.isError ? (
                   <ErrorState error={activity.error} onRetry={() => activity.refetch()} />
                 ) : (activity.data?.results.length ?? 0) === 0 ? (
-                  <p className="text-sm text-muted-foreground">Nothing recorded yet.</p>
+                  <p className="text-sm text-muted-foreground">{t("Nothing recorded yet.")}</p>
                 ) : (
                   // Across the full width each line reads straight through: what happened
                   // and to which record on the left, who did it and when on the right.
@@ -363,12 +368,12 @@ export function DashboardView({ businessName }: { businessName: string }) {
                         key={entry.id}
                         className="flex flex-col gap-x-4 gap-y-0.5 py-2 first:pt-0 last:pb-0 sm:flex-row sm:items-baseline"
                       >
-                        <span className="shrink-0 font-medium">{entry.action}</span>
+                        <span className="shrink-0 font-medium">{t(entry.action)}</span>
                         {entry.detail && (
                           <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{entry.detail}</span>
                         )}
                         <span className="shrink-0 text-xs text-muted-foreground sm:ml-auto sm:text-right">
-                          {entry.userName || "System"} · {friendlyDateTime(entry.at)}
+                          {entry.userName || t("System")} · {friendlyDateTime(entry.at)}
                         </span>
                       </li>
                     ))}
@@ -385,7 +390,7 @@ type Tone = "danger" | "warning" | "info"
 
 /** "2026-11-01" → "1 Nov", the way the axis and the tooltip both want it. */
 function day(period: string) {
-  return new Date(period + "T00:00").toLocaleDateString(undefined, { day: "numeric", month: "short" })
+  return format(new Date(period + "T00:00"), "d MMM")
 }
 
 /** Axis labels: "12k" rather than "12,000", so the numbers fit without turning sideways. */

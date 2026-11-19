@@ -2,6 +2,7 @@ import { round2 } from "@/lib/format"
 import { logoUrl } from "@/lib/logo"
 import { countDays, dailyValue, daysLate, quoteRental } from "@/lib/rental"
 import type { Business, Rental, RentalPlan } from "@/lib/types"
+import { msg } from "@/lib/i18n"
 
 /**
  * One rental, in the shape a receipt needs.
@@ -56,9 +57,9 @@ export interface ReceiptView {
 }
 
 export const RECEIPT_STATE: Record<ReceiptView["state"], string> = {
-  out: "Out on rent",
-  returned: "All returned",
-  cancelled: "Cancelled",
+  out: msg("Out on rent"),
+  returned: msg("All returned"),
+  cancelled: msg("Cancelled"),
 }
 
 /** The money lines of a receipt, worked out once so the sheet and the till slip agree. */
@@ -74,12 +75,12 @@ export function receiptSums(r: ReceiptView) {
      */
     closing:
       r.balance > 0
-        ? "Balance due"
+        ? msg("Balance due")
         : r.balance < 0
           ? r.state === "out"
-            ? "In credit"
-            : "To give back"
-          : "Balance due",
+            ? msg("In credit")
+            : msg("To give back")
+          : msg("Balance due"),
   }
 }
 

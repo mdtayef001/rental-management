@@ -13,6 +13,7 @@ import { useSaveCustomer } from "@/lib/data/mutations"
 import { useCustomers, useDebounced } from "@/lib/data/queries"
 import { plural } from "@/lib/format"
 import type { Customer } from "@/lib/types"
+import { t } from "@/lib/i18n"
 
 /**
  * Pick the customer, or add them on the spot.
@@ -49,11 +50,11 @@ export function CustomerPicker({
             )}
           </div>
           <div className="mt-0.5 truncate text-sm text-muted-foreground">
-            {[value.phone, value.company].filter(Boolean).join(" · ") || "No contact details"}
+            {[value.phone, value.company].filter(Boolean).join(" · ") || t("No contact details")}
           </div>
         </div>
         <Button variant="ghost" size="sm" onClick={() => onChange(null)}>
-          Change
+          {t("Change")}
         </Button>
       </div>
     )
@@ -67,14 +68,14 @@ export function CustomerPicker({
           <Input
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Customer name or phone number"
+            placeholder={t("Customer name or phone number")}
             className="h-10 pl-9"
-            aria-label="Search customers"
+            aria-label={t("Search customers")}
           />
         </div>
         <Button variant="outline" onClick={() => setAdding(true)}>
           <Plus className="size-4" />
-          New
+          {t("New")}
         </Button>
       </div>
 
@@ -82,14 +83,14 @@ export function CustomerPicker({
         <>
           {isFetching && !data && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Spinner /> Searching…
+              <Spinner /> {t("Searching…")}
             </div>
           )}
           {data && data.results.length === 0 && (
             <p className="text-sm text-muted-foreground">
               Nobody matches “{search}”.{" "}
               <button type="button" className="underline" onClick={() => setAdding(true)}>
-                Add them
+                {t("Add them")}
               </button>
               ?
             </p>
@@ -118,7 +119,7 @@ export function CustomerPicker({
                     </div>
                     {(customer.openRentalCount ?? 0) > 0 && (
                       <Badge variant="secondary" className="shrink-0">
-                        {customer.openRentalCount} out
+                        {t("{count} out", { count: customer.openRentalCount ?? 0 })}
                       </Badge>
                     )}
                   </button>
@@ -176,9 +177,9 @@ export function CustomerDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{customer ? `Edit ${customer.name}` : "New customer"}</DialogTitle>
+          <DialogTitle>{customer ? t("Edit {name}", { name: customer.name }) : t("New customer")}</DialogTitle>
           <DialogDescription>
-            Only the name is required. An ID reference is worth taking for anything valuable.
+            {t("Only the name is required. An ID reference is worth taking for anything valuable.")}
           </DialogDescription>
         </DialogHeader>
 
@@ -192,31 +193,31 @@ export function CustomerDialog({
         >
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="c-name">Name</Label>
+              <Label htmlFor="c-name">{t("Name")}</Label>
               <Input id="c-name" value={form.name} onChange={set("name")} required autoFocus />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="c-phone">Phone</Label>
-              <Input id="c-phone" value={form.phone} onChange={set("phone")} inputMode="tel" placeholder="01XXXXXXXXX" />
+              <Label htmlFor="c-phone">{t("Phone")}</Label>
+              <Input id="c-phone" value={form.phone} onChange={set("phone")} inputMode="tel" placeholder={t("01XXXXXXXXX")} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="c-company">Company</Label>
+              <Label htmlFor="c-company">{t("Company")}</Label>
               <Input id="c-company" value={form.company} onChange={set("company")} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="c-id-type">ID type</Label>
-              <Input id="c-id-type" value={form.idType} onChange={set("idType")} placeholder="NID, passport…" />
+              <Label htmlFor="c-id-type">{t("ID type")}</Label>
+              <Input id="c-id-type" value={form.idType} onChange={set("idType")} placeholder={t("NID, passport…")} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="c-id-number">ID number</Label>
+              <Label htmlFor="c-id-number">{t("ID number")}</Label>
               <Input id="c-id-number" value={form.idNumber} onChange={set("idNumber")} />
             </div>
             <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="c-address">Address</Label>
+              <Label htmlFor="c-address">{t("Address")}</Label>
               <Input id="c-address" value={form.address} onChange={set("address")} />
             </div>
             <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="c-notes">Notes</Label>
+              <Label htmlFor="c-notes">{t("Notes")}</Label>
               <Textarea id="c-notes" value={form.notes} onChange={set("notes")} rows={2} />
             </div>
           </div>
@@ -224,11 +225,11 @@ export function CustomerDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("Cancel")}
           </Button>
           <Button type="submit" form="customer-form" disabled={save.isPending || !form.name.trim()}>
             {save.isPending && <Spinner />}
-            {customer ? "Save" : "Add customer"}
+            {customer ? t("Save") : t("Add customer")}
           </Button>
         </DialogFooter>
       </DialogContent>

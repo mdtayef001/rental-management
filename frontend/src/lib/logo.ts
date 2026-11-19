@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n"
 /**
  * The business's logo, as an address an `<img>` can load.
  *
@@ -25,16 +26,16 @@ const MAX_SIDE = 600
  * background, which is what lets a logo sit on white paper without a box around it.
  */
 export async function prepareLogo(file: File): Promise<string> {
-  if (!file.type.startsWith("image/")) throw new Error("Choose a picture: PNG or JPG.")
+  if (!file.type.startsWith("image/")) throw new Error(t("Choose a picture: PNG or JPG."))
   const bitmap = await createImageBitmap(file).catch(() => {
-    throw new Error("That picture couldn't be opened. Try a PNG or JPG.")
+    throw new Error(t("That picture couldn't be opened. Try a PNG or JPG."))
   })
   const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height))
   const canvas = document.createElement("canvas")
   canvas.width = Math.max(1, Math.round(bitmap.width * scale))
   canvas.height = Math.max(1, Math.round(bitmap.height * scale))
   const context = canvas.getContext("2d")
-  if (!context) throw new Error("This browser can't prepare pictures.")
+  if (!context) throw new Error(t("This browser can't prepare pictures."))
   context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
   bitmap.close()
   return canvas.toDataURL("image/png")

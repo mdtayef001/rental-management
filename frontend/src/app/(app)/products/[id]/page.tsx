@@ -1,8 +1,8 @@
-import type { Metadata } from "next"
 import { requireAccess } from "@/lib/auth/dal"
 import { ProductDetailView } from "./view"
+import { pageTitle } from "@/lib/i18n/server"
 
-export const metadata: Metadata = { title: "Product" }
+export const generateMetadata = () => pageTitle("Product")
 
 export default async function ProductPage({ params }: PageProps<"/products/[id]">) {
   const { user, business } = await requireAccess("/products")

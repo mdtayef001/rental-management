@@ -7,18 +7,24 @@ import {
   PaperBox,
   PaperBoxes,
   PaperHeader,
+  SheetCard,
+  SheetCards,
   SheetPage,
   Signatures,
+  TABLE_ONLY,
   Sum,
   SumTotal,
   Sums,
 } from "@/components/paper"
 import { ReceiptPaper } from "@/components/receipt-paper"
 import { count, date, dateTime, money, plural } from "@/lib/format"
+import { DevixSlipCredit } from "@/components/devix"
+import { cn } from "@/lib/utils"
 import { RECEIPT_STATE, receiptEstimate, receiptSums, returnedLateDays, type ReceiptView } from "@/lib/receipt"
+import { msg, t } from "@/lib/i18n"
 
 const UNIT: Record<string, string> = { daily: "day", weekly: "week", monthly: "month" }
-const PER: Record<string, string> = { daily: "per day", weekly: "per week", monthly: "per month" }
+const PER: Record<string, string> = { daily: msg("per day"), weekly: msg("per week"), monthly: msg("per month") }
 
 /**
  * One rental's receipt.
@@ -45,43 +51,71 @@ export function ReceiptDocument({ receipt: r, paper = "sheet" }: { receipt: Rece
         <PaperHeader
           business={{ name: r.businessName, address: r.address, phone: r.phone }}
           logo={r.logo}
-          title="Rental receipt"
+          title={t("Rental receipt")}
         >
           <p className="font-mono font-semibold">{r.code}</p>
           <p>{date(r.startedAt)}</p>
           <p className="mt-1 inline-block border border-(--sheet-line) px-2 py-0.5 text-[0.9em] font-bold uppercase">
-            {RECEIPT_STATE[r.state]}
+            {t(RECEIPT_STATE[r.state])}
           </p>
         </PaperHeader>
 
         <PaperBoxes className="sm:grid-cols-3 print:grid-cols-3">
           <PaperBox>
-            <Caption>Rented to</Caption>
+            <Caption>{t("Rented to")}</Caption>
             <p className="font-bold [overflow-wrap:anywhere]">{r.customerName}</p>
             {r.customerPhone && <p>{r.customerPhone}</p>}
           </PaperBox>
           <PaperBox>
-            <Caption>Taken</Caption>
+            <Caption>{t("Taken")}</Caption>
             <p>{dateTime(r.startedAt)}</p>
           </PaperBox>
           <PaperBox>
             {/* The date agreed is always shown when there is one: it is what the hire was
                 priced on, and what "late" is measured from. */}
-            <Caption>Due back</Caption>
-            <p>{r.dueAt ? dateTime(r.dueAt) : "No fixed date"}</p>
-            {est.overdueDays > 0 && <p className="font-bold">Overdue {plural(est.overdueDays, "day")}</p>}
+            <Caption>{t("Due back")}</Caption>
+            <p>{r.dueAt ? dateTime(r.dueAt) : t("No fixed date")}</p>
+            {est.overdueDays > 0 && <p className="font-bold">{t("Overdue {days}", { days: plural(est.overdueDays, "day") })}</p>}
             {r.returnedAt && (
               <>
-                <Caption className="mt-2">Returned</Caption>
+                <Caption className="mt-2">{t("Returned")}</Caption>
                 <p>{dateTime(r.returnedAt)}</p>
-                {cameBackLate > 0 && <p className="font-bold">{plural(cameBackLate, "day")} late</p>}
+                {cameBackLate > 0 && <p className="font-bold">{t("{days} late", { days: plural(cameBackLate, "day") })}</p>}
               </>
             )}
           </PaperBox>
         </PaperBoxes>
 
         <section className="bill-block mt-5">
-          <div className="overflow-x-auto print:overflow-visible">
+          <SheetCards>
+            {r.items.map((item, index) => {
+              const running = est.lines[index]
+              const charged = item.lineTotal + running.rent + running.lateFee
+              return (
+                <SheetCard
+                  key={index}
+                  title={item.name}
+                  amount={charged > 0 ? cash(charged) : "—"}
+                  fields={[
+                    { label: t("Taken"), value: count(item.quantity) },
+                    { label: t("Back"), value: count(item.quantityReturned) },
+                    {
+                      label: t("Rate"),
+                      value: `${cash(item.rate)}${item.plan !== "fixed" ? ` ${t(PER[item.plan])}` : ""}`,
+                    },
+                    {
+                      label: t("Days"),
+                      value: running.out > 0 ? count(est.days) : item.daysOut ? count(item.daysOut) : "—",
+                    },
+                    ...(item.quantityLost > 0
+                      ? [{ label: t("Not returned"), value: <strong>{count(item.quantityLost)}</strong> }]
+                      : []),
+                  ]}
+                />
+              )
+            })}
+          </SheetCards>
+          <div className={`${TABLE_ONLY} overflow-x-auto print:overflow-visible`}>
             <table className="sheet-table min-w-[34rem] table-fixed print:min-w-0">
               <colgroup>
                 <col />
@@ -93,12 +127,12 @@ export function ReceiptDocument({ receipt: r, paper = "sheet" }: { receipt: Rece
               </colgroup>
               <thead>
                 <tr>
-                  <th>Item</th>
-                  <th className="num">Taken</th>
-                  <th className="num">Back</th>
-                  <th className="num">Rate</th>
-                  <th className="num">Days</th>
-                  <th className="num">Charged</th>
+                  <th>{t("Item")}</th>
+                  <th className="num">{t("Taken")}</th>
+                  <th className="num">{t("Back")}</th>
+                  <th className="num">{t("Rate")}</th>
+                  <th className="num">{t("Days")}</th>
+                  <th className="num">{t("Charged")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -109,13 +143,13 @@ export function ReceiptDocument({ receipt: r, paper = "sheet" }: { receipt: Rece
                   <tr key={index}>
                     <td>
                       {item.name}
-                      {item.quantityLost > 0 && <p className="font-bold">{count(item.quantityLost)} not returned</p>}
+                      {item.quantityLost > 0 && <p className="font-bold">{t("{count} not returned", { count: count(item.quantityLost) })}</p>}
                     </td>
                     <td className="num">{count(item.quantity)}</td>
                     <td className="num">{count(item.quantityReturned)}</td>
                     <td className="num">
                       {cash(item.rate)}
-                      {item.plan !== "fixed" && <span className="block text-[0.85em]">{PER[item.plan]}</span>}
+                      {item.plan !== "fixed" && <span className="block text-[0.85em]">{t(PER[item.plan])}</span>}
                     </td>
                     <td className="num">
                       {running.out > 0 ? count(est.days) : item.daysOut ? count(item.daysOut) : "—"}
@@ -133,25 +167,25 @@ export function ReceiptDocument({ receipt: r, paper = "sheet" }: { receipt: Rece
           {r.link ? (
             <div className="flex items-center gap-3">
               <QRCodeSVG value={r.link} size={92} level="M" marginSize={0} />
-              <p className="font-semibold">Scan to return</p>
+              <p className="font-semibold">{t("Scan to return")}</p>
             </div>
           ) : (
             <span />
           )}
           <Sums className="w-full sm:w-[17rem] print:w-[17rem]">
             {(r.rentTotal > 0 || !est.running) && (
-              <Sum label={est.running ? "Rent on items returned" : "Rent"} value={cash(r.rentTotal)} />
+              <Sum label={est.running ? t("Rent on items returned") : t("Rent")} value={cash(r.rentTotal)} />
             )}
             {est.running && <Sum label={runningLabel(r, est)} value={cash(est.rent)} />}
-            {r.lateFee > 0 && <Sum label="Late fee" value={cash(r.lateFee)} />}
+            {r.lateFee > 0 && <Sum label={t("Late fee")} value={cash(r.lateFee)} />}
             {est.lateFee > 0 && (
-              <Sum label={`Late fee so far · ${plural(est.overdueDays, "day")}`} value={cash(est.lateFee)} />
+              <Sum label={`${t("Late fee so far")} · ${plural(est.overdueDays, "day")}`} value={cash(est.lateFee)} />
             )}
-            {r.damageFee > 0 && <Sum label="Damage and loss" value={cash(r.damageFee)} />}
-            {r.discount > 0 && <Sum label="Discount" value={cash(-r.discount)} />}
-            {r.advancePaid > 0 && <Sum label="Paid in advance" value={cash(-r.advancePaid)} />}
-            {sums.paidLater > 0 && <Sum label="Paid" value={cash(-sums.paidLater)} />}
-            {r.refunded > 0 && <Sum label="Given back" value={cash(r.refunded)} />}
+            {r.damageFee > 0 && <Sum label={t("Damage and loss")} value={cash(r.damageFee)} />}
+            {r.discount > 0 && <Sum label={t("Discount")} value={cash(-r.discount)} />}
+            {r.advancePaid > 0 && <Sum label={t("Paid in advance")} value={cash(-r.advancePaid)} />}
+            {sums.paidLater > 0 && <Sum label={t("Paid")} value={cash(-sums.paidLater)} />}
+            {r.refunded > 0 && <Sum label={t("Given back")} value={cash(r.refunded)} />}
             <SumTotal label={closingLabel(sums.closing, est)} value={cash(Math.abs(est.balance))} />
           </Sums>
         </section>
@@ -160,7 +194,7 @@ export function ReceiptDocument({ receipt: r, paper = "sheet" }: { receipt: Rece
           <footer className="bill-block mt-5 border-t border-(--sheet-rule) pt-2 whitespace-pre-wrap">{r.note}</footer>
         )}
 
-        <Signatures left="Received by" leftName={r.customerName} businessName={r.businessName} />
+        <Signatures left={t("Received by")} leftName={r.customerName} businessName={r.businessName} />
       </Paper>
 
       <ReceiptPaper active={paper === "slip"}>
@@ -175,14 +209,14 @@ type Estimate = ReturnType<typeof receiptEstimate>
 /** "Rent to 19 Nov 2026 · 14 days" while the date is ahead, "Rent so far · 31 days" after. */
 function runningLabel(r: ReceiptView, est: Estimate) {
   return est.toDue && r.dueAt
-    ? `Rent to ${date(r.dueAt)} · ${plural(est.days, "day")}`
-    : `Rent so far · ${plural(est.days, "day")}`
+    ? `${t("Rent to {date}", { date: date(r.dueAt) })} · ${plural(est.days, "day")}`
+    : `${t("Rent so far")} · ${plural(est.days, "day")}`
 }
 
 /** The last line's name. While items are out the figure is still moving, and says so. */
 function closingLabel(settled: string, est: Estimate) {
-  if (!est.running) return settled
-  return est.balance < 0 ? "In credit so far" : est.toDue ? "To pay by return" : "To pay so far"
+  if (!est.running) return t(settled)
+  return est.balance < 0 ? t("In credit so far") : est.toDue ? t("To pay by return") : t("To pay so far")
 }
 
 /**
@@ -195,13 +229,13 @@ function TillReceipt({ receipt: r, cash }: { receipt: ReceiptView; cash: (value:
   const est = receiptEstimate(r)
   const cameBackLate = returnedLateDays(r)
   const rows: [string, string][] = [
-    ["Date", dateTime(r.startedAt)],
-    ["Customer", r.customerName],
-    ...(r.customerPhone ? ([["Phone", r.customerPhone]] as [string, string][]) : []),
-    ...(r.dueAt ? ([["Due back", dateTime(r.dueAt)]] as [string, string][]) : []),
-    ...(est.overdueDays > 0 ? ([["OVERDUE", plural(est.overdueDays, "day")]] as [string, string][]) : []),
-    ...(r.returnedAt ? ([["All returned", dateTime(r.returnedAt)]] as [string, string][]) : []),
-    ...(cameBackLate > 0 ? ([["Returned late", plural(cameBackLate, "day")]] as [string, string][]) : []),
+    [t("Date"), dateTime(r.startedAt)],
+    [t("Customer"), r.customerName],
+    ...(r.customerPhone ? ([[t("Phone"), r.customerPhone]] as [string, string][]) : []),
+    ...(r.dueAt ? ([[t("Due back"), dateTime(r.dueAt)]] as [string, string][]) : []),
+    ...(est.overdueDays > 0 ? ([[t("OVERDUE"), plural(est.overdueDays, "day")]] as [string, string][]) : []),
+    ...(r.returnedAt ? ([[t("All returned"), dateTime(r.returnedAt)]] as [string, string][]) : []),
+    ...(cameBackLate > 0 ? ([[t("Returned late"), plural(cameBackLate, "day")]] as [string, string][]) : []),
   ]
   return (
     <div>
@@ -210,72 +244,97 @@ function TillReceipt({ receipt: r, cash }: { receipt: ReceiptView; cash: (value:
           // eslint-disable-next-line @next/next/no-img-element -- must print, and is already small
           <img src={r.logo} alt="" className="mx-auto mb-[1mm] max-h-[14mm] max-w-[50mm] object-contain" />
         )}
-        <p className="text-[16px] leading-tight font-bold">{r.businessName}</p>
+        <p className="text-[1.3em] leading-tight font-bold">{r.businessName}</p>
         {r.address && <p>{r.address}</p>}
         {r.phone && <p>{r.phone}</p>}
       </div>
       <div className={rule} />
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[14px] font-bold">
-          {r.state === "returned" ? "RECEIPT · RETURNED" : r.state === "cancelled" ? "RECEIPT · CANCELLED" : "RECEIPT"}
-        </span>
-        <span className="font-mono">{r.code}</span>
-      </div>
+      <TillLine
+        label={<span className="text-[1.15em] font-bold">
+          {r.state === "returned" ? t("RECEIPT · RETURNED") : r.state === "cancelled" ? t("RECEIPT · CANCELLED") : t("RECEIPT")}
+        </span>}
+        value={<span className="font-mono">{r.code}</span>}
+      />
       {rows.map(([label, value]) => (
-        <div key={label} className="flex justify-between gap-2">
-          <span className="shrink-0">{label}</span>
-          <span className="text-right break-words">{value}</span>
-        </div>
+        <TillLine key={label} label={label} value={value} detail />
       ))}
       <div className={rule} />
-      {r.items.map((item, i) => (
-        <div key={i} className="mb-[1mm]">
-          <p className="font-bold break-words">{item.name}</p>
-          <div className="flex justify-between gap-2 tabular-nums">
-            <span>
-              {count(item.quantity)} × {cash(item.rate)}
-              {item.plan !== "fixed" && ` / ${UNIT[item.plan]}`}
-            </span>
-            <span className="whitespace-nowrap">{count(item.quantityReturned)} back</span>
+      {r.items.map((item, i) => {
+        const running = est.lines[i]
+        const charged = item.lineTotal + running.rent + running.lateFee
+        return (
+          <div key={i} className="mb-[1.5mm] last:mb-0">
+            <p className="font-bold [overflow-wrap:anywhere]">{item.name}</p>
+            <TillLine
+              label={`${count(item.quantity)} × ${cash(item.rate)}${item.plan !== "fixed" ? ` / ${t(UNIT[item.plan])}` : ""}`}
+              value={charged > 0 ? cash(charged) : "—"}
+            />
+            <p className="text-[0.88em]">
+              {t("{count} back", { count: count(item.quantityReturned) })}
+              {item.quantityLost > 0 && ` · ${t("{count} NOT RETURNED", { count: count(item.quantityLost) })}`}
+            </p>
           </div>
-          {item.quantityLost > 0 && <p>{count(item.quantityLost)} NOT RETURNED</p>}
-        </div>
-      ))}
+        )
+      })}
       <div className={rule} />
-      {r.rentTotal > 0 && <TillLine label={est.running ? "Rent, returned" : "Rent"} value={cash(r.rentTotal)} />}
+      {r.rentTotal > 0 && <TillLine label={est.running ? t("Rent, returned") : t("Rent")} value={cash(r.rentTotal)} />}
       {est.running && <TillLine label={runningLabel(r, est)} value={cash(est.rent)} />}
-      {r.lateFee > 0 && <TillLine label="Late fee" value={cash(r.lateFee)} />}
-      {est.lateFee > 0 && <TillLine label="Late fee so far" value={cash(est.lateFee)} />}
-      {r.damageFee > 0 && <TillLine label="Damage or loss" value={cash(r.damageFee)} />}
-      {r.discount > 0 && <TillLine label="Discount" value={`- ${cash(r.discount)}`} />}
-      {r.advancePaid > 0 && <TillLine label="Paid in advance" value={cash(r.advancePaid)} />}
-      {sums.paidLater > 0 && <TillLine label="Paid" value={cash(sums.paidLater)} />}
-      {r.refunded > 0 && <TillLine label="Given back" value={cash(r.refunded)} />}
-      <div className="mt-[1mm] flex justify-between border-t-2 border-black pt-[1mm] text-[15px] font-bold tabular-nums">
-        <span>{closingLabel(sums.closing, est).toUpperCase()}</span>
-        <span>{cash(Math.abs(est.balance))}</span>
+      {r.lateFee > 0 && <TillLine label={t("Late fee")} value={cash(r.lateFee)} />}
+      {est.lateFee > 0 && <TillLine label={t("Late fee so far")} value={cash(est.lateFee)} />}
+      {r.damageFee > 0 && <TillLine label={t("Damage or loss")} value={cash(r.damageFee)} />}
+      {/* What comes off is written as a minus, the same way every time, so the figures
+          read straight down one column. */}
+      {r.discount > 0 && <TillLine label={t("Discount")} value={cash(-r.discount)} />}
+      {r.advancePaid > 0 && <TillLine label={t("Paid in advance")} value={cash(-r.advancePaid)} />}
+      {sums.paidLater > 0 && <TillLine label={t("Paid")} value={cash(-sums.paidLater)} />}
+      {r.refunded > 0 && <TillLine label={t("Given back")} value={cash(r.refunded)} />}
+      <div className="mt-[1mm] border-t-2 border-black pt-[1mm] text-[1.2em] font-bold">
+        <TillLine label={closingLabel(sums.closing, est).toUpperCase()} value={cash(Math.abs(est.balance))} />
       </div>
       {r.link && (
         <>
           <div className={rule} />
           <div className="flex flex-col items-center gap-[1mm]">
-            <QRCodeSVG value={r.link} size={88} level="M" />
-            <p className="text-center font-bold">Scan to return</p>
+            <QRCodeSVG value={r.link} size={88} level="M" style={{ width: "22mm", height: "22mm" }} />
+            <p className="text-center font-bold">{t("Scan to return")}</p>
           </div>
         </>
       )}
       <div className={rule} />
       {r.note && <p className="text-center whitespace-pre-line [overflow-wrap:anywhere]">{r.note}</p>}
-      <p className="text-center">Thank you.</p>
+      <p className="text-center">{t("Thank you.")}</p>
+      <div className={rule} />
+      <DevixSlipCredit />
     </div>
   )
 }
 
-function TillLine({ label, value }: { label: string; value: string }) {
+/**
+ * One line of the slip: what it is on the left, its figure on the right.
+ *
+ * Every line shares the same two columns. The figure never wraps and is set flush right in
+ * tabular digits, so all the amounts end in one straight edge; a long label wraps inside
+ * its own column instead of pushing its figure out of line.
+ */
+function TillLine({
+  label,
+  value,
+  detail,
+}: {
+  label: React.ReactNode
+  value: React.ReactNode
+  /** A fact rather than a figure — a customer's name, a date — which may need to wrap. */
+  detail?: boolean
+}) {
   return (
-    <div className="flex justify-between gap-2 tabular-nums">
-      <span>{label}</span>
-      <span>{value}</span>
+    <div
+      className={cn(
+        "grid items-baseline gap-x-[3mm] tabular-nums",
+        detail ? "grid-cols-[auto_1fr]" : "grid-cols-[1fr_auto]",
+      )}
+    >
+      <span className={detail ? "whitespace-nowrap" : "min-w-0 [overflow-wrap:anywhere]"}>{label}</span>
+      <span className={cn("text-right", detail ? "min-w-0 [overflow-wrap:anywhere]" : "whitespace-nowrap")}>{value}</span>
     </div>
   )
 }

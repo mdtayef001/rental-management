@@ -11,8 +11,11 @@ import {
   PaperBox,
   PaperBoxes,
   PaperHeader,
+  SheetCard,
+  SheetCards,
   SheetPage,
   Signatures,
+  TABLE_ONLY,
   Sum,
   SumTotal,
   Sums,
@@ -22,9 +25,11 @@ import { BILL_TITLE, kindOf, monthOf, periodName, step, yearOf } from "@/lib/bil
 import { useBill } from "@/lib/data/queries"
 import { count, date, money } from "@/lib/format"
 import { logoUrl } from "@/lib/logo"
+import { PAYMENT_METHODS } from "@/lib/rental"
 import type { Bill, BillKind, BillLine, ReportRange } from "@/lib/types"
+import { msg, t } from "@/lib/i18n"
 
-const UNIT: Record<string, string> = { daily: "per day", weekly: "per week", monthly: "per month" }
+const UNIT: Record<string, string> = { daily: msg("per day"), weekly: msg("per week"), monthly: msg("per month") }
 
 /**
  * A customer's bill for a month or a year.
@@ -40,56 +45,93 @@ const UNIT: Record<string, string> = { daily: "per day", weekly: "per week", mon
  */
 export function BillDocument({ bill }: { bill: Bill }) {
   const cash = (value: number) => money(value, bill.business.currency)
-  const t = bill.totals
-  const due = t.closingBalance
+  const totals = bill.totals
+  const due = totals.closingBalance
 
   return (
     <>
       <SheetPage />
       <Paper>
-        <PaperHeader business={bill.business} logo={logoUrl(bill.business.logoVersion)} title={BILL_TITLE[bill.kind]}>
-          <p className="font-semibold">{bill.label}</p>
+        <PaperHeader business={bill.business} logo={logoUrl(bill.business.logoVersion)} title={t(BILL_TITLE[bill.kind])}>
+          <p className="font-semibold">{periodName(bill)}</p>
           <p className="font-mono">{bill.number}</p>
-          <p>Issued {date(bill.issuedAt)}</p>
+          <p>{t("Issued {date}", { date: date(bill.issuedAt) })}</p>
         </PaperHeader>
 
         <PaperBoxes>
           <PaperBox>
-            <Caption>Bill to</Caption>
+            <Caption>{t("Bill to")}</Caption>
             <p className="font-bold [overflow-wrap:anywhere]">{bill.customer.company || bill.customer.name}</p>
             {bill.customer.company && <p>{bill.customer.name}</p>}
             {bill.customer.address && <p>{bill.customer.address}</p>}
             {bill.customer.phone && <p>{bill.customer.phone}</p>}
           </PaperBox>
           <PaperBox tint>
-            <Caption>{due < 0 ? "In credit" : "Amount due"}</Caption>
+            <Caption>{due < 0 ? t("In credit") : t("Amount due")}</Caption>
             <p className="font-heading text-2xl font-bold tabular-nums">{cash(Math.abs(due))}</p>
             <p className="mt-1">
-              {date(`${bill.from}T00:00:00`)} to {date(`${bill.to}T00:00:00`)}
+              {t("{from} to {to}", { from: date(`${bill.from}T00:00:00`), to: date(`${bill.to}T00:00:00`) })}
             </p>
           </PaperBox>
         </PaperBoxes>
 
         <section className="mt-5 space-y-4">
           {bill.rentals.length === 0 && (
-            <p className="border border-(--sheet-rule) p-4 text-center">Nothing was out on rent in this period.</p>
+            <p className="border border-(--sheet-rule) p-4 text-center">{t("Nothing was out on rent in this period.")}</p>
           )}
           {bill.rentals.map((rental) => (
             <div key={rental.id} className="bill-block">
               <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 pb-1">
                 <p className="font-bold">
                   <span className="font-mono">{rental.code}</span>
-                  <span className="font-normal"> · taken </span>
+                  <span className="font-normal"> · {t("taken")} </span>
                   {date(rental.startedAt)}
                   <Link
                     href={`/rentals/${rental.id}/receipt`}
                     className="ml-3 text-xs font-normal underline underline-offset-2 print:hidden"
                   >
-                    Receipt
+                    {t("Receipt")}
                   </Link>
                 </p>
               </div>
-              <div className="overflow-x-auto print:overflow-visible">
+              <SheetCards>
+                {rental.lines.flatMap((line) =>
+                  line.stretches.map((part, index) => (
+                    <SheetCard
+                      key={`${line.productName}-${index}`}
+                      title={line.productName}
+                      amount={cash(part.rent + part.lateFee + part.damageFee)}
+                      fields={[
+                        { label: t("Qty"), value: count(part.quantity) },
+                        {
+                          label: t("Rate"),
+                          value: `${cash(line.rate)}${line.plan !== "fixed" ? ` ${t(UNIT[line.plan])}` : ""}`,
+                        },
+                        { label: t("Out"), value: date(part.outAt) },
+                        {
+                          label: t("Back"),
+                          value: (
+                            <>
+                              {part.backAt ? date(part.backAt) : t("Still out")}
+                              {part.condition === "damaged" && <span className="block font-semibold">{t("Damaged")}</span>}
+                              {part.condition === "lost" && <span className="block font-semibold">{t("Not returned")}</span>}
+                            </>
+                          ),
+                        },
+                        { label: t("Days"), value: count(part.days) },
+                        ...(part.daysOff > 0 ? [{ label: t("Days not charged"), value: count(part.daysOff) }] : []),
+                        ...(part.lateFee > 0 ? [{ label: t("Late fee"), value: cash(part.lateFee) }] : []),
+                        ...(part.damageFee > 0 ? [{ label: t("Damage"), value: cash(part.damageFee) }] : []),
+                      ]}
+                    />
+                  )),
+                )}
+                {rental.discount > 0 && <Sums><Sum label={t("Discount")} value={cash(-rental.discount)} /></Sums>}
+                <Sums>
+                  <SumTotal label={t("Total for {code}", { code: rental.code })} value={cash(rental.total)} />
+                </Sums>
+              </SheetCards>
+              <div className={`${TABLE_ONLY} overflow-x-auto print:overflow-visible`}>
                 <table className="sheet-table min-w-[42rem] table-fixed print:min-w-0">
                   {/* Fixed widths, so the columns of one rental line up with the next. */}
                   <colgroup>
@@ -104,14 +146,14 @@ export function BillDocument({ bill }: { bill: Bill }) {
                   </colgroup>
                   <thead>
                     <tr>
-                      <th>Item</th>
-                      <th className="num">Qty</th>
-                      <th>Out</th>
-                      <th>Back</th>
-                      <th className="num">Days</th>
-                      <th className="num">Off</th>
-                      <th className="num">Rate</th>
-                      <th className="num">Amount</th>
+                      <th>{t("Item")}</th>
+                      <th className="num">{t("Qty")}</th>
+                      <th>{t("Out")}</th>
+                      <th>{t("Back")}</th>
+                      <th className="num">{t("Days")}</th>
+                      <th className="num">{t("Off")}</th>
+                      <th className="num">{t("Rate")}</th>
+                      <th className="num">{t("Amount")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -120,7 +162,7 @@ export function BillDocument({ bill }: { bill: Bill }) {
                     ))}
                     {rental.discount > 0 && (
                       <tr>
-                        <td colSpan={7}>Discount</td>
+                        <td colSpan={7}>{t("Discount")}</td>
                         <td className="num">{cash(-rental.discount)}</td>
                       </tr>
                     )}
@@ -128,7 +170,7 @@ export function BillDocument({ bill }: { bill: Bill }) {
                   <tfoot>
                     <tr>
                       <td colSpan={7} className="num">
-                        Total for {rental.code}
+                        {t("Total for {code}", { code: rental.code })}
                       </td>
                       <td className="num">{cash(rental.total)}</td>
                     </tr>
@@ -143,14 +185,27 @@ export function BillDocument({ bill }: { bill: Bill }) {
           <div>
             {bill.payments.length > 0 && (
               <>
-                <Caption className="pb-1">Payments received</Caption>
-                <table className="sheet-table">
+                <Caption className="pb-1">{t("Payments received")}</Caption>
+                <SheetCards>
+                  {bill.payments.map((payment) => (
+                    <SheetCard
+                      key={payment.id}
+                      title={date(payment.at)}
+                      amount={cash(payment.amount)}
+                      fields={[
+                        { label: t("Rental"), value: <span className="font-mono">{payment.rentalCode}</span> },
+                        { label: t("Paid by"), value: paidBy(payment) },
+                      ]}
+                    />
+                  ))}
+                </SheetCards>
+                <table className="sheet-table hidden sm:table print:table">
                   <thead>
                     <tr>
-                      <th>Date</th>
-                      <th>Rental</th>
-                      <th>Paid by</th>
-                      <th className="num">Amount</th>
+                      <th>{t("Date")}</th>
+                      <th>{t("Rental")}</th>
+                      <th>{t("Paid by")}</th>
+                      <th className="num">{t("Amount")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -158,9 +213,7 @@ export function BillDocument({ bill }: { bill: Bill }) {
                       <tr key={payment.id}>
                         <td className="whitespace-nowrap">{date(payment.at)}</td>
                         <td className="font-mono">{payment.rentalCode}</td>
-                        <td className="capitalize">
-                          {[payment.method, payment.reference].filter(Boolean).join(" · ") || "—"}
-                        </td>
+                        <td>{paidBy(payment)}</td>
                         <td className="num">{cash(payment.amount)}</td>
                       </tr>
                     ))}
@@ -171,15 +224,15 @@ export function BillDocument({ bill }: { bill: Bill }) {
           </div>
           {/* Headed like the payments beside it, so the two boxes start on the same line. */}
           <div>
-            <Caption className="pb-1">Summary</Caption>
+            <Caption className="pb-1">{t("Summary")}</Caption>
             <Sums>
-            <Sum label="Brought forward" value={cash(t.openingBalance)} />
-            <Sum label="Rent" value={cash(t.rent)} />
-            {t.lateFee > 0 && <Sum label="Late fees" value={cash(t.lateFee)} />}
-            {t.damageFee > 0 && <Sum label="Damage and loss" value={cash(t.damageFee)} />}
-            {t.discount > 0 && <Sum label="Discount" value={cash(-t.discount)} />}
-            <Sum label="Paid" value={cash(-t.paid)} />
-            <SumTotal label={due < 0 ? "In credit" : "Amount due"} value={cash(Math.abs(due))} />
+            <Sum label={t("Brought forward")} value={cash(totals.openingBalance)} />
+            <Sum label={t("Rent")} value={cash(totals.rent)} />
+            {totals.lateFee > 0 && <Sum label={t("Late fees")} value={cash(totals.lateFee)} />}
+            {totals.damageFee > 0 && <Sum label={t("Damage and loss")} value={cash(totals.damageFee)} />}
+            {totals.discount > 0 && <Sum label={t("Discount")} value={cash(-totals.discount)} />}
+            <Sum label={t("Paid")} value={cash(-totals.paid)} />
+            <SumTotal label={due < 0 ? t("In credit") : t("Amount due")} value={cash(Math.abs(due))} />
             </Sums>
           </div>
         </section>
@@ -192,13 +245,19 @@ export function BillDocument({ bill }: { bill: Bill }) {
 
         {/* Room to sign by hand: the customer acknowledging the bill, the owner issuing it. */}
         <Signatures
-          left="Received by"
+          left={t("Received by")}
           leftName={bill.customer.company || bill.customer.name}
           businessName={bill.business.name}
         />
       </Paper>
     </>
   )
+}
+
+/** "Mobile banking · TX123": the way it was paid, in words, and its reference. */
+function paidBy(payment: { method: string; reference: string }) {
+  const method = PAYMENT_METHODS.find((option) => option.value === payment.method)?.label ?? payment.method
+  return [method && t(method), payment.reference].filter(Boolean).join(" · ") || "—"
 }
 
 /**
@@ -256,15 +315,15 @@ function Line({ line, cash }: { line: BillLine; cash: (value: number) => string 
           <td className="num">{count(part.quantity)}</td>
           <td className="whitespace-nowrap">{date(part.outAt)}</td>
           <td className="whitespace-nowrap">
-            {part.backAt ? date(part.backAt) : "Still out"}
-            {part.condition === "damaged" && <p className="font-semibold">Damaged</p>}
-            {part.condition === "lost" && <p className="font-semibold">Not returned</p>}
+            {part.backAt ? date(part.backAt) : t("Still out")}
+            {part.condition === "damaged" && <p className="font-semibold">{t("Damaged")}</p>}
+            {part.condition === "lost" && <p className="font-semibold">{t("Not returned")}</p>}
           </td>
           <td className="num">{count(part.days)}</td>
           <td className="num">{part.daysOff > 0 ? count(part.daysOff) : "—"}</td>
           <td className="num">
             {cash(line.rate)}
-            {line.plan !== "fixed" && <span className="block text-[0.85em]">{UNIT[line.plan]}</span>}
+            {line.plan !== "fixed" && <span className="block text-[0.85em]">{t(UNIT[line.plan])}</span>}
           </td>
           <td className="num">
             {cash(part.rent)}
@@ -278,9 +337,9 @@ function Line({ line, cash }: { line: BillLine; cash: (value: number) => string 
 }
 
 const KINDS: { id: BillKind; label: string }[] = [
-  { id: "month", label: "Month" },
-  { id: "year", label: "Year" },
-  { id: "custom", label: "Other dates" },
+  { id: "month", label: msg("Month") },
+  { id: "year", label: msg("Year") },
+  { id: "custom", label: msg("Other dates") },
 ]
 
 /**
@@ -312,7 +371,7 @@ export function PeriodPicker({ range, onChange }: { range: ReportRange; onChange
             variant={kind === option.id ? "default" : "outline"}
             onClick={() => pick(option.id)}
           >
-            {option.label}
+            {t(option.label)}
           </Button>
         ))}
       </div>
@@ -325,25 +384,25 @@ export function PeriodPicker({ range, onChange }: { range: ReportRange; onChange
             max={range.to}
             onChange={(e) => e.target.value && onChange({ ...range, from: e.target.value })}
             className="h-9 w-auto flex-1 sm:flex-none"
-            aria-label="From"
+            aria-label={t("From")}
           />
-          <span className="text-muted-foreground">to</span>
+          <span className="text-muted-foreground">{t("to")}</span>
           <Input
             type="date"
             value={range.to}
             min={range.from}
             onChange={(e) => e.target.value && onChange({ ...range, to: e.target.value })}
             className="h-9 w-auto flex-1 sm:flex-none"
-            aria-label="To"
+            aria-label={t("To")}
           />
         </div>
       ) : (
         <div className="flex items-center gap-1">
-          <Button size="icon-sm" variant="outline" aria-label={`Previous ${kind}`} onClick={() => onChange(step(range, -1))}>
+          <Button size="icon-sm" variant="outline" aria-label={t(kind === "year" ? msg("Previous year") : msg("Previous month"))} onClick={() => onChange(step(range, -1))}>
             <ChevronLeft className="size-4" />
           </Button>
           <span className="min-w-36 px-2 text-center text-sm font-medium tabular-nums">{periodName(range)}</span>
-          <Button size="icon-sm" variant="outline" aria-label={`Next ${kind}`} onClick={() => onChange(step(range, 1))}>
+          <Button size="icon-sm" variant="outline" aria-label={t(kind === "year" ? msg("Next year") : msg("Next month"))} onClick={() => onChange(step(range, 1))}>
             <ChevronRight className="size-4" />
           </Button>
         </div>

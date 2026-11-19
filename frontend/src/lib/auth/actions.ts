@@ -6,12 +6,13 @@ import { API_URL } from "@/lib/api/config"
 import { SERVER_TIMEOUT_MS, errorMessage } from "@/lib/api/errors"
 import { isAppRoute } from "./roles"
 import { createSession } from "./session"
+import { msg } from "@/lib/i18n"
 
 // `FormData.get` returns null for a field that isn't on the form, so every optional
 // field has to accept null rather than only undefined.
 const LoginInput = z.object({
-  email: z.string().trim().toLowerCase().email("Enter a valid email address."),
-  password: z.string().min(1, "Enter your password."),
+  email: z.string().trim().toLowerCase().email(msg("Enter a valid email address.")),
+  password: z.string().min(1, msg("Enter your password.")),
   next: z.string().nullish(),
 })
 
@@ -47,12 +48,12 @@ export async function login(_state: LoginState, form: FormData): Promise<LoginSt
       signal: AbortSignal.timeout(SERVER_TIMEOUT_MS),
     })
   } catch {
-    return { error: "Couldn't reach the server. Check your connection and try again.", email }
+    return { error: msg("Couldn't reach the server. Check your connection and try again."), email }
   }
 
   const data = await res.json().catch(() => null)
   if (!res.ok) {
-    if (res.status === 401) return { error: "That email and password don't match.", email }
+    if (res.status === 401) return { error: msg("That email and password don't match."), email }
     return { error: errorMessage(data, res.status), email }
   }
 

@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { request } from "@/lib/api/client"
 import { ApiError } from "@/lib/api/errors"
 import type { Customer, CustomerRate, Product, Rental, RentalReturn, ResolveReturnResult } from "@/lib/types"
+import { t } from "@/lib/i18n"
 
 // Writes, and what each one refreshes.
 //
@@ -39,7 +40,7 @@ function useRefresh() {
 /** Turns an ApiError into a toast. Anything else rethrows, so real bugs aren't swallowed. */
 function showError(err: unknown, fallback: string) {
   if (err instanceof ApiError) {
-    toast.error(err.message)
+    toast.error(t(err.message))
     return
   }
   toast.error(fallback)
@@ -80,13 +81,13 @@ export function useRentOut() {
     onSuccess: (rental) => {
       // Stock moved, so the product and stock screens are stale as well as the rental list.
       refresh("rentals", "products", "stock", "customers", "activity")
-      toast.success(`${rental.code} rented out`)
+      toast.success(t("{code} rented out", { code: rental.code }))
     },
     onError: (err) => {
       // Refused, most often because another till rented the same stock first. Reload the
       // shelf counts so the form shows what is really left.
       refresh("products", "stock")
-      showError(err, "Couldn't save the rental.")
+      showError(err, t("Couldn't save the rental."))
     },
   })
 }
@@ -102,7 +103,7 @@ export function useResolveReturn() {
   return useMutation({
     mutationFn: (input: { code?: string; customer?: string; rental?: string }) =>
       request<ResolveReturnResult>("rentals/resolve-return/", { method: "POST", body: input }),
-    onError: (err) => showError(err, "Couldn't look that up."),
+    onError: (err) => showError(err, t("Couldn't look that up.")),
   })
 }
 
@@ -135,12 +136,12 @@ export function useTakeReturn() {
       request<{ return: RentalReturn; rental: Rental }>(`rentals/${rentalId}/return/`, { method: "POST", body }),
     onSuccess: ({ return: taken }) => {
       refresh("rentals", "returns", "products", "stock", "customers", "activity")
-      toast.success(`${taken.code} recorded`)
+      toast.success(t("{code} recorded", { code: taken.code }))
     },
     onError: (err) => {
       // Refused, most often because another till took the same items back first.
       refresh("rentals", "returns", "products", "stock")
-      showError(err, "Couldn't record the return.")
+      showError(err, t("Couldn't record the return."))
     },
   })
 }
@@ -152,9 +153,9 @@ export function useRentalPayment() {
       request<Rental>(`rentals/${rentalId}/payment/`, { method: "POST", body }),
     onSuccess: () => {
       refresh("rentals", "customers", "activity")
-      toast.success("Payment recorded")
+      toast.success(t("Payment recorded"))
     },
-    onError: (err) => showError(err, "Couldn't record the payment."),
+    onError: (err) => showError(err, t("Couldn't record the payment.")),
   })
 }
 
@@ -166,9 +167,9 @@ export function useSetCustomerRate(customerId: string) {
       request<CustomerRate[]>(`customers/${customerId}/rates/`, { method: "PUT", body }),
     onSuccess: (_, body) => {
       refresh("customers", "activity")
-      toast.success(body.rate === null ? "Back to the usual price" : "Price saved")
+      toast.success(body.rate === null ? t("Back to the usual price") : t("Price saved"))
     },
-    onError: (err) => showError(err, "Couldn't save the price."),
+    onError: (err) => showError(err, t("Couldn't save the price.")),
   })
 }
 
@@ -180,9 +181,9 @@ export function useReceivePayment() {
       request<{ payments: { rentalCode: string; amount: number }[] }>(`bills/${customerId}/payment/`, { method: "POST", body }),
     onSuccess: ({ payments }) => {
       refresh("rentals", "customers", "activity")
-      toast.success(payments.length > 1 ? `Payment recorded across ${payments.length} rentals` : "Payment recorded")
+      toast.success(payments.length > 1 ? t("Payment recorded across {count} rentals", { count: payments.length }) : t("Payment recorded"))
     },
-    onError: (err) => showError(err, "Couldn't record the payment."),
+    onError: (err) => showError(err, t("Couldn't record the payment.")),
   })
 }
 
@@ -194,9 +195,9 @@ export function useRefund() {
       request<Rental>(`rentals/${rentalId}/refund/`, { method: "POST", body }),
     onSuccess: () => {
       refresh("rentals", "customers", "activity")
-      toast.success("Money given back")
+      toast.success(t("Money given back"))
     },
-    onError: (err) => showError(err, "Couldn't record the refund."),
+    onError: (err) => showError(err, t("Couldn't record the refund.")),
   })
 }
 
@@ -207,9 +208,9 @@ export function useCancelRental() {
       request<Rental>(`rentals/${rentalId}/cancel/`, { method: "POST", body: { reason } }),
     onSuccess: (rental) => {
       refresh("rentals", "products", "stock", "activity")
-      toast.success(`${rental.code} cancelled and the stock put back`)
+      toast.success(t("{code} cancelled and the stock put back", { code: rental.code }))
     },
-    onError: (err) => showError(err, "Couldn't cancel the rental."),
+    onError: (err) => showError(err, t("Couldn't cancel the rental.")),
   })
 }
 
@@ -222,9 +223,9 @@ export function useSaveProduct(id?: string) {
       request<Product>(id ? `products/${id}/` : "products/", { method: id ? "PATCH" : "POST", body }),
     onSuccess: (product) => {
       refresh("products", "stock", "activity")
-      toast.success(id ? `${product.name} saved` : `${product.name} added`)
+      toast.success(id ? t("{name} saved", { name: product.name }) : t("{name} added", { name: product.name }))
     },
-    onError: (err) => showError(err, "Couldn't save the product."),
+    onError: (err) => showError(err, t("Couldn't save the product.")),
   })
 }
 
@@ -243,10 +244,10 @@ export function useDeleteProduct() {
       refresh("products", "stock", "activity")
       // A product that has been rented is kept for its receipts, bills and reports.
       toast.success(
-        result?.archived ? "Product removed from the list. Its past rentals and reports are kept." : "Product deleted",
+        result?.archived ? t("Product removed from the list. Its past rentals and reports are kept.") : t("Product deleted"),
       )
     },
-    onError: (err) => showError(err, "Couldn't delete the product."),
+    onError: (err) => showError(err, t("Couldn't delete the product.")),
   })
 }
 
@@ -257,9 +258,9 @@ export function useAdjustStock() {
       request("stock/adjust/", { method: "POST", body }),
     onSuccess: () => {
       refresh("stock", "products", "activity")
-      toast.success("Stock updated")
+      toast.success(t("Stock updated"))
     },
-    onError: (err) => showError(err, "Couldn't update the stock."),
+    onError: (err) => showError(err, t("Couldn't update the stock.")),
   })
 }
 
@@ -270,9 +271,9 @@ export function useSaveCustomer(id?: string) {
       request<Customer>(id ? `customers/${id}/` : "customers/", { method: id ? "PATCH" : "POST", body }),
     onSuccess: (customer) => {
       refresh("customers", "activity")
-      toast.success(id ? `${customer.name} saved` : `${customer.name} added`)
+      toast.success(id ? t("{name} saved", { name: customer.name }) : t("{name} added", { name: customer.name }))
     },
-    onError: (err) => showError(err, "Couldn't save the customer."),
+    onError: (err) => showError(err, t("Couldn't save the customer.")),
   })
 }
 
@@ -283,10 +284,10 @@ export function useDeleteCustomer() {
     onSuccess: (result) => {
       refresh("customers", "activity")
       toast.success(
-        result?.archived ? "Customer removed from the list. Their rentals and bills are kept." : "Customer removed",
+        result?.archived ? t("Customer removed from the list. Their rentals and bills are kept.") : t("Customer removed"),
       )
     },
-    onError: (err) => showError(err, "Couldn't remove the customer."),
+    onError: (err) => showError(err, t("Couldn't remove the customer.")),
   })
 }
 
@@ -299,9 +300,9 @@ export function useSaveUser(id?: string) {
       request(id ? `users/${id}/` : "users/", { method: id ? "PATCH" : "POST", body }),
     onSuccess: () => {
       refresh("users", "activity")
-      toast.success(id ? "Account saved" : "Account created")
+      toast.success(id ? t("Account saved") : t("Account created"))
     },
-    onError: (err) => showError(err, "Couldn't save the account."),
+    onError: (err) => showError(err, t("Couldn't save the account.")),
   })
 }
 
@@ -311,9 +312,9 @@ export function useDisableUser() {
     mutationFn: (id: string) => request<void>(`users/${id}/`, { method: "DELETE" }),
     onSuccess: () => {
       refresh("users", "activity")
-      toast.success("Account disabled")
+      toast.success(t("Account disabled"))
     },
-    onError: (err) => showError(err, "Couldn't disable the account."),
+    onError: (err) => showError(err, t("Couldn't disable the account.")),
   })
 }
 
@@ -321,8 +322,8 @@ export function useSetUserPassword() {
   return useMutation({
     mutationFn: ({ id, password }: { id: string; password: string }) =>
       request<void>(`users/${id}/password/`, { method: "POST", body: { password } }),
-    onSuccess: () => toast.success("Password changed"),
-    onError: (err) => showError(err, "Couldn't change the password."),
+    onSuccess: () => toast.success(t("Password changed")),
+    onError: (err) => showError(err, t("Couldn't change the password.")),
   })
 }
 
@@ -342,9 +343,9 @@ export function useCreateBusiness() {
     }) => request("platform/businesses/", { method: "POST", body }),
     onSuccess: () => {
       refresh("platform")
-      toast.success("Business created with its owner account")
+      toast.success(t("Business created with its owner account"))
     },
-    onError: (err) => showError(err, "Couldn't create the business."),
+    onError: (err) => showError(err, t("Couldn't create the business.")),
   })
 }
 
@@ -355,9 +356,9 @@ export function useSuspendBusiness() {
       request(`platform/businesses/${id}/suspend/`, { method: "POST", body: { suspended, reason } }),
     onSuccess: (_data, { suspended }) => {
       refresh("platform")
-      toast.success(suspended ? "Business suspended" : "Business switched back on")
+      toast.success(suspended ? t("Business suspended") : t("Business switched back on"))
     },
-    onError: (err) => showError(err, "Couldn't change the business."),
+    onError: (err) => showError(err, t("Couldn't change the business.")),
   })
 }
 
@@ -365,8 +366,8 @@ export function useResetOwnerPassword() {
   return useMutation({
     mutationFn: ({ id, password }: { id: string; password: string }) =>
       request<void>(`platform/businesses/${id}/owner-password/`, { method: "POST", body: { password } }),
-    onSuccess: () => toast.success("Owner password reset"),
-    onError: (err) => showError(err, "Couldn't reset the password."),
+    onSuccess: () => toast.success(t("Owner password reset")),
+    onError: (err) => showError(err, t("Couldn't reset the password.")),
   })
 }
 
@@ -377,8 +378,8 @@ export function useDeleteBusiness() {
       request<void>(`platform/businesses/${id}/`, { method: "DELETE", body: { confirmName } }),
     onSuccess: () => {
       refresh("platform")
-      toast.success("Business deleted")
+      toast.success(t("Business deleted"))
     },
-    onError: (err) => showError(err, "Couldn't delete the business."),
+    onError: (err) => showError(err, t("Couldn't delete the business.")),
   })
 }
