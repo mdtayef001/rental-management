@@ -1,9 +1,12 @@
 """Auth, team management, business settings and the super admin's platform API."""
 
 import hashlib
+from datetime import datetime, timedelta
+from datetime import timezone as dt_timezone
 
 from django.db import transaction
 from django.db.models import Count, Prefetch, Q
+from django.utils import timezone
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import AuthenticationFailed, PermissionDenied, ValidationError
@@ -83,15 +86,39 @@ class LoginView(TokenObtainPairView):
     throttle_scope = "login"
 
 
+# A login is renewed once it has less than this left. The web app renews its access token
+# every 15 minutes or so while someone is working, so a one-hour window can't be missed.
+RENEW_LOGIN_WITHIN = timedelta(hours=1)
+
+
 class RefreshSerializer(TokenRefreshSerializer):
-    """SimpleJWT's refresh, but a token whose user has since been deleted (their business
-    was deleted) is refused with 401 instead of crashing with a 500."""
+    """SimpleJWT's refresh, plus two things.
+
+    A login that is nearly over is renewed: a new refresh token good for another 12 hours
+    comes back with the access token. Only near the end, not on every refresh, so a working
+    day writes a couple of tokens to the database rather than one every 15 minutes. The old
+    token stays valid until it expires, so two requests renewing at once can't log each
+    other out. Logging out blacklists the token in use, and a password reset blacklists
+    every one the user holds (see end_sessions).
+
+    And a token whose user has since been deleted (their business was deleted) is refused
+    with 401 instead of crashing with a 500.
+    """
 
     def validate(self, attrs):
         try:
-            return super().validate(attrs)
+            data = super().validate(attrs)
         except User.DoesNotExist:
             raise AuthenticationFailed("No active account found for the given token.", "no_active_account")
+        refresh = RefreshToken(attrs["refresh"])
+        left = datetime.fromtimestamp(refresh["exp"], tz=dt_timezone.utc) - timezone.now()
+        if left < RENEW_LOGIN_WITHIN:
+            refresh.set_jti()
+            refresh.set_exp()
+            refresh.set_iat()
+            refresh.outstand()
+            data["refresh"] = str(refresh)
+        return data
 
 
 class RefreshView(TokenRefreshView):

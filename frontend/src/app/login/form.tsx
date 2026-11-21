@@ -1,11 +1,12 @@
 "use client"
 
-import { useActionState, useRef, useState } from "react"
+import { useActionState, useEffect, useRef, useState } from "react"
 import { AlertCircle, Eye, EyeOff, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { type LoginState, login } from "@/lib/auth/actions"
+import { IDLE_KEY } from "@/components/idle-logout"
 import { DemoLogins } from "./demo-logins"
 import { t } from "@/lib/i18n"
 
@@ -20,6 +21,16 @@ export function LoginForm({ next }: { next?: string }) {
   const [state, action, pending] = useActionState<LoginState, FormData>(login, {})
   const formRef = useRef<HTMLFormElement>(null)
   const [shown, setShown] = useState(false)
+
+  // A fresh login starts a fresh idle clock: an old "last used" time left by a session
+  // that ended some other way must not log the new one straight back out.
+  useEffect(() => {
+    try {
+      localStorage.removeItem(IDLE_KEY)
+    } catch {
+      // Storage blocked: nothing was kept.
+    }
+  }, [])
 
   return (
     <>

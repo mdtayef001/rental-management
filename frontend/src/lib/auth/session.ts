@@ -8,13 +8,21 @@ import type { Role } from "@/lib/types"
 // Login tokens come from Django (SimpleJWT) and live in httpOnly cookies, so browser
 // JavaScript never sees them — an XSS bug in a dependency can't walk off with a session.
 // The access token is short-lived; proxy.ts swaps in a new one using the refresh token
-// when it runs out, which is why a user never gets logged out mid-task.
+// shortly before it runs out, and each swap also brings a new refresh token good for
+// another 12 hours. So someone working is never logged out; the 15-minute idle logout
+// is done in the browser (components/idle-logout.tsx).
 
 export const ACCESS_COOKIE = "rm_access"
 export const REFRESH_COOKIE = "rm_refresh"
 // These must match ACCESS_TOKEN_LIFETIME and REFRESH_TOKEN_LIFETIME in backend/config/settings.py.
 const ACCESS_SECONDS = 15 * 60
 const REFRESH_SECONDS = 12 * 60 * 60
+/**
+ * Renew this long before the access token expires. A token checked here as valid with a
+ * second to spare would otherwise reach Django already expired — and a refused token
+ * logs the user out.
+ */
+export const RENEW_EARLY_SECONDS = 2 * 60
 const ROLES: Role[] = ["superadmin", "owner", "manager", "staff"]
 
 export interface SessionPayload {
@@ -23,6 +31,8 @@ export interface SessionPayload {
   tenantId: string | null
   /** From the token, so the proxy can hide a route before anything renders. */
   canRent: boolean
+  /** When the token expires, in seconds since 1970. */
+  expiresAt: number
 }
 
 export interface Tokens {
@@ -55,14 +65,32 @@ export async function verifyAccess(token: string | undefined): Promise<SessionPa
       role: payload.role as Role,
       tenantId: (payload.tenant_id as string | null) ?? null,
       canRent: payload.can_rent !== false,
+      expiresAt: payload.exp ?? 0,
     }
   } catch {
     return null
   }
 }
 
-/** Trades a refresh token for a new access token. Null when the login ended or was logged out. */
-export async function refreshAccess(refresh: string): Promise<string | null> {
+/** Whether a token is close enough to expiry to renew now rather than risk it running out in flight. */
+export function needsRenewal(session: SessionPayload, now = Date.now() / 1000) {
+  return session.expiresAt - now < RENEW_EARLY_SECONDS
+}
+
+/**
+ * What came of trying to renew: new tokens; a refusal, meaning the login is over (expired,
+ * logged out, password reset, account disabled); or no answer at all.
+ */
+export type Renewal = { tokens: Tokens } | { refused: true } | { unreachable: true }
+
+/**
+ * Trades a refresh token for a new access token, and a new refresh token that extends the
+ * login (Django rotates them).
+ *
+ * "No answer" is kept apart from "refused" on purpose: a slow cold start or a dropped
+ * connection must not end anyone's session. Only Django saying no does that.
+ */
+export async function refreshAccess(refresh: string): Promise<Renewal> {
   try {
     const res = await fetch(`${API_URL}/auth/refresh/`, {
       method: "POST",
@@ -71,11 +99,14 @@ export async function refreshAccess(refresh: string): Promise<string | null> {
       cache: "no-store",
       signal: AbortSignal.timeout(SERVER_TIMEOUT_MS),
     })
-    if (!res.ok) return null
-    const data = (await res.json()) as { access?: string }
-    return data.access ?? null
+    // 400/401: the token is bad, expired or blacklisted. Anything else (a 5xx, a 429) is
+    // the server having a moment, not a verdict on the login.
+    if (res.status === 400 || res.status === 401) return { refused: true }
+    if (!res.ok) return { unreachable: true }
+    const data = (await res.json()) as { access?: string; refresh?: string }
+    return data.access ? { tokens: { access: data.access, refresh: data.refresh } } : { unreachable: true }
   } catch {
-    return null
+    return { unreachable: true }
   }
 }
 

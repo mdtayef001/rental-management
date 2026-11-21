@@ -461,3 +461,71 @@ class SeedDemoTests(ApiTestCase):
         with self.assertRaises(CommandError):
             call_command("seed_demo")
         self.assertFalse(User.objects.filter(email="admin@example.com").exists())
+
+
+class SlidingSessionTests(ApiTestCase):
+    """Someone working is never logged out: a login nearly at its end renews itself."""
+
+    def sign_in(self, minutes_left=None):
+        from datetime import timedelta
+
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        res = self.client.post("/api/auth/login/", {"email": "owner@example.com", "password": PASSWORD}, format="json")
+        self.assertEqual(res.status_code, 200)
+        self.anonymous()
+        if minutes_left is None:
+            return res.data["refresh"]
+        # The same login, as it would look with only this much of its 12 hours left.
+        token = RefreshToken(res.data["refresh"])
+        token.set_exp(lifetime=timedelta(minutes=minutes_left))
+        return str(token)
+
+    def refresh(self, token):
+        return self.client.post("/api/auth/refresh/", {"refresh": token}, format="json")
+
+    def hours_left(self, token):
+        import time
+
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        return (RefreshToken(token)["exp"] - time.time()) / 3600
+
+    def test_a_fresh_login_only_renews_the_access_token(self):
+        res = self.refresh(self.sign_in())
+        self.assertEqual(res.status_code, 200)
+        self.assertIn("access", res.data)
+        self.assertNotIn("refresh", res.data)
+
+    def test_a_login_in_its_last_hour_comes_back_with_another_12_hours(self):
+        nearly_over = self.sign_in(minutes_left=30)
+        res = self.refresh(nearly_over)
+        self.assertEqual(res.status_code, 200)
+        renewed = res.data["refresh"]
+        self.assertGreater(self.hours_left(renewed), 11.9)
+        # The renewed one works in turn, and isn't renewed again straight away.
+        again = self.refresh(renewed)
+        self.assertEqual(again.status_code, 200)
+        self.assertNotIn("refresh", again.data)
+
+    def test_the_old_token_still_works_so_two_requests_renewing_at_once_dont_log_out(self):
+        nearly_over = self.sign_in(minutes_left=30)
+        self.assertEqual(self.refresh(nearly_over).status_code, 200)
+        self.assertEqual(self.refresh(nearly_over).status_code, 200)
+
+    def test_logging_out_ends_a_renewed_login(self):
+        renewed = self.refresh(self.sign_in(minutes_left=30)).data["refresh"]
+        self.client.post("/api/auth/logout/", {"refresh": renewed}, format="json")
+        self.assertEqual(self.refresh(renewed).status_code, 401)
+
+    def test_a_password_reset_ends_renewed_logins_too(self):
+        nearly_over = self.sign_in(minutes_left=30)
+        renewed = self.refresh(nearly_over).data["refresh"]
+        self.as_user(self.superadmin)
+        res = self.client.post(
+            f"/api/platform/businesses/{self.business.id}/owner-password/", {"password": "another-horse-battery"}, format="json"
+        )
+        self.assertEqual(res.status_code, 204)
+        self.anonymous()
+        self.assertEqual(self.refresh(nearly_over).status_code, 401)
+        self.assertEqual(self.refresh(renewed).status_code, 401)

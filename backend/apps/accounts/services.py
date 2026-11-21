@@ -6,6 +6,7 @@ always agree) live in one place instead of being repeated in every view that tou
 """
 
 from django.db import transaction
+from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 
@@ -83,5 +84,7 @@ def end_sessions(user):
     Used when an account is disabled or its password reset. Without it a disabled user's
     old tokens would quietly work again if the account were re-enabled within 12 hours.
     """
-    for token in OutstandingToken.objects.filter(user=user):
+    # Only tokens that could still be used: a sliding login leaves a long trail of expired
+    # ones behind (`manage.py flushexpiredtokens` clears them out).
+    for token in OutstandingToken.objects.filter(user=user, expires_at__gt=timezone.now()):
         BlacklistedToken.objects.get_or_create(token=token)

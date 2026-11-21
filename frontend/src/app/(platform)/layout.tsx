@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { IdleLogout } from "@/components/idle-logout"
 import { SessionProvider } from "@/components/session"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { getContext } from "@/lib/auth/dal"
@@ -20,6 +21,7 @@ export default async function PlatformLayout({ children }: LayoutProps<"/">) {
 
   return (
     <SessionProvider user={ctx.user} business={null}>
+      <IdleLogout />
       <div className="flex min-h-full flex-1 flex-col">
         <header className="sticky top-0 z-20 flex items-center justify-between gap-4 border-b bg-background/80 px-4 py-3 backdrop-blur-sm sm:px-6">
           <div className="flex items-center gap-2.5">

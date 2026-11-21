@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { ROLE_HOME, canAccess, isAppRoute } from "@/lib/auth/roles"
-import { ACCESS_COOKIE, REFRESH_COOKIE, cookieOptions, refreshAccess, verifyAccess } from "@/lib/auth/session"
+import { ACCESS_COOKIE, REFRESH_COOKIE, type Tokens, cookieOptions, needsRenewal, refreshAccess, verifyAccess } from "@/lib/auth/session"
 
 // The first of three checks.
 //
@@ -22,22 +22,37 @@ export default async function proxy(req: NextRequest) {
   if (path === "/logout") return NextResponse.next({ request: { headers: req.headers } })
 
   let session = await verifyAccess(req.cookies.get(ACCESS_COOKIE)?.value)
-  let renewed: string | null = null
+  let renewed: Tokens | null = null
+  let refused = false
   const refresh = req.cookies.get(REFRESH_COOKIE)?.value
 
-  if (!session && refresh) {
-    renewed = await refreshAccess(refresh)
-    session = await verifyAccess(renewed ?? undefined)
-    // Hand the new token to whatever renders this request, not just to the browser.
-    if (renewed) req.cookies.set(ACCESS_COOKIE, renewed)
+  // Renewed a couple of minutes before it runs out, not after: a token that passes here
+  // with a second to spare would reach Django expired, and a refused token logs the user
+  // out in the middle of their work.
+  if (refresh && (!session || needsRenewal(session))) {
+    const result = await refreshAccess(refresh)
+    if ("tokens" in result) {
+      renewed = result.tokens
+      session = (await verifyAccess(renewed.access)) ?? session
+      // Hand the new tokens to whatever renders this request, not just to the browser.
+      req.cookies.set(ACCESS_COOKIE, renewed.access)
+      if (renewed.refresh) req.cookies.set(REFRESH_COOKIE, renewed.refresh)
+    } else if ("refused" in result) {
+      refused = true
+    }
+    // Unreachable: keep going with the token there is, if it is still good. The next
+    // request tries again.
   }
 
   const res = route(req, path, session)
   if (renewed) {
-    res.cookies.set(ACCESS_COOKIE, renewed, cookieOptions(ACCESS_COOKIE))
-  } else if (refresh && !session) {
-    // The login expired or was logged out elsewhere: clear the dead cookies so the browser
-    // stops sending them.
+    res.cookies.set(ACCESS_COOKIE, renewed.access, cookieOptions(ACCESS_COOKIE))
+    // Each renewal brings a new refresh token good for another 12 hours: the login slides
+    // for as long as someone keeps using it.
+    if (renewed.refresh) res.cookies.set(REFRESH_COOKIE, renewed.refresh, cookieOptions(REFRESH_COOKIE))
+  } else if (refused && !session) {
+    // The login ended (expired, logged out, password reset): clear the dead cookies so
+    // the browser stops sending them. Never on a mere network failure.
     res.cookies.delete(ACCESS_COOKIE)
     res.cookies.delete(REFRESH_COOKIE)
   }

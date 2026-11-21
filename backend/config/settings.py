@@ -192,10 +192,16 @@ SIMPLE_JWT = {
     "SIGNING_KEY": JWT_SIGNING_KEY,
     "ALGORITHM": "HS256",
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
-    # How long a login lasts. Not rotated: two requests refreshing at the same moment would
-    # otherwise log each other out. Logging out blacklists it.
+    # How long a login lasts. It is renewed in its last hour (see RefreshSerializer), so
+    # someone working all day is never cut off, while a device nobody has used for 12
+    # hours can't get back in. (The web app also logs out after 15 minutes without a tap
+    # or a key press; that idle timer lives in the browser, see IdleLogout.)
     "REFRESH_TOKEN_LIFETIME": timedelta(hours=12),
+    # Renewed on our terms rather than on every refresh: see RefreshSerializer.
     "ROTATE_REFRESH_TOKENS": False,
+    # The web app's server and this one keep their own clocks; a token checked as valid
+    # there must not be refused here a second later.
+    "LEEWAY": 30,
     "UPDATE_LAST_LOGIN": True,
     # Tokens carry a hash of the password, so a password reset ends every session at once.
     "CHECK_REVOKE_TOKEN": True,

@@ -14,12 +14,14 @@ import { deleteSession } from "@/lib/auth/session"
 // request only logs out when Django already refuses the session — that is also the case
 // where the DAL sent the browser here after arriving from another site, and it must not
 // bounce back and forth.
-export async function GET() {
+export async function GET(request: Request) {
+  // Said on the login page, so a logout nobody asked for doesn't look like a fault.
+  const idle = new URL(request.url).searchParams.get("reason") === "idle"
   const site = (await headers()).get("sec-fetch-site")
   if (site === "cross-site" || site === "same-site") {
     const ctx = await getContext().catch(() => null)
     if (ctx) redirect(ROLE_HOME[ctx.user.role])
   }
   await deleteSession()
-  redirect("/login")
+  redirect(idle ? "/login?reason=idle" : "/login")
 }

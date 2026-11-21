@@ -2,6 +2,7 @@ import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 import { AppHeader } from "@/components/app-header"
 import { AppSidebar } from "@/components/app-sidebar"
+import { IdleLogout } from "@/components/idle-logout"
 import { MobileBar } from "@/components/mobile-bar"
 import { SessionProvider } from "@/components/session"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
@@ -39,6 +40,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
 
           {/* The three things staff do all day, within thumb reach on a phone. */}
           <MobileBar />
+          {/* Logs out after 15 minutes with nobody using the app. */}
+          <IdleLogout />
         </SidebarInset>
       </SidebarProvider>
     </SessionProvider>

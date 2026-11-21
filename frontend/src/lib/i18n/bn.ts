@@ -61,6 +61,8 @@ const app: Record<string, string> = {
   // ---------- Logging in ----------
   "Log in": "লগ ইন",
   "Logging in…": "লগ ইন হচ্ছে…",
+  "You were logged out after 15 minutes without use.": "15 মিনিট ব্যবহার না করায় আপনাকে লগ আউট করা হয়েছে।",
+  "You'll be logged out in a minute. Tap anywhere to stay.": "এক মিনিটের মধ্যে লগ আউট হবেন। থাকতে চাইলে যেকোনো জায়গায় চাপুন।",
   "Log in to rent out stock and take it back.": "মালামাল ভাড়া দিতে ও ফেরত নিতে লগ ইন করুন।",
   "Accounts are created by the owner. If you can't get in, ask them to reset your password.":
     "অ্যাকাউন্ট মালিক তৈরি করেন। ঢুকতে না পারলে তাকে আপনার পাসওয়ার্ড রিসেট করতে বলুন।",

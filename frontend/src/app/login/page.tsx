@@ -13,7 +13,7 @@ export const generateMetadata = () => pageTitle("Log in")
  * moment in the product, so it carries the one signal colour.
  */
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
-  const { next } = await searchParams
+  const { next, reason } = await searchParams
   const t = await getT()
   return (
     <main className="flex min-h-full flex-1 items-center justify-center bg-muted/40 p-4 sm:p-6">
@@ -28,6 +28,12 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
             <p className="text-sm text-muted-foreground">{t("Log in to rent out stock and take it back.")}</p>
           </div>
         </div>
+
+        {reason === "idle" && (
+          <p role="status" className="rounded-lg border bg-card px-4 py-3 text-center text-sm text-muted-foreground">
+            {t("You were logged out after 15 minutes without use.")}
+          </p>
+        )}
 
         <div className="rounded-xl border bg-card p-5 shadow-sm sm:p-6">
           <LoginForm next={typeof next === "string" ? next : undefined} />
